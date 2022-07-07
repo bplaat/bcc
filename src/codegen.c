@@ -13,11 +13,20 @@ int32_t unique = 0;
 bool inAssign = false;
 
 void node_asm(FILE *file, Node *node) {
+    if (node->kind == NODE_MULTIPLE) {
+        for (size_t i = 0; i < node->statements->size; i++) {
+            Node *statement = list_get(node->statements, i);
+            if (statement->kind != NODE_NULL) {
+                node_asm(file, statement);
+                fprintf(file, "\n");
+            }
+        }
+    }
     if (node->kind == NODE_BLOCK) {
         size_t stackSize = 0;
         for (size_t i = 0; i < node->locals->size; i++) {
             Local *local = list_get(node->locals, i);
-            stackSize += local->size;
+            stackSize += local->type->size;
         }
         if (stackSize > 0) {
             stackSize = align(stackSize, 16);
@@ -151,7 +160,7 @@ void node_asm(FILE *file, Node *node) {
         node_print(file, node);
         fprintf(file, "\n");
 
-        Local *local = block_find_local(currentBlock, node->string);
+        Local *local = node_find_local(currentBlock, node->string);
         if (inAssign) {
             if (arch == ARCH_ARM64) fprintf(file, "    sub x0, x8, %zu\n", local->offset);
             if (arch == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", local->offset);
@@ -167,7 +176,7 @@ void node_asm(FILE *file, Node *node) {
         fprintf(file, "\n");
 
         if (node->kind == NODE_ADDR) {
-            Local *local = block_find_local(currentBlock, node->unary->string);
+            Local *local = node_find_local(currentBlock, node->unary->string);
             if (arch == ARCH_ARM64) fprintf(file, "    sub x0, x8, %zu\n", local->offset);
             if (arch == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", local->offset);
             return;

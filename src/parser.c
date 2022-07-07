@@ -5,133 +5,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-Node *node_new(NodeKind kind) {
-    Node *node = malloc(sizeof(Node));
-    node->kind = kind;
-    return node;
-}
-
-Node *node_new_number(int64_t number) {
-    Node *node = malloc(sizeof(Node));
-    node->kind = NODE_NUMBER;
-    node->number = number;
-    node->type = type_new(TYPE_NUMBER);
-    return node;
-}
-
-Node *node_new_unary(NodeKind kind, Node *unary) {
-    Node *node = malloc(sizeof(Node));
-    node->kind = kind;
-    node->unary = unary;
-    node->type = unary->type;
-    return node;
-}
-
-Node *node_new_operation(NodeKind kind, Node *lhs, Node *rhs) {
-    Node *node = malloc(sizeof(Node));
-    node->kind = kind;
-    node->lhs = lhs;
-    node->rhs = rhs;
-    node->type = lhs->type;
-    return node;
-}
-
-void node_print(FILE *file, Node *node) {
-    if (node->kind == NODE_BLOCK) {
-        fprintf(file, "{ ");
-        for (size_t i = 0; i < node->locals->size; i++) {
-            Local *local = list_get(node->locals, i);
-            fprintf(file, "i64 %s; ", local->name);
-        }
-        for (size_t i = 0; i < node->statements->size; i++) {
-            node_print(file, list_get(node->statements, i));
-            fprintf(file, "; ");
-        }
-        fprintf(file, " }");
-        return;
-    }
-
-    if (node->kind == NODE_NUMBER) {
-        fprintf(file, "%lld", node->number);
-    }
-    if (node->kind == NODE_VARIABLE) {
-        fprintf(file, "%s", node->string);
-    }
-
-    if (node->kind == NODE_IF) {
-        fprintf(file, "if (");
-        type_print(file, node->condition->type);
-        node_print(file, node->condition);
-        fprintf(file, ") ");
-        node_print(file, node->thenBlock);
-        if (node->elseBlock != NULL) {
-            fprintf(file, " else ");
-            node_print(file, node->elseBlock);
-        }
-    }
-
-    if (node->kind == NODE_WHILE) {
-        fprintf(file, "while (");
-        if (node->condition != NULL) {
-            type_print(file, node->condition->type);
-            node_print(file, node->condition);
-        } else {
-            fprintf(file, "1");
-        }
-        fprintf(file, ") ");
-        node_print(file, node->thenBlock);
-    }
-
-    if (node->kind == NODE_RETURN) {
-        fprintf(file, "return ");
-        type_print(file, node->unary->type);
-        node_print(file, node->unary);
-    }
-
-    if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
-        if (node->kind == NODE_NEG) fprintf(file, "(- ");
-        if (node->kind == NODE_ADDR) fprintf(file, "(& ");
-        if (node->kind == NODE_DEREF) fprintf(file, "(* ");
-        if (node->kind == NODE_LOGIC_NOT) fprintf(file, "(! ");
-        type_print(file, node->unary->type);
-        node_print(file, node->unary);
-        fprintf(file, ")");
-    }
-
-    if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
-        fprintf(file, "(");
-        type_print(file, node->lhs->type);
-        node_print(file, node->lhs);
-        if (node->kind == NODE_ASSIGN) fprintf(file, " = ");
-        if (node->kind == NODE_ADD) fprintf(file, " + ");
-        if (node->kind == NODE_SUB) fprintf(file, " - ");
-        if (node->kind == NODE_MUL) fprintf(file, " * ");
-        if (node->kind == NODE_DIV) fprintf(file, " / ");
-        if (node->kind == NODE_MOD) fprintf(file, " %% ");
-        if (node->kind == NODE_EQ) fprintf(file, " == ");
-        if (node->kind == NODE_NEQ) fprintf(file, " != ");
-        if (node->kind == NODE_LT) fprintf(file, " < ");
-        if (node->kind == NODE_LTEQ) fprintf(file, " <= ");
-        if (node->kind == NODE_GT) fprintf(file, " > ");
-        if (node->kind == NODE_GTEQ) fprintf(file, " >= ");
-        if (node->kind == NODE_LOGIC_AND) fprintf(file, " && ");
-        if (node->kind == NODE_LOGIC_OR) fprintf(file, " || ");
-        type_print(file, node->rhs->type);
-        node_print(file, node->rhs);
-        fprintf(file, ")");
-    }
-}
-
 /*
 
 block = LCURLY statement* RCURLY | statement
 statement = LCURLY? block
     | IF LPAREN assign RPAREN block (ELSE block)?
     | WHILE LPAREN assign RPAREN block
-    | FOR LPAREN assign? SEMICOLON assign? SEMICOLON assign? RPAREN block
+    | FOR LPAREN declarations? SEMICOLON assigns? SEMICOLON assigns? RPAREN block
     | RETURN assign SEMICOLON
     | SEMICOLON
-    | assign SEMICOLON
+    | declarations SEMICOLON
+
+type = (INT | SIGNED | UNSIGNED)+ STAR*
+declarations = type factor
+        (ASSIGN assign)? (COMMA factor (ASSIGN assign))*
+    | assigns
+assigns = assign (COMMA assign)*
 assign = logic (ASSIGN assign)?
 
 logic = equality ((LOGIC_AND | LOGIC_OR) equality)*
@@ -148,6 +37,7 @@ char *text;
 List *tokens;
 int32_t position;
 Node *currentBlock = NULL;
+Type *declarationType = NULL;
 
 Node *parser(char *_text, List *_tokens) {
     text = _text;
@@ -164,9 +54,8 @@ void parser_eat(TokenKind kind) {
     if (current()->kind == kind) {
         position++;
     } else {
-        fprintf(stderr, "%d", current()->kind);
         fprintf(stderr, "%s\n", text);
-        for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
+        for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
         char wantedTokenBuffer[32];
         token_to_string(kind, wantedTokenBuffer);
         char gotTokenBuffer[32];
@@ -176,84 +65,21 @@ void parser_eat(TokenKind kind) {
     }
 }
 
-Local *block_find_local(Node *block, char *name) {
-    if (block->parentBlock != NULL) {
-        Local *local = block_find_local(block->parentBlock, name);
-        if (local != NULL) {
-            return local;
-        }
-    }
-
-    for (size_t i = 0; i < block->locals->size; i++) {
-        Local *local = list_get(block->locals, i);
-        if (!strcmp(local->name, name)) {
-            return local;
-        }
-    }
-    return NULL;
-}
-
-void block_create_locals(Node *node) {
-    static bool inAssign = false;
-
-    if (node->kind == NODE_ASSIGN) {
-        inAssign = true;
-        block_create_locals(node->lhs);
-        block_create_locals(node->rhs);
-        inAssign = false;
-    }
-
-    if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
-        block_create_locals(node->unary);
-    }
-
-    if (node->kind >= NODE_ADD && node->kind <= NODE_LOGIC_OR) {
-        block_create_locals(node->lhs);
-        block_create_locals(node->rhs);
-    }
-
-    if (node->kind == NODE_VARIABLE) {
-        Local *local = block_find_local(currentBlock, node->string);
-        if (local == NULL) {
-            if (inAssign) {
-                Local *local = malloc(sizeof(Local));
-                local->name = node->string;
-                local->size = 8;
-                local->offset = local->size;
-                for (size_t i = 0; i < currentBlock->locals->size; i++) {
-                    Local *local = list_get(currentBlock->locals, i);
-                    local->offset += local->size;
-                }
-                list_add(currentBlock->locals, local);
-            } else {
-                fprintf(stderr, "%s\n", text);
-                for (int32_t i = 0; i < node->token->position; i++) fprintf(stderr, " ");
-                fprintf(stderr, "^\nCan't find variable: %s\n", node->token->string);
-                exit(EXIT_FAILURE);
-            }
-        }
-    }
-}
-
 Node *parser_block(void) {
-    Node *node = node_new(NODE_BLOCK);
-    node->parentBlock = currentBlock;
-    node->statements = list_new(8);
+    Node *node = node_new_multiple(NODE_BLOCK);
     node->locals = list_new(4);
-
+    node->parentBlock = currentBlock;
     if (current()->kind == TOKEN_LCURLY) {
         position++;
         while (current()->kind != TOKEN_RCURLY && current()->kind != TOKEN_EOF) {
             currentBlock = node;
             Node *statement = parser_statement();
-            block_create_locals(statement);
             list_add(node->statements, statement);
         }
         parser_eat(TOKEN_RCURLY);
     } else {
         currentBlock = node;
         Node *statement = parser_statement();
-        block_create_locals(statement);
         list_add(node->statements, statement);
     }
     return node;
@@ -296,18 +122,18 @@ Node *parser_statement(void) {
 
         parser_eat(TOKEN_LPAREN);
         if (current()->kind != TOKEN_SEMICOLON) {
-            list_add(currentBlock->statements, parser_assign());
+            list_add(currentBlock->statements, parser_declarations());
         }
         parser_eat(TOKEN_SEMICOLON);
         if (current()->kind != TOKEN_SEMICOLON) {
-            node->condition = parser_assign();
+            node->condition = parser_assigns();
         } else {
             node->condition = NULL;
         }
         parser_eat(TOKEN_SEMICOLON);
         Node *increment = NULL;
         if (current()->kind != TOKEN_RPAREN) {
-            increment = parser_assign();
+            increment = parser_assigns();
         }
         parser_eat(TOKEN_RPAREN);
 
@@ -330,20 +156,74 @@ Node *parser_statement(void) {
         return node_new(NODE_NULL);
     }
 
-    Node *node = parser_assign();
+    Node *node = parser_declarations();
     parser_eat(TOKEN_SEMICOLON);
+    return node;
+}
+
+Type *parser_type(void) {
+    Type *type = type_new(TYPE_NUMBER, 8, true);
+    while (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
+        if (current()->kind == TOKEN_INT) type->size = 8, position++;
+        if (current()->kind == TOKEN_SIGNED) type->isSigned = true, position++;
+        if (current()->kind == TOKEN_UNSIGNED) type->isSigned = false, position++;
+    }
+    while (current()->kind == TOKEN_STAR) {
+        type = type_pointer(type);
+        position++;
+    }
+    return type;
+}
+
+Node *parser_declarations(void) {
+    Type *type = NULL;
+    if (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
+        type = parser_type();
+    }
+
+    if (type != NULL) {
+        Node *node = node_new_multiple(NODE_MULTIPLE);
+        for (;;) {
+            declarationType = type;
+            Node *variable = parser_primary();
+            declarationType = NULL;
+
+            if (current()->kind == TOKEN_ASSIGN) {
+                parser_eat(TOKEN_ASSIGN);
+                list_add(node->statements, node_new_operation(NODE_ASSIGN, variable, parser_assign()));
+            } else {
+                list_add(node->statements, node_new_operation(NODE_ASSIGN, variable, node_new_number(0)));
+            }
+
+            if (current()->kind == TOKEN_COMMA) {
+                position++;
+            } else {
+                break;
+            }
+        }
+        return node;
+    }
+    return parser_assigns();
+}
+
+Node *parser_assigns(void) {
+    Node *node =  node_new_multiple(NODE_MULTIPLE);
+    for (;;) {
+        list_add(node->statements, parser_assign());
+        if (current()->kind == TOKEN_COMMA) {
+            position++;
+        } else {
+            break;
+        }
+    }
     return node;
 }
 
 Node *parser_assign(void) {
     Node *node = parser_logic();
     if (current()->kind == TOKEN_ASSIGN) {
-        Node *otherNode = node_new(NODE_ASSIGN);
-        otherNode->lhs = node;
         parser_eat(TOKEN_ASSIGN);
-        otherNode->rhs = parser_assign();
-        otherNode->type = node->type;
-        return otherNode;
+        return node_new_operation(NODE_ASSIGN, node, parser_assign());
     }
     return node;
 }
@@ -418,7 +298,7 @@ Node *parser_add(void) {
             node = node_new_operation(NODE_SUB, node, rhs);
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
                 node = node_new_operation(NODE_DIV, node, node_new_number(8));
-                node->type = type_new(TYPE_NUMBER);
+                node->type = node->type->base;
             }
         }
     }
@@ -458,7 +338,7 @@ Node *parser_unary(void) {
         Node *node = node_new_unary(NODE_ADDR, parser_unary());
         if (node->unary->kind != NODE_VARIABLE) {
             fprintf(stderr, "%s\n", text);
-            for (int32_t i = 0; i < ((Token *)list_get(tokens, position - 1))->position; i++) fprintf(stderr, " ");
+            for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can only get an address from a variable\n");
             exit(EXIT_FAILURE);
         }
@@ -471,7 +351,7 @@ Node *parser_unary(void) {
         Node *node = node_new_unary(NODE_DEREF, parser_unary());
         if (node->unary->type->kind != TYPE_POINTER) {
             fprintf(stderr, "%s\n", text);
-            for (int32_t i = 0; i < ((Token *)list_get(tokens, position - 1))->position; i++) fprintf(stderr, " ");
+            for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can only dereference a pointer type\n");
             exit(EXIT_FAILURE);
         }
@@ -502,10 +382,40 @@ Node *parser_primary(void) {
     }
 
     if (current()->kind == TOKEN_VARIABLE) {
+        Local *local = node_find_local(currentBlock, current()->string);
+        if (local == NULL) {
+            if (declarationType != NULL) {
+                for (size_t i = 0; i < currentBlock->locals->size; i++) {
+                    Local *local = list_get(currentBlock->locals, i);
+                    if (!strcmp(local->name, current()->string)) {
+                        fprintf(stderr, "%s\n", text);
+                        for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
+                        fprintf(stderr, "^\nCan't redefine variable: %s\n", current()->string);
+                        exit(EXIT_FAILURE);
+                    }
+                }
+
+                local = malloc(sizeof(Local));
+                local->name = current()->string;
+                local->type = declarationType;
+                local->offset = local->type->size;
+                for (size_t i = 0; i < currentBlock->locals->size; i++) {
+                    Local *local = list_get(currentBlock->locals, i);
+                    local->offset += local->type->size;
+                }
+                list_add(currentBlock->locals, local);
+            } else {
+                fprintf(stderr, "%s\n", text);
+                for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
+                fprintf(stderr, "^\nCan't find variable: %s\n", current()->string);
+                exit(EXIT_FAILURE);
+            }
+        }
+
         Node *node = node_new(NODE_VARIABLE);
-        node->type = type_new(TYPE_NUMBER);
-        node->string = current()->string;
-        node->token = list_get(tokens, position++);
+        node->type = local->type;
+        node->string = local->name;
+        position++;
         return node;
     }
 
@@ -513,6 +423,6 @@ Node *parser_primary(void) {
     for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
     char tokenBuffer[32];
     token_to_string(current()->kind, tokenBuffer);
-    fprintf(stderr, "^\nUnexpected: %s\n", tokenBuffer);
+    fprintf(stderr, "^\nUnexpected: %s token\n", tokenBuffer);
     exit(EXIT_FAILURE);
 }

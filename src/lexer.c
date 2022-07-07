@@ -22,8 +22,10 @@ void token_to_string(TokenKind kind, char *buffer) {
     if (kind == TOKEN_RPAREN) strcpy(buffer, ")");
     if (kind == TOKEN_LCURLY) strcpy(buffer, "{");
     if (kind == TOKEN_RCURLY) strcpy(buffer, "}");
+    if (kind == TOKEN_COMMA) strcpy(buffer, ",");
     if (kind == TOKEN_SEMICOLON) strcpy(buffer, ";");
 
+    if (kind == TOKEN_INT) strcpy(buffer, "int");
     if (kind == TOKEN_IF) strcpy(buffer, "if");
     if (kind == TOKEN_ELSE) strcpy(buffer, "else");
     if (kind == TOKEN_WHILE) strcpy(buffer, "while");
@@ -66,6 +68,21 @@ List *lexer(char *_text) {
             continue;
         }
 
+        if (!strncmp(c, "int", 3)) {
+            list_add(tokens, token_new(TOKEN_INT));
+            c += 3;
+            continue;
+        }
+        if (!strncmp(c, "signed", 6)) {
+            list_add(tokens, token_new(TOKEN_SIGNED));
+            c += 6;
+            continue;
+        }
+        if (!strncmp(c, "unsigned", 8)) {
+            list_add(tokens, token_new(TOKEN_UNSIGNED));
+            c += 8;
+            continue;
+        }
         if (!strncmp(c, "if", 2)) {
             list_add(tokens, token_new(TOKEN_IF));
             c += 2;
@@ -124,6 +141,11 @@ List *lexer(char *_text) {
         }
         if (*c == '}') {
             list_add(tokens, token_new(TOKEN_RCURLY));
+            c++;
+            continue;
+        }
+        if (*c == ',') {
+            list_add(tokens, token_new(TOKEN_COMMA));
             c++;
             continue;
         }
@@ -220,7 +242,7 @@ List *lexer(char *_text) {
         }
 
         fprintf(stderr, "%s\n", text);
-        for (int32_t i = 0; i < c - text; i++) fprintf(stderr, " ");
+        for (int32_t i = 0; i < c - text - 1; i++) fprintf(stderr, " ");
         fprintf(stderr, "^\nUnexpected character: '%c'\n", *c);
         exit(EXIT_FAILURE);
     }
