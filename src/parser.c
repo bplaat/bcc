@@ -17,10 +17,9 @@ statement = LCURLY? block
     | declarations SEMICOLON
 
 type = (INT | SIGNED | UNSIGNED)+ STAR*
-declarations = type factor
-        (ASSIGN assign)? (COMMA factor (ASSIGN assign))*
+declarations = type (factor (ASSIGN assign)? COMMA?)*
     | assigns
-assigns = assign (COMMA assign)*
+assigns = (assign COMMA?)*
 assign = logic (ASSIGN assign)?
 
 logic = equality ((LOGIC_AND | LOGIC_OR) equality)*
@@ -29,7 +28,7 @@ relational = add ((LT | LTEQ | GT | GTEQ) add)*
 add = mul ((ADD | SUB) mul)*
 mul = unary ((STAR | DIV | MOD) unary)*
 unary = ADD unary | SUB unary | STAR unary | ADDR unary | LOGIC_NOT unary | primary
-primary = LPAREN logic RPAREN | NUMBER | VARIABLE (LPAREN RPAREN)?
+primary = LPAREN logic RPAREN | NUMBER | VARIABLE (LPAREN (assign COMMA?)* RPAREN)? | VARIABLE
 
 */
 
@@ -74,13 +73,13 @@ Node *parser_block(void) {
         while (current()->kind != TOKEN_RCURLY && current()->kind != TOKEN_EOF) {
             currentBlock = node;
             Node *statement = parser_statement();
-            list_add(node->statements, statement);
+            list_add(node->nodes, statement);
         }
         parser_eat(TOKEN_RCURLY);
     } else {
         currentBlock = node;
         Node *statement = parser_statement();
-        list_add(node->statements, statement);
+        list_add(node->nodes, statement);
     }
     return node;
 }
@@ -122,7 +121,7 @@ Node *parser_statement(void) {
 
         parser_eat(TOKEN_LPAREN);
         if (current()->kind != TOKEN_SEMICOLON) {
-            list_add(currentBlock->statements, parser_declarations());
+            list_add(currentBlock->nodes, parser_declarations());
         }
         parser_eat(TOKEN_SEMICOLON);
         if (current()->kind != TOKEN_SEMICOLON) {
@@ -139,7 +138,7 @@ Node *parser_statement(void) {
 
         node->thenBlock = parser_block();
         if (increment != NULL) {
-            list_add(node->thenBlock->statements, increment);
+            list_add(node->thenBlock->nodes, increment);
         }
         return node;
     }
@@ -199,9 +198,9 @@ Node *parser_declarations(void) {
 
             if (current()->kind == TOKEN_ASSIGN) {
                 parser_eat(TOKEN_ASSIGN);
-                list_add(node->statements, node_new_operation(NODE_ASSIGN, variable, parser_assign()));
+                list_add(node->nodes, node_new_operation(NODE_ASSIGN, variable, parser_assign()));
             } else {
-                list_add(node->statements, node_new_operation(NODE_ASSIGN, variable, node_new_number(0)));
+                list_add(node->nodes, node_new_operation(NODE_ASSIGN, variable, node_new_number(0)));
             }
 
             if (current()->kind == TOKEN_COMMA) {
@@ -218,7 +217,7 @@ Node *parser_declarations(void) {
 Node *parser_assigns(void) {
     Node *node = node_new_multiple(NODE_MULTIPLE);
     for (;;) {
-        list_add(node->statements, parser_assign());
+        list_add(node->nodes, parser_assign());
         if (current()->kind == TOKEN_COMMA) {
             parser_eat(TOKEN_COMMA);
         } else {
@@ -392,11 +391,19 @@ Node *parser_primary(void) {
 
     if (current()->kind == TOKEN_VARIABLE) {
         if (next()->kind == TOKEN_LPAREN) {
-            Node *node = node_new(NODE_FNCALL);
+            Node *node = node_new_multiple(NODE_FNCALL);
             node->type = type_new(TYPE_NUMBER, 8, true);
             node->string = current()->string;
             parser_eat(TOKEN_VARIABLE);
             parser_eat(TOKEN_LPAREN);
+            for (;;) {
+                list_add(node->nodes, parser_assign());
+                if (current()->kind == TOKEN_COMMA) {
+                    parser_eat(TOKEN_COMMA);
+                } else {
+                    break;
+                }
+            }
             parser_eat(TOKEN_RPAREN);
             return node;
         }

@@ -34,7 +34,7 @@ Node *node_new_operation(NodeKind kind, Node *lhs, Node *rhs) {
 
 Node *node_new_multiple(NodeKind kind) {
     Node *node = node_new(kind);
-    node->statements = list_new(8);
+    node->nodes = list_new(8);
     return node;
 }
 
@@ -57,8 +57,8 @@ Local *node_find_local(Node *block, char *name) {
 
 void node_print(FILE *file, Node *node) {
     if (node->kind == NODE_MULTIPLE) {
-        for (size_t i = 0; i < node->statements->size; i++) {
-            node_print(file, list_get(node->statements, i));
+        for (size_t i = 0; i < node->nodes->size; i++) {
+            node_print(file, list_get(node->nodes, i));
             fprintf(file, "; ");
         }
         return;
@@ -70,8 +70,8 @@ void node_print(FILE *file, Node *node) {
             type_print(file, local->type);
             fprintf(file, " %s; ", local->name);
         }
-        for (size_t i = 0; i < node->statements->size; i++) {
-            node_print(file, list_get(node->statements, i));
+        for (size_t i = 0; i < node->nodes->size; i++) {
+            node_print(file, list_get(node->nodes, i));
             fprintf(file, "; ");
         }
         fprintf(file, " }");
@@ -85,7 +85,12 @@ void node_print(FILE *file, Node *node) {
         fprintf(file, "%s", node->string);
     }
     if (node->kind == NODE_FNCALL) {
-        fprintf(file, "%s()", node->string);
+        fprintf(file, "%s(", node->string);
+        for (size_t i = 0; i < node->nodes->size; i++) {
+            node_print(file, list_get(node->nodes, i));
+            if (i != node->nodes->size - 1) fprintf(file, ", ");
+        }
+        fprintf(file, ")");
     }
 
     if (node->kind == NODE_IF) {

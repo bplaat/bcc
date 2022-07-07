@@ -60,7 +60,7 @@ struct Node {
         };
         struct {
             Node *parentBlock;
-            List *statements;
+            List *nodes;
             List *locals;
         };
         struct {

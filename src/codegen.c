@@ -14,8 +14,8 @@ bool inAssign = false;
 
 void node_asm(FILE *file, Node *node) {
     if (node->kind == NODE_MULTIPLE) {
-        for (size_t i = 0; i < node->statements->size; i++) {
-            Node *statement = list_get(node->statements, i);
+        for (size_t i = 0; i < node->nodes->size; i++) {
+            Node *statement = list_get(node->nodes, i);
             if (statement->kind != NODE_NULL) {
                 node_asm(file, statement);
                 fprintf(file, "\n");
@@ -43,8 +43,8 @@ void node_asm(FILE *file, Node *node) {
         }
 
         depth++;
-        for (size_t i = 0; i < node->statements->size; i++) {
-            Node *statement = list_get(node->statements, i);
+        for (size_t i = 0; i < node->nodes->size; i++) {
+            Node *statement = list_get(node->nodes, i);
             currentBlock = node;
             if (statement->kind != NODE_NULL) {
                 node_asm(file, statement);
@@ -175,12 +175,29 @@ void node_asm(FILE *file, Node *node) {
         node_print(file, node);
         fprintf(file, "\n");
 
+        for (size_t i = 0; i < node->nodes->size; i++) {
+            Node *statement = list_get(node->nodes, i);
+            if (statement->kind != NODE_NULL) {
+                node_asm(file, statement);
+                fprintf(file, "\n");
+                if (arch == ARCH_ARM64) fprintf(file, "    str x0, [sp, -16]!\n");
+                if (arch == ARCH_X86_64) fprintf(file, "    push rax\n");
+            }
+        }
+
         if (arch == ARCH_ARM64) {
+            for (int32_t i = (int32_t)node->nodes->size - 1; i >= 0; i--) {
+                fprintf(file, "    ldr x%d, [sp], 16\n", i);
+            }
             fprintf(file, "    str x30, [sp, -16]!\n");
             fprintf(file, "    bl _%s\n", node->string);
             fprintf(file, "    ldr x30, [sp], 16\n");
         }
         if (arch == ARCH_X86_64) {
+            char *argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+            for (int32_t i = (int32_t)node->nodes->size - 1; i >= 0; i--) {
+                fprintf(file, "    pop %s\n", argregs[i]);
+            }
             fprintf(file, "    xor rax, rax\n");
             fprintf(file, "    extern _%s\n", node->string);
             fprintf(file, "    call _%s\n", node->string);

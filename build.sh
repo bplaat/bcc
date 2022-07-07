@@ -34,6 +34,11 @@ cat <<EOF | gcc -xc -c -o b.o -
 #include <stdint.h>
 int64_t ret3(void) { return 3; }
 int64_t ret5(void) { return 5; }
+int64_t add(int64_t x, int64_t y) { return x+y; }
+int64_t sub(int64_t x, int64_t y) { return x-y; }
+int64_t add6(int64_t a, int64_t b, int64_t c, int64_t d, int64_t e, int64_t f) {
+  return a+b+c+d+e+f;
+}
 EOF
 
     if [[ $debug = "debug" ]]; then
@@ -55,6 +60,11 @@ cat <<EOF | arch -x86_64 gcc -xc -c -o b.o -
 #include <stdint.h>
 int64_t ret3(void) { return 3; }
 int64_t ret5(void) { return 5; }
+int64_t add(int64_t x, int64_t y) { return x+y; }
+int64_t sub(int64_t x, int64_t y) { return x-y; }
+int64_t add6(int64_t a, int64_t b, int64_t c, int64_t d, int64_t e, int64_t f) {
+  return a+b+c+d+e+f;
+}
 EOF
 
     if [[ $test = "test" ]]; then
@@ -153,6 +163,13 @@ if [[ $2 = "all" || $2 = "ptrs" ]]; then
     assert 8 '{ int x=3, y=5; return x+y; }'
 fi
 
-# if [[ $2 = "all" || $2 = "funcs" ]]; then
+if [[ $2 = "all" || $2 = "funcs" ]]; then
     assert 3 '{ return ret3(); }'
     assert 5 '{ return ret5(); }'
+fi
+
+assert 8 '{ return add(3, 5); }'
+assert 2 '{ return sub(5, 3); }'
+assert 21 '{ return add6(1,2,3,4,5,6); }'
+assert 66 '{ return add6(1,2,add6(3,4,5,6,7,8),9,10,11); }'
+assert 136 '{ return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16); }'
