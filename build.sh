@@ -174,3 +174,4 @@ if [[ $2 = "all" || $2 = "funcs" ]]; then
 fi
 
 assert 33 'int main() { return ret32() + 1; } int ret32() { return 32; }'
+assert 10 'int main() { return (a() + b()) / 3; } int a() { return 18; } int b() { return 12; }'
