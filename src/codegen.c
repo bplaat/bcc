@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "type.h"
+
 Arch arch;
 Node *currentBlock;
 int32_t depth = 0;
@@ -11,7 +13,7 @@ int32_t unique = 0;
 bool inAssign = false;
 
 void node_asm(FILE *file, Node *node) {
-    if (node->type == NODE_TYPE_BLOCK) {
+    if (node->kind == NODE_BLOCK) {
         size_t stackSize = 0;
         for (size_t i = 0; i < node->locals->size; i++) {
             Local *local = list_get(node->locals, i);
@@ -35,10 +37,7 @@ void node_asm(FILE *file, Node *node) {
         for (size_t i = 0; i < node->statements->size; i++) {
             Node *statement = list_get(node->statements, i);
             currentBlock = node;
-            if (statement->type != NODE_TYPE_NULL) {
-                fprintf(file, "    ; ");
-                node_print(file, statement);
-                fprintf(file, "\n");
+            if (statement->kind != NODE_NULL) {
                 node_asm(file, statement);
                 fprintf(file, "\n");
             }
@@ -66,7 +65,7 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->type == NODE_TYPE_IF) {
+    if (node->kind == NODE_IF) {
         node_asm(file, node->condition);
         int32_t endId = unique++;
         if (arch == ARCH_ARM64) {
@@ -103,7 +102,7 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->type == NODE_TYPE_WHILE) {
+    if (node->kind == NODE_WHILE) {
         int32_t beginId = unique++;
         fprintf(file, ".b%d:\n", beginId);
         if (node->condition != NULL) node_asm(file, node->condition);
@@ -125,13 +124,17 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->type == NODE_TYPE_RETURN) {
+    if (node->kind == NODE_RETURN) {
         node_asm(file, node->unary);
         if (arch == ARCH_ARM64) fprintf(file, "    b .return\n");
         if (arch == ARCH_X86_64) fprintf(file, "    jmp .return\n");
     }
 
-    if (node->type == NODE_TYPE_NUMBER) {
+    if (node->kind == NODE_NUMBER) {
+        fprintf(file, "    ; ");
+        node_print(file, node);
+        fprintf(file, "\n");
+
         if (arch == ARCH_ARM64) {
             fprintf(file, "    mov w0, %d\n", (int32_t)node->number & 0xffff);
             if (node->number >= 0xffff) {
@@ -143,7 +146,11 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->type == NODE_TYPE_VARIABLE) {
+    if (node->kind == NODE_VARIABLE) {
+        fprintf(file, "    ; ");
+        node_print(file, node);
+        fprintf(file, "\n");
+
         Local *local = block_find_local(currentBlock, node->string);
         if (inAssign) {
             if (arch == ARCH_ARM64) fprintf(file, "    sub x0, x8, %zu\n", local->offset);
@@ -154,8 +161,12 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->type >= NODE_TYPE_NEG && node->type <= NODE_TYPE_LOGIC_NOT) {
-        if (node->type == NODE_TYPE_ADDR) {
+    if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
+        fprintf(file, "    ; ");
+        node_print(file, node);
+        fprintf(file, "\n");
+
+        if (node->kind == NODE_ADDR) {
             Local *local = block_find_local(currentBlock, node->unary->string);
             if (arch == ARCH_ARM64) fprintf(file, "    sub x0, x8, %zu\n", local->offset);
             if (arch == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", local->offset);
@@ -164,19 +175,19 @@ void node_asm(FILE *file, Node *node) {
 
         node_asm(file, node->unary);
 
-        if (node->type == NODE_TYPE_NEG) {
+        if (node->kind == NODE_NEG) {
             if (arch == ARCH_ARM64) fprintf(file, "    sub x0, xzr, x0\n");
             if (arch == ARCH_X86_64) fprintf(file, "    neg rax\n");
         }
 
-        if (node->type == NODE_TYPE_DEREF) {
-            if (!inAssign || node->unary->type == NODE_TYPE_VARIABLE) {
+        if (node->kind == NODE_DEREF) {
+            if (!inAssign || node->unary->kind == NODE_VARIABLE) {
                 if (arch == ARCH_ARM64) fprintf(file, "    ldr x0, [x0]\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    mov rax, [rax]\n");
             }
         }
 
-        if (node->type == NODE_TYPE_LOGIC_NOT) {
+        if (node->kind == NODE_LOGIC_NOT) {
             if (arch == ARCH_ARM64) {
                 fprintf(file, "    cmp x0, 0\n");
                 fprintf(file, "    cset x0, eq\n");
@@ -189,39 +200,43 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->type >= NODE_TYPE_ASSIGN && node->type <= NODE_TYPE_LOGIC_OR) {
+    if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
         node_asm(file, node->rhs);
 
-        if (!(node->type == NODE_TYPE_ASSIGN && node->rhs->type == NODE_TYPE_ASSIGN)) {
+        if (!(node->kind == NODE_ASSIGN && node->rhs->kind == NODE_ASSIGN)) {
             if (arch == ARCH_ARM64) fprintf(file, "    str x0, [sp, -16]!\n");
             if (arch == ARCH_X86_64) fprintf(file, "    push rax\n");
         }
 
-        if (node->type == NODE_TYPE_ASSIGN) inAssign = true;
+        if (node->kind == NODE_ASSIGN) inAssign = true;
         node_asm(file, node->lhs);
-        if (node->type == NODE_TYPE_ASSIGN) inAssign = false;
-        if (!(node->type == NODE_TYPE_ASSIGN && node->rhs->type == NODE_TYPE_ASSIGN)) {
+        if (node->kind == NODE_ASSIGN) inAssign = false;
+        if (!(node->kind == NODE_ASSIGN && node->rhs->kind == NODE_ASSIGN)) {
             if (arch == ARCH_ARM64) fprintf(file, "    ldr x1, [sp], 16\n");
             if (arch == ARCH_X86_64) fprintf(file, "    pop rdx\n");
         }
 
-        if (node->type == NODE_TYPE_ASSIGN) {
+        fprintf(file, "    ; ");
+        node_print(file, node);
+        fprintf(file, "\n");
+
+        if (node->kind == NODE_ASSIGN) {
             if (arch == ARCH_ARM64) fprintf(file, "    str x1, [x0]\n");
             if (arch == ARCH_X86_64) fprintf(file, "    mov [rax], rdx\n");
         }
-        if (node->type == NODE_TYPE_ADD) {
+        if (node->kind == NODE_ADD) {
             if (arch == ARCH_ARM64) fprintf(file, "    add x0, x0, x1\n");
             if (arch == ARCH_X86_64) fprintf(file, "    add rax, rdx\n");
         }
-        if (node->type == NODE_TYPE_SUB) {
+        if (node->kind == NODE_SUB) {
             if (arch == ARCH_ARM64) fprintf(file, "    sub x0, x0, x1\n");
             if (arch == ARCH_X86_64) fprintf(file, "    sub rax, rdx\n");
         }
-        if (node->type == NODE_TYPE_MUL) {
+        if (node->kind == NODE_MUL) {
             if (arch == ARCH_ARM64) fprintf(file, "    mul x0, x0, x1\n");
             if (arch == ARCH_X86_64) fprintf(file, "    imul rdx\n");
         }
-        if (node->type == NODE_TYPE_DIV) {
+        if (node->kind == NODE_DIV) {
             if (arch == ARCH_ARM64) {
                 fprintf(file, "    sdiv x0, x0, x1\n");
             }
@@ -231,7 +246,7 @@ void node_asm(FILE *file, Node *node) {
                 fprintf(file, "    idiv rcx\n");
             }
         }
-        if (node->type == NODE_TYPE_MOD) {
+        if (node->kind == NODE_MOD) {
             if (arch == ARCH_ARM64) {
                 fprintf(file, "    udiv x2, x0, x1\n");
                 fprintf(file, "    msub x0, x2, x1, x0\n");
@@ -244,31 +259,31 @@ void node_asm(FILE *file, Node *node) {
             }
         }
 
-        if (node->type >= NODE_TYPE_EQ && node->type <= NODE_TYPE_GTEQ) {
+        if (node->kind >= NODE_EQ && node->kind <= NODE_GTEQ) {
             if (arch == ARCH_ARM64) fprintf(file, "    cmp x0, x1\n");
             if (arch == ARCH_X86_64) fprintf(file, "    cmp rax, rdx\n");
 
-            if (node->type == NODE_TYPE_EQ) {
+            if (node->kind == NODE_EQ) {
                 if (arch == ARCH_ARM64) fprintf(file, "    cset x0, eq\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    sete al\n");
             }
-            if (node->type == NODE_TYPE_NEQ) {
+            if (node->kind == NODE_NEQ) {
                 if (arch == ARCH_ARM64) fprintf(file, "    cset x0, ne\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    setne al\n");
             }
-            if (node->type == NODE_TYPE_LT) {
+            if (node->kind == NODE_LT) {
                 if (arch == ARCH_ARM64) fprintf(file, "    cset x0, lt\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    setl al\n");
             }
-            if (node->type == NODE_TYPE_LTEQ) {
+            if (node->kind == NODE_LTEQ) {
                 if (arch == ARCH_ARM64) fprintf(file, "    cset x0, le\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    setle al\n");
             }
-            if (node->type == NODE_TYPE_GT) {
+            if (node->kind == NODE_GT) {
                 if (arch == ARCH_ARM64) fprintf(file, "    cset x0, gt\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    setg al\n");
             }
-            if (node->type == NODE_TYPE_GTEQ) {
+            if (node->kind == NODE_GTEQ) {
                 if (arch == ARCH_ARM64) fprintf(file, "    cset x0, ge\n");
                 if (arch == ARCH_X86_64) fprintf(file, "    setge al\n");
             }
@@ -276,11 +291,11 @@ void node_asm(FILE *file, Node *node) {
             if (arch == ARCH_X86_64) fprintf(file, "   movzx rax, al\n");
         }
 
-        if (node->type == NODE_TYPE_LOGIC_AND) {
+        if (node->kind == NODE_LOGIC_AND) {
             if (arch == ARCH_ARM64) fprintf(file, "    and x0, x0, x1\n");
             if (arch == ARCH_X86_64) fprintf(file, "    and rax, rdx\n");
         }
-        if (node->type == NODE_TYPE_LOGIC_OR) {
+        if (node->kind == NODE_LOGIC_OR) {
             if (arch == ARCH_ARM64) fprintf(file, "    or x0, x0, x1\n");
             if (arch == ARCH_X86_64) fprintf(file, "    or rax, rdx\n");
         }

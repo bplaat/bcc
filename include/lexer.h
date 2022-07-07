@@ -6,43 +6,43 @@
 
 #include "utils.h"
 
-typedef enum TokenType {
-    TOKEN_TYPE_EOF,
-    TOKEN_TYPE_LPAREN,
-    TOKEN_TYPE_RPAREN,
-    TOKEN_TYPE_LCURLY,
-    TOKEN_TYPE_RCURLY,
-    TOKEN_TYPE_SEMICOLON,
+typedef enum TokenKind {
+    TOKEN_EOF,
+    TOKEN_LPAREN,
+    TOKEN_RPAREN,
+    TOKEN_LCURLY,
+    TOKEN_RCURLY,
+    TOKEN_SEMICOLON,
 
-    TOKEN_TYPE_NUMBER,
-    TOKEN_TYPE_VARIABLE,
+    TOKEN_NUMBER,
+    TOKEN_VARIABLE,
 
-    TOKEN_TYPE_IF,
-    TOKEN_TYPE_ELSE,
-    TOKEN_TYPE_WHILE,
-    TOKEN_TYPE_FOR,
-    TOKEN_TYPE_RETURN,
+    TOKEN_IF,
+    TOKEN_ELSE,
+    TOKEN_WHILE,
+    TOKEN_FOR,
+    TOKEN_RETURN,
 
-    TOKEN_TYPE_ASSIGN,
-    TOKEN_TYPE_ADD,
-    TOKEN_TYPE_SUB,
-    TOKEN_TYPE_STAR,
-    TOKEN_TYPE_DIV,
-    TOKEN_TYPE_MOD,
-    TOKEN_TYPE_EQ,
-    TOKEN_TYPE_NEQ,
-    TOKEN_TYPE_LT,
-    TOKEN_TYPE_LTEQ,
-    TOKEN_TYPE_GT,
-    TOKEN_TYPE_GTEQ,
-    TOKEN_TYPE_ADDR,
-    TOKEN_TYPE_LOGIC_NOT,
-    TOKEN_TYPE_LOGIC_AND,
-    TOKEN_TYPE_LOGIC_OR
-} TokenType;
+    TOKEN_ASSIGN,
+    TOKEN_ADD,
+    TOKEN_SUB,
+    TOKEN_STAR,
+    TOKEN_DIV,
+    TOKEN_MOD,
+    TOKEN_EQ,
+    TOKEN_NEQ,
+    TOKEN_LT,
+    TOKEN_LTEQ,
+    TOKEN_GT,
+    TOKEN_GTEQ,
+    TOKEN_ADDR,
+    TOKEN_LOGIC_NOT,
+    TOKEN_LOGIC_AND,
+    TOKEN_LOGIC_OR
+} TokenKind;
 
 typedef struct Token {
-    TokenType type;
+    TokenKind kind;
     union {
         int64_t number;
         char *string;
@@ -50,9 +50,9 @@ typedef struct Token {
     int32_t position;
 } Token;
 
-Token *token_new(TokenType type);
+Token *token_new(TokenKind kind);
 
-void token_type_to_string(TokenType type, char *buffer);
+void token_to_string(TokenKind kind, char *buffer);
 
 List *lexer(char *text);
 

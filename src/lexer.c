@@ -7,45 +7,45 @@
 char *text;
 char *c;
 
-Token *token_new(TokenType type) {
+Token *token_new(TokenKind kind) {
     Token *token = malloc(sizeof(Token));
-    token->type = type;
+    token->kind = kind;
     token->position = c - text;
     return token;
 }
 
-void token_type_to_string(TokenType type, char *buffer) {
-    if (type == TOKEN_TYPE_EOF) strcpy(buffer, "EOF");
-    if (type == TOKEN_TYPE_NUMBER) strcpy(buffer, "number");
-    if (type == TOKEN_TYPE_VARIABLE) strcpy(buffer, "variable");
-    if (type == TOKEN_TYPE_LPAREN) strcpy(buffer, "(");
-    if (type == TOKEN_TYPE_RPAREN) strcpy(buffer, ")");
-    if (type == TOKEN_TYPE_LCURLY) strcpy(buffer, "{");
-    if (type == TOKEN_TYPE_RCURLY) strcpy(buffer, "}");
-    if (type == TOKEN_TYPE_SEMICOLON) strcpy(buffer, ";");
+void token_to_string(TokenKind kind, char *buffer) {
+    if (kind == TOKEN_EOF) strcpy(buffer, "EOF");
+    if (kind == TOKEN_NUMBER) strcpy(buffer, "number");
+    if (kind == TOKEN_VARIABLE) strcpy(buffer, "variable");
+    if (kind == TOKEN_LPAREN) strcpy(buffer, "(");
+    if (kind == TOKEN_RPAREN) strcpy(buffer, ")");
+    if (kind == TOKEN_LCURLY) strcpy(buffer, "{");
+    if (kind == TOKEN_RCURLY) strcpy(buffer, "}");
+    if (kind == TOKEN_SEMICOLON) strcpy(buffer, ";");
 
-    if (type == TOKEN_TYPE_IF) strcpy(buffer, "if");
-    if (type == TOKEN_TYPE_ELSE) strcpy(buffer, "else");
-    if (type == TOKEN_TYPE_WHILE) strcpy(buffer, "while");
-    if (type == TOKEN_TYPE_FOR) strcpy(buffer, "for");
-    if (type == TOKEN_TYPE_RETURN) strcpy(buffer, "return");
+    if (kind == TOKEN_IF) strcpy(buffer, "if");
+    if (kind == TOKEN_ELSE) strcpy(buffer, "else");
+    if (kind == TOKEN_WHILE) strcpy(buffer, "while");
+    if (kind == TOKEN_FOR) strcpy(buffer, "for");
+    if (kind == TOKEN_RETURN) strcpy(buffer, "return");
 
-    if (type == TOKEN_TYPE_ASSIGN) strcpy(buffer, "=");
-    if (type == TOKEN_TYPE_ADD) strcpy(buffer, "+");
-    if (type == TOKEN_TYPE_SUB) strcpy(buffer, "-");
-    if (type == TOKEN_TYPE_STAR) strcpy(buffer, "*");
-    if (type == TOKEN_TYPE_DIV) strcpy(buffer, "/");
-    if (type == TOKEN_TYPE_MOD) strcpy(buffer, "%");
-    if (type == TOKEN_TYPE_ADDR) strcpy(buffer, "&");
-    if (type == TOKEN_TYPE_EQ) strcpy(buffer, "==");
-    if (type == TOKEN_TYPE_NEQ) strcpy(buffer, "!=");
-    if (type == TOKEN_TYPE_LT) strcpy(buffer, "<");
-    if (type == TOKEN_TYPE_LTEQ) strcpy(buffer, "<=");
-    if (type == TOKEN_TYPE_GT) strcpy(buffer, ">");
-    if (type == TOKEN_TYPE_GTEQ) strcpy(buffer, ">=");
-    if (type == TOKEN_TYPE_LOGIC_NOT) strcpy(buffer, "!");
-    if (type == TOKEN_TYPE_LOGIC_AND) strcpy(buffer, "&&");
-    if (type == TOKEN_TYPE_LOGIC_OR) strcpy(buffer, "||");
+    if (kind == TOKEN_ASSIGN) strcpy(buffer, "=");
+    if (kind == TOKEN_ADD) strcpy(buffer, "+");
+    if (kind == TOKEN_SUB) strcpy(buffer, "-");
+    if (kind == TOKEN_STAR) strcpy(buffer, "*");
+    if (kind == TOKEN_DIV) strcpy(buffer, "/");
+    if (kind == TOKEN_MOD) strcpy(buffer, "%");
+    if (kind == TOKEN_ADDR) strcpy(buffer, "&");
+    if (kind == TOKEN_EQ) strcpy(buffer, "==");
+    if (kind == TOKEN_NEQ) strcpy(buffer, "!=");
+    if (kind == TOKEN_LT) strcpy(buffer, "<");
+    if (kind == TOKEN_LTEQ) strcpy(buffer, "<=");
+    if (kind == TOKEN_GT) strcpy(buffer, ">");
+    if (kind == TOKEN_GTEQ) strcpy(buffer, ">=");
+    if (kind == TOKEN_LOGIC_NOT) strcpy(buffer, "!");
+    if (kind == TOKEN_LOGIC_AND) strcpy(buffer, "&&");
+    if (kind == TOKEN_LOGIC_OR) strcpy(buffer, "||");
 }
 
 List *lexer(char *_text) {
@@ -60,34 +60,34 @@ List *lexer(char *_text) {
         }
 
         if (isdigit(*c)) {
-            Token *token = token_new(TOKEN_TYPE_NUMBER);
+            Token *token = token_new(TOKEN_NUMBER);
             token->number = strtol(c, &c, 10);
             list_add(tokens, token);
             continue;
         }
 
         if (!strncmp(c, "if", 2)) {
-            list_add(tokens, token_new(TOKEN_TYPE_IF));
+            list_add(tokens, token_new(TOKEN_IF));
             c += 2;
             continue;
         }
         if (!strncmp(c, "else", 4)) {
-            list_add(tokens, token_new(TOKEN_TYPE_ELSE));
+            list_add(tokens, token_new(TOKEN_ELSE));
             c += 4;
             continue;
         }
         if (!strncmp(c, "while", 5)) {
-            list_add(tokens, token_new(TOKEN_TYPE_WHILE));
+            list_add(tokens, token_new(TOKEN_WHILE));
             c += 5;
             continue;
         }
         if (!strncmp(c, "for", 3)) {
-            list_add(tokens, token_new(TOKEN_TYPE_FOR));
+            list_add(tokens, token_new(TOKEN_FOR));
             c += 3;
             continue;
         }
         if (!strncmp(c, "return", 6)) {
-            list_add(tokens, token_new(TOKEN_TYPE_RETURN));
+            list_add(tokens, token_new(TOKEN_RETURN));
             c += 6;
             continue;
         }
@@ -99,7 +99,7 @@ List *lexer(char *_text) {
                 size++;
                 c++;
             }
-            Token *token = token_new(TOKEN_TYPE_VARIABLE);
+            Token *token = token_new(TOKEN_VARIABLE);
             token->string = malloc(size + 1);
             memcpy(token->string, ptr, size);
             token->string[size] = '\0';
@@ -108,113 +108,113 @@ List *lexer(char *_text) {
         }
 
         if (*c == '(') {
-            list_add(tokens, token_new(TOKEN_TYPE_LPAREN));
+            list_add(tokens, token_new(TOKEN_LPAREN));
             c++;
             continue;
         }
         if (*c == ')') {
-            list_add(tokens, token_new(TOKEN_TYPE_RPAREN));
+            list_add(tokens, token_new(TOKEN_RPAREN));
             c++;
             continue;
         }
         if (*c == '{') {
-            list_add(tokens, token_new(TOKEN_TYPE_LCURLY));
+            list_add(tokens, token_new(TOKEN_LCURLY));
             c++;
             continue;
         }
         if (*c == '}') {
-            list_add(tokens, token_new(TOKEN_TYPE_RCURLY));
+            list_add(tokens, token_new(TOKEN_RCURLY));
             c++;
             continue;
         }
         if (*c == ';') {
-            list_add(tokens, token_new(TOKEN_TYPE_SEMICOLON));
+            list_add(tokens, token_new(TOKEN_SEMICOLON));
             c++;
             continue;
         }
 
         if (*c == '+') {
-            list_add(tokens, token_new(TOKEN_TYPE_ADD));
+            list_add(tokens, token_new(TOKEN_ADD));
             c++;
             continue;
         }
         if (*c == '-') {
-            list_add(tokens, token_new(TOKEN_TYPE_SUB));
+            list_add(tokens, token_new(TOKEN_SUB));
             c++;
             continue;
         }
         if (*c == '*') {
-            list_add(tokens, token_new(TOKEN_TYPE_STAR));
+            list_add(tokens, token_new(TOKEN_STAR));
             c++;
             continue;
         }
         if (*c == '/') {
-            list_add(tokens, token_new(TOKEN_TYPE_DIV));
+            list_add(tokens, token_new(TOKEN_DIV));
             c++;
             continue;
         }
         if (*c == '%') {
-            list_add(tokens, token_new(TOKEN_TYPE_MOD));
+            list_add(tokens, token_new(TOKEN_MOD));
             c++;
             continue;
         }
         if (*c == '&') {
-            list_add(tokens, token_new(TOKEN_TYPE_ADDR));
+            list_add(tokens, token_new(TOKEN_ADDR));
             c++;
             continue;
         }
 
         if (*c == '=') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_TYPE_EQ));
+                list_add(tokens, token_new(TOKEN_EQ));
                 c += 2;
                 continue;
             }
 
-            list_add(tokens, token_new(TOKEN_TYPE_ASSIGN));
+            list_add(tokens, token_new(TOKEN_ASSIGN));
             c++;
             continue;
         }
         if (*c == '!') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_TYPE_NEQ));
+                list_add(tokens, token_new(TOKEN_NEQ));
                 c += 2;
                 continue;
             }
 
-            list_add(tokens, token_new(TOKEN_TYPE_LOGIC_NOT));
+            list_add(tokens, token_new(TOKEN_LOGIC_NOT));
             c++;
             continue;
         }
         if (*c == '<') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_TYPE_LTEQ));
+                list_add(tokens, token_new(TOKEN_LTEQ));
                 c += 2;
                 continue;
             }
 
-            list_add(tokens, token_new(TOKEN_TYPE_LT));
+            list_add(tokens, token_new(TOKEN_LT));
             c++;
             continue;
         }
         if (*c == '>') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_TYPE_GTEQ));
+                list_add(tokens, token_new(TOKEN_GTEQ));
                 c += 2;
                 continue;
             }
 
-            list_add(tokens, token_new(TOKEN_TYPE_GT));
+            list_add(tokens, token_new(TOKEN_GT));
             c++;
             continue;
         }
         if (*c == '&' && *(c + 1) == '&') {
-            list_add(tokens, token_new(TOKEN_TYPE_LOGIC_AND));
+            list_add(tokens, token_new(TOKEN_LOGIC_AND));
             c += 2;
             continue;
         }
         if (*c == '|' && *(c + 1) == '|') {
-            list_add(tokens, token_new(TOKEN_TYPE_LOGIC_OR));
+            list_add(tokens, token_new(TOKEN_LOGIC_OR));
             c += 2;
             continue;
         }
@@ -225,6 +225,6 @@ List *lexer(char *_text) {
         exit(EXIT_FAILURE);
     }
 
-    list_add(tokens, token_new(TOKEN_TYPE_EOF));
+    list_add(tokens, token_new(TOKEN_EOF));
     return tokens;
 }

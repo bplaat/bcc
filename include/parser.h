@@ -4,39 +4,40 @@
 #include <stdio.h>
 
 #include "lexer.h"
+#include "type.h"
 #include "utils.h"
 
-typedef enum NodeType {
-    NODE_TYPE_BLOCK,
-    NODE_TYPE_NULL,
+typedef enum NodeKind {
+    NODE_BLOCK,
+    NODE_NULL,
 
-    NODE_TYPE_VARIABLE,
-    NODE_TYPE_NUMBER,
+    NODE_VARIABLE,
+    NODE_NUMBER,
 
-    NODE_TYPE_IF,
-    NODE_TYPE_WHILE,
-    NODE_TYPE_RETURN,
+    NODE_IF,
+    NODE_WHILE,
+    NODE_RETURN,
 
-    NODE_TYPE_NEG,
-    NODE_TYPE_ADDR,
-    NODE_TYPE_DEREF,
-    NODE_TYPE_LOGIC_NOT,
+    NODE_NEG,
+    NODE_ADDR,
+    NODE_DEREF,
+    NODE_LOGIC_NOT,
 
-    NODE_TYPE_ASSIGN,
-    NODE_TYPE_ADD,
-    NODE_TYPE_SUB,
-    NODE_TYPE_MUL,
-    NODE_TYPE_DIV,
-    NODE_TYPE_MOD,
-    NODE_TYPE_EQ,
-    NODE_TYPE_NEQ,
-    NODE_TYPE_LT,
-    NODE_TYPE_LTEQ,
-    NODE_TYPE_GT,
-    NODE_TYPE_GTEQ,
-    NODE_TYPE_LOGIC_AND,
-    NODE_TYPE_LOGIC_OR
-} NodeType;
+    NODE_ASSIGN,
+    NODE_ADD,
+    NODE_SUB,
+    NODE_MUL,
+    NODE_DIV,
+    NODE_MOD,
+    NODE_EQ,
+    NODE_NEQ,
+    NODE_LT,
+    NODE_LTEQ,
+    NODE_GT,
+    NODE_GTEQ,
+    NODE_LOGIC_AND,
+    NODE_LOGIC_OR
+} NodeKind;
 
 typedef struct Local {
     char *name;
@@ -46,7 +47,9 @@ typedef struct Local {
 
 typedef struct Node Node;
 struct Node {
-    NodeType type;
+    NodeKind kind;
+    Type *type;
+    Token *token;
     union {
         int64_t number;
         char *string;
@@ -67,12 +70,27 @@ struct Node {
             Node *elseBlock;
         };
     };
-    Token *token;
 };
+
+Node *node_new(NodeKind kind);
+
+Node *node_new_number(int64_t number);
+
+Node *node_new_string(char *string);
+
+Node *node_new_unary(NodeKind kind, Node *unary);
+
+Node *node_new_operation(NodeKind kind, Node *lhs, Node *rhs);
+
+void node_print(FILE *file, Node *node);
 
 Node *parser(char *text, List *tokens);
 
-void parser_eat(TokenType type);
+void parser_eat(TokenKind kind);
+
+Local *block_find_local(Node *block, char *name);
+
+void block_create_locals(Node *node);
 
 Node *parser_block(void);
 
@@ -93,9 +111,5 @@ Node *parser_mul(void);
 Node *parser_unary(void);
 
 Node *parser_primary(void);
-
-Local *block_find_local(Node *block, char *name);
-
-void node_print(FILE *file, Node *node);
 
 #endif
