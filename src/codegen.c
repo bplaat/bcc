@@ -170,6 +170,23 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
+    if (node->kind == NODE_FNCALL) {
+        fprintf(file, "    ; ");
+        node_print(file, node);
+        fprintf(file, "\n");
+
+        if (arch == ARCH_ARM64) {
+            fprintf(file, "    str x30, [sp, -16]!\n");
+            fprintf(file, "    bl _%s\n", node->string);
+            fprintf(file, "    ldr x30, [sp], 16\n");
+        }
+        if (arch == ARCH_X86_64) {
+            fprintf(file, "    xor rax, rax\n");
+            fprintf(file, "    extern _%s\n", node->string);
+            fprintf(file, "    call _%s\n", node->string);
+        }
+    }
+
     if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
         fprintf(file, "    ; ");
         node_print(file, node);

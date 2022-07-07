@@ -29,7 +29,7 @@ relational = add ((LT | LTEQ | GT | GTEQ) add)*
 add = mul ((ADD | SUB) mul)*
 mul = unary ((STAR | DIV | MOD) unary)*
 unary = ADD unary | SUB unary | STAR unary | ADDR unary | LOGIC_NOT unary | primary
-primary = LPAREN logic RPAREN | NUMBER | VARIABLE
+primary = LPAREN logic RPAREN | NUMBER | VARIABLE (LPAREN RPAREN)?
 
 */
 
@@ -70,7 +70,7 @@ Node *parser_block(void) {
     node->locals = list_new(4);
     node->parentBlock = currentBlock;
     if (current()->kind == TOKEN_LCURLY) {
-        position++;
+        parser_eat(TOKEN_LCURLY);
         while (current()->kind != TOKEN_RCURLY && current()->kind != TOKEN_EOF) {
             currentBlock = node;
             Node *statement = parser_statement();
@@ -92,13 +92,13 @@ Node *parser_statement(void) {
 
     if (current()->kind == TOKEN_IF) {
         Node *node = node_new(NODE_IF);
-        position++;
+        parser_eat(TOKEN_IF);
         parser_eat(TOKEN_LPAREN);
         node->condition = parser_assign();
         parser_eat(TOKEN_RPAREN);
         node->thenBlock = parser_block();
         if (current()->kind == TOKEN_ELSE) {
-            position++;
+            parser_eat(TOKEN_ELSE);
             node->elseBlock = parser_block();
         } else {
             node->elseBlock = NULL;
@@ -108,7 +108,7 @@ Node *parser_statement(void) {
 
     if (current()->kind == TOKEN_WHILE) {
         Node *node = node_new(NODE_WHILE);
-        position++;
+        parser_eat(TOKEN_WHILE);
         parser_eat(TOKEN_LPAREN);
         node->condition = parser_assign();
         parser_eat(TOKEN_RPAREN);
@@ -118,7 +118,7 @@ Node *parser_statement(void) {
 
     if (current()->kind == TOKEN_FOR) {
         Node *node = node_new(NODE_WHILE);
-        position++;
+        parser_eat(TOKEN_FOR);
 
         parser_eat(TOKEN_LPAREN);
         if (current()->kind != TOKEN_SEMICOLON) {
@@ -145,14 +145,14 @@ Node *parser_statement(void) {
     }
 
     if (current()->kind == TOKEN_RETURN) {
-        position++;
+        parser_eat(TOKEN_RETURN);
         Node *node = node_new_unary(NODE_RETURN, parser_assign());
         parser_eat(TOKEN_SEMICOLON);
         return node;
     }
 
     if (current()->kind == TOKEN_SEMICOLON) {
-        position++;
+        parser_eat(TOKEN_SEMICOLON);
         return node_new(NODE_NULL);
     }
 
@@ -164,13 +164,22 @@ Node *parser_statement(void) {
 Type *parser_type(void) {
     Type *type = type_new(TYPE_NUMBER, 8, true);
     while (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
-        if (current()->kind == TOKEN_INT) type->size = 8, position++;
-        if (current()->kind == TOKEN_SIGNED) type->isSigned = true, position++;
-        if (current()->kind == TOKEN_UNSIGNED) type->isSigned = false, position++;
+        if (current()->kind == TOKEN_INT) {
+            parser_eat(TOKEN_INT);
+            type->size = 8;
+        }
+        if (current()->kind == TOKEN_SIGNED) {
+            parser_eat(TOKEN_SIGNED);
+            type->isSigned = true;
+        }
+        if (current()->kind == TOKEN_UNSIGNED) {
+            parser_eat(TOKEN_UNSIGNED);
+            type->isSigned = false;
+        }
     }
     while (current()->kind == TOKEN_STAR) {
+        parser_eat(TOKEN_STAR);
         type = type_pointer(type);
-        position++;
     }
     return type;
 }
@@ -196,7 +205,7 @@ Node *parser_declarations(void) {
             }
 
             if (current()->kind == TOKEN_COMMA) {
-                position++;
+                parser_eat(TOKEN_COMMA);
             } else {
                 break;
             }
@@ -207,11 +216,11 @@ Node *parser_declarations(void) {
 }
 
 Node *parser_assigns(void) {
-    Node *node =  node_new_multiple(NODE_MULTIPLE);
+    Node *node = node_new_multiple(NODE_MULTIPLE);
     for (;;) {
         list_add(node->statements, parser_assign());
         if (current()->kind == TOKEN_COMMA) {
-            position++;
+            parser_eat(TOKEN_COMMA);
         } else {
             break;
         }
@@ -232,10 +241,10 @@ Node *parser_logic(void) {
     Node *node = parser_equality();
     while (current()->kind == TOKEN_LOGIC_AND || current()->kind == TOKEN_LOGIC_OR) {
         if (current()->kind == TOKEN_LOGIC_AND) {
-            position++;
+            parser_eat(TOKEN_LOGIC_AND);
             node = node_new_operation(NODE_LOGIC_AND, node, parser_equality());
         } else if (current()->kind == TOKEN_LOGIC_OR) {
-            position++;
+            parser_eat(TOKEN_LOGIC_OR);
             node = node_new_operation(NODE_LOGIC_OR, node, parser_equality());
         }
     }
@@ -246,10 +255,10 @@ Node *parser_equality(void) {
     Node *node = parser_relational();
     while (current()->kind == TOKEN_EQ || current()->kind == TOKEN_NEQ) {
         if (current()->kind == TOKEN_EQ) {
-            position++;
+            parser_eat(TOKEN_EQ);
             node = node_new_operation(NODE_EQ, node, parser_relational());
         } else if (current()->kind == TOKEN_NEQ) {
-            position++;
+            parser_eat(TOKEN_NEQ);
             node = node_new_operation(NODE_NEQ, node, parser_relational());
         }
     }
@@ -261,16 +270,16 @@ Node *parser_relational(void) {
     while (current()->kind == TOKEN_LT || current()->kind == TOKEN_LTEQ || current()->kind == TOKEN_GT ||
            current()->kind == TOKEN_GTEQ) {
         if (current()->kind == TOKEN_LT) {
-            position++;
+            parser_eat(TOKEN_LT);
             node = node_new_operation(NODE_LT, node, parser_add());
         } else if (current()->kind == TOKEN_LTEQ) {
-            position++;
+            parser_eat(TOKEN_LTEQ);
             node = node_new_operation(NODE_LTEQ, node, parser_add());
         } else if (current()->kind == TOKEN_GT) {
-            position++;
+            parser_eat(TOKEN_GT);
             node = node_new_operation(NODE_GT, node, parser_add());
         } else if (current()->kind == TOKEN_GTEQ) {
-            position++;
+            parser_eat(TOKEN_GTEQ);
             node = node_new_operation(NODE_GTEQ, node, parser_add());
         }
     }
@@ -281,7 +290,7 @@ Node *parser_add(void) {
     Node *node = parser_mul();
     while (current()->kind == TOKEN_ADD || current()->kind == TOKEN_SUB) {
         if (current()->kind == TOKEN_ADD) {
-            position++;
+            parser_eat(TOKEN_ADD);
             Node *rhs = parser_mul();
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_NUMBER) {
                 rhs = node_new_operation(NODE_MUL, rhs, node_new_number(8));
@@ -290,7 +299,7 @@ Node *parser_add(void) {
         }
 
         else if (current()->kind == TOKEN_SUB) {
-            position++;
+            parser_eat(TOKEN_SUB);
             Node *rhs = parser_mul();
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_NUMBER) {
                 rhs = node_new_operation(NODE_MUL, rhs, node_new_number(8));
@@ -309,13 +318,13 @@ Node *parser_mul(void) {
     Node *node = parser_unary();
     while (current()->kind == TOKEN_STAR || current()->kind == TOKEN_DIV || current()->kind == TOKEN_MOD) {
         if (current()->kind == TOKEN_STAR) {
-            position++;
+            parser_eat(TOKEN_STAR);
             node = node_new_operation(NODE_MUL, node, parser_unary());
         } else if (current()->kind == TOKEN_DIV) {
-            position++;
+            parser_eat(TOKEN_DIV);
             node = node_new_operation(NODE_DIV, node, parser_unary());
         } else if (current()->kind == TOKEN_MOD) {
-            position++;
+            parser_eat(TOKEN_MOD);
             node = node_new_operation(NODE_MOD, node, parser_unary());
         }
     }
@@ -324,17 +333,17 @@ Node *parser_mul(void) {
 
 Node *parser_unary(void) {
     if (current()->kind == TOKEN_ADD) {
-        position++;
+        parser_eat(TOKEN_ADD);
         return parser_unary();
     }
 
     if (current()->kind == TOKEN_SUB) {
-        position++;
+        parser_eat(TOKEN_SUB);
         return node_new_unary(NODE_NEG, parser_unary());
     }
 
     if (current()->kind == TOKEN_ADDR) {
-        position++;
+        parser_eat(TOKEN_ADDR);
         Node *node = node_new_unary(NODE_ADDR, parser_unary());
         if (node->unary->kind != NODE_VARIABLE) {
             fprintf(stderr, "%s\n", text);
@@ -347,7 +356,7 @@ Node *parser_unary(void) {
     }
 
     if (current()->kind == TOKEN_STAR) {
-        position++;
+        parser_eat(TOKEN_STAR);
         Node *node = node_new_unary(NODE_DEREF, parser_unary());
         if (node->unary->type->kind != TYPE_POINTER) {
             fprintf(stderr, "%s\n", text);
@@ -360,7 +369,7 @@ Node *parser_unary(void) {
     }
 
     if (current()->kind == TOKEN_LOGIC_NOT) {
-        position++;
+        parser_eat(TOKEN_LOGIC_NOT);
         return node_new_unary(NODE_LOGIC_NOT, parser_unary());
     }
 
@@ -369,7 +378,7 @@ Node *parser_unary(void) {
 
 Node *parser_primary(void) {
     if (current()->kind == TOKEN_LPAREN) {
-        position++;
+        parser_eat(TOKEN_LPAREN);
         Node *node = parser_logic();
         parser_eat(TOKEN_RPAREN);
         return node;
@@ -377,11 +386,21 @@ Node *parser_primary(void) {
 
     if (current()->kind == TOKEN_NUMBER) {
         Node *node = node_new_number(current()->number);
-        position++;
+        parser_eat(TOKEN_NUMBER);
         return node;
     }
 
     if (current()->kind == TOKEN_VARIABLE) {
+        if (next()->kind == TOKEN_LPAREN) {
+            Node *node = node_new(NODE_FNCALL);
+            node->type = type_new(TYPE_NUMBER, 8, true);
+            node->string = current()->string;
+            parser_eat(TOKEN_VARIABLE);
+            parser_eat(TOKEN_LPAREN);
+            parser_eat(TOKEN_RPAREN);
+            return node;
+        }
+
         Local *local = node_find_local(currentBlock, current()->string);
         if (local == NULL) {
             if (declarationType != NULL) {
@@ -415,7 +434,7 @@ Node *parser_primary(void) {
         Node *node = node_new(NODE_VARIABLE);
         node->type = local->type;
         node->string = local->name;
-        position++;
+        parser_eat(TOKEN_VARIABLE);
         return node;
     }
 

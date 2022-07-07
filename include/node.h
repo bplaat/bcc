@@ -1,6 +1,7 @@
 #ifndef NODE_H
 
 #include <stdio.h>
+
 #include "type.h"
 #include "utils.h"
 
@@ -11,6 +12,7 @@ typedef enum NodeKind {
 
     NODE_VARIABLE,
     NODE_NUMBER,
+    NODE_FNCALL,
 
     NODE_IF,
     NODE_WHILE,

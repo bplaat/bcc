@@ -47,13 +47,14 @@ int main(int argc, char **argv) {
 
     if (arch == ARCH_ARM64) {
         system("as a.s -o a.o");
-        system("ld a.o -e _start -syslibroot $(xcrun -sdk macosx --show-sdk-path) -lSystem -o a.out");
+        system("ld a.o b.o -e _start -syslibroot $(xcrun -sdk macosx --show-sdk-path) -lSystem -o a.out");
     }
     if (arch == ARCH_X86_64) {
         system("nasm -f macho64 a.s -o a.o");
-        system("arch -x86_64 ld a.o -e _start -syslibroot $(xcrun -sdk macosx --show-sdk-path) -lSystem -o a.out");
+        system("arch -x86_64 ld a.o b.o -e _start -syslibroot $(xcrun -sdk macosx --show-sdk-path) -lSystem -o a.out");
     }
     remove("a.o");
+    remove("b.o");
 
     node_print(stdout, node);
     return EXIT_SUCCESS;

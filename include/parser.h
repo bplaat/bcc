@@ -1,8 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "node.h"
 #include "lexer.h"
+#include "node.h"
 #include "utils.h"
 
 Node *parser(char *text, List *tokens);

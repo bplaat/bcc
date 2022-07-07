@@ -84,6 +84,9 @@ void node_print(FILE *file, Node *node) {
     if (node->kind == NODE_VARIABLE) {
         fprintf(file, "%s", node->string);
     }
+    if (node->kind == NODE_FNCALL) {
+        fprintf(file, "%s()", node->string);
+    }
 
     if (node->kind == NODE_IF) {
         fprintf(file, "if (");

@@ -1,3 +1,4 @@
+#!/bin/bash
 # Build and test script for the Bassie C Compiler
 # ./build.sh # Compile and run selected tests in this file
 # ./build.sh format # Run the clang formatter over the whole code base
@@ -29,6 +30,12 @@ assert() {
     input=$2
 
     # Compile for ARM64
+cat <<EOF | gcc -xc -c -o b.o -
+#include <stdint.h>
+int64_t ret3(void) { return 3; }
+int64_t ret5(void) { return 5; }
+EOF
+
     if [[ $debug = "debug" ]]; then
         lldb -- ./bcc "$input"
     else
@@ -44,6 +51,12 @@ assert() {
     fi
 
     # Compile for x86_64
+cat <<EOF | arch -x86_64 gcc -xc -c -o b.o -
+#include <stdint.h>
+int64_t ret3(void) { return 3; }
+int64_t ret5(void) { return 5; }
+EOF
+
     if [[ $test = "test" ]]; then
         ./bcc "$input" --arch=x86_64 || exit
         ./a.out
@@ -139,3 +152,7 @@ if [[ $2 = "all" || $2 = "ptrs" ]]; then
     assert 8 '{ int x, y; x=3, y=5; return x+y; }'
     assert 8 '{ int x=3, y=5; return x+y; }'
 fi
+
+# if [[ $2 = "all" || $2 = "funcs" ]]; then
+    assert 3 '{ return ret3(); }'
+    assert 5 '{ return ret5(); }'

@@ -20,7 +20,6 @@ Type *type_pointer(Type *type) {
     return pointerType;
 }
 
-
 void _type_print(FILE *file, Type *type, bool enclose) {
     if (enclose) fprintf(file, "[");
 
@@ -40,6 +39,4 @@ void _type_print(FILE *file, Type *type, bool enclose) {
     if (enclose) fprintf(file, "]");
 }
 
-void type_print(FILE *file, Type *type) {
-    _type_print(file, type, true);
-}
+void type_print(FILE *file, Type *type) { _type_print(file, type, true); }
