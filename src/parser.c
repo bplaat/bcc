@@ -396,12 +396,14 @@ Node *parser_primary(void) {
             node->string = current()->string;
             parser_eat(TOKEN_VARIABLE);
             parser_eat(TOKEN_LPAREN);
-            for (;;) {
-                list_add(node->nodes, parser_assign());
-                if (current()->kind == TOKEN_COMMA) {
-                    parser_eat(TOKEN_COMMA);
-                } else {
-                    break;
+            if (current()->kind != TOKEN_RPAREN) {
+                for (;;) {
+                    list_add(node->nodes, parser_assign());
+                    if (current()->kind == TOKEN_COMMA) {
+                        parser_eat(TOKEN_COMMA);
+                    } else {
+                        break;
+                    }
                 }
             }
             parser_eat(TOKEN_RPAREN);

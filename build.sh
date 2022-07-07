@@ -166,10 +166,9 @@ fi
 if [[ $2 = "all" || $2 = "funcs" ]]; then
     assert 3 '{ return ret3(); }'
     assert 5 '{ return ret5(); }'
+    assert 8 '{ return add(3, 5); }'
+    assert 2 '{ return sub(5, 3); }'
+    assert 21 '{ return add6(1,2,3,4,5,6); }'
+    assert 66 '{ return add6(1,2,add6(3,4,5,6,7,8),9,10,11); }'
+    assert 136 '{ return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16); }'
 fi
-
-assert 8 '{ return add(3, 5); }'
-assert 2 '{ return sub(5, 3); }'
-assert 21 '{ return add6(1,2,3,4,5,6); }'
-assert 66 '{ return add6(1,2,add6(3,4,5,6,7,8),9,10,11); }'
-assert 136 '{ return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16); }'
