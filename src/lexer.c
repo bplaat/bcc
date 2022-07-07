@@ -26,6 +26,7 @@ void token_to_string(TokenKind kind, char *buffer) {
     if (kind == TOKEN_SEMICOLON) strcpy(buffer, ";");
 
     if (kind == TOKEN_INT) strcpy(buffer, "int");
+    if (kind == TOKEN_LONG) strcpy(buffer, "long");
     if (kind == TOKEN_IF) strcpy(buffer, "if");
     if (kind == TOKEN_ELSE) strcpy(buffer, "else");
     if (kind == TOKEN_WHILE) strcpy(buffer, "while");
@@ -71,6 +72,11 @@ List *lexer(char *_text) {
         if (!strncmp(c, "int", 3)) {
             list_add(tokens, token_new(TOKEN_INT));
             c += 3;
+            continue;
+        }
+        if (!strncmp(c, "long", 4)) {
+            list_add(tokens, token_new(TOKEN_LONG));
+            c += 4;
             continue;
         }
         if (!strncmp(c, "signed", 6)) {
@@ -181,6 +187,12 @@ List *lexer(char *_text) {
             continue;
         }
         if (*c == '&') {
+            if (*(c + 1) == '&') {
+                list_add(tokens, token_new(TOKEN_LOGIC_AND));
+                c += 2;
+                continue;
+            }
+
             list_add(tokens, token_new(TOKEN_ADDR));
             c++;
             continue;
@@ -228,11 +240,6 @@ List *lexer(char *_text) {
 
             list_add(tokens, token_new(TOKEN_GT));
             c++;
-            continue;
-        }
-        if (*c == '&' && *(c + 1) == '&') {
-            list_add(tokens, token_new(TOKEN_LOGIC_AND));
-            c += 2;
             continue;
         }
         if (*c == '|' && *(c + 1) == '|') {

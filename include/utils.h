@@ -3,6 +3,13 @@
 
 #include <stdlib.h>
 
+typedef enum ArchKind { ARCH_ARM64, ARCH_X86_64 } ArchKind;
+
+typedef struct Arch {
+    ArchKind kind;
+    int32_t stackAlign;
+} Arch;
+
 size_t align(size_t size, size_t alignment);
 
 typedef struct List {

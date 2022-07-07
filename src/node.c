@@ -13,7 +13,7 @@ Node *node_new(NodeKind kind) {
 Node *node_new_number(int64_t number) {
     Node *node = node_new(NODE_NUMBER);
     node->number = number;
-    node->type = type_new(TYPE_NUMBER, 8, true);
+    node->type = type_new(TYPE_NUMBER, 4, true);
     return node;
 }
 

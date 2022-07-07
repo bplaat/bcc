@@ -32,11 +32,11 @@ assert() {
     # Compile for ARM64
 cat <<EOF | gcc -xc -c -o b.o -
 #include <stdint.h>
-int64_t ret3(void) { return 3; }
-int64_t ret5(void) { return 5; }
-int64_t add(int64_t x, int64_t y) { return x+y; }
-int64_t sub(int64_t x, int64_t y) { return x-y; }
-int64_t add6(int64_t a, int64_t b, int64_t c, int64_t d, int64_t e, int64_t f) {
+int ret3(void) { return 3; }
+int ret5(void) { return 5; }
+int add(int x, int y) { return x+y; }
+int sub(int x, int y) { return x-y; }
+int add6(int a, int b, int c, int d, int e, int f) {
   return a+b+c+d+e+f;
 }
 EOF
@@ -58,11 +58,11 @@ EOF
     # Compile for x86_64
 cat <<EOF | arch -x86_64 gcc -xc -c -o b.o -
 #include <stdint.h>
-int64_t ret3(void) { return 3; }
-int64_t ret5(void) { return 5; }
-int64_t add(int64_t x, int64_t y) { return x+y; }
-int64_t sub(int64_t x, int64_t y) { return x-y; }
-int64_t add6(int64_t a, int64_t b, int64_t c, int64_t d, int64_t e, int64_t f) {
+int ret3(void) { return 3; }
+int ret5(void) { return 5; }
+int add(int x, int y) { return x+y; }
+int sub(int x, int y) { return x-y; }
+int add6(int a, int b, int c, int d, int e, int f) {
   return a+b+c+d+e+f;
 }
 EOF
@@ -80,7 +80,7 @@ EOF
     fi
 }
 
-if [[ $2 = "all" ]]; then
+if [[ $2 = "all" || $2 = "basic"  ]]; then
     assert 0 'int main() { return 0; }'
     assert 42 'int main() { return 42; }'
     assert 21 'int main() { return 5+20-4; }'
@@ -91,9 +91,7 @@ if [[ $2 = "all" ]]; then
     assert 10 'int main() { return -10+20; }'
     assert 10 'int main() { return - -10; }'
     assert 10 'int main() { return - - +10; }'
-
     assert 2 'int main() { return 56%6; }'
-    assert 1 'int main() { return !(4 > 5); }'
 
     assert 0 'int main() { return 0==1; }'
     assert 1 'int main() { return 42==42; }'
@@ -113,6 +111,12 @@ if [[ $2 = "all" ]]; then
     assert 1 'int main() { return 1>=0; }'
     assert 1 'int main() { return 1>=1; }'
     assert 0 'int main() { return 1>=2; }'
+
+    assert 1 'int main() { return !(4 > 5); }'
+    assert 1 'int main() { return 5 > 4 && 3 > 2; }'
+    assert 0 'int main() { return 5 > 4 && 3 < 2; }'
+    assert 1 'int main() { return 5 > 4 || 3 > 2; }'
+    assert 0 'int main() { return 5 < 4 || 3 < 2; }'
 fi
 
 if [[ $2 = "all" || $2 = "locals" ]]; then
@@ -155,6 +159,7 @@ if [[ $2 = "all" || $2 = "ptrs" ]]; then
     assert 5 'int main() { int x=3; int y=5; return *(&x+1); }'
     assert 3 'int main() { int x=3; int y=5; return *(&y-1); }'
     assert 5 'int main() { int x=3; int y=5; return *(&x-(-1)); }'
+
     assert 5 'int main() { int x=3; int *y=&x; *y=5; return x; }'
     assert 7 'int main() { int x=3; int y=5; *(&x+1)=7; return y; }'
     assert 7 'int main() { int x=3; int y=5; *(&y-2+1)=7; return x; }'
@@ -171,7 +176,9 @@ if [[ $2 = "all" || $2 = "funcs" ]]; then
     assert 21 'int main() { return add6(1,2,3,4,5,6); }'
     assert 66 'int main() { return add6(1,2,add6(3,4,5,6,7,8),9,10,11); }'
     assert 136 'int main() { return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16); }'
+    assert 33 'int main() { return ret32() + 1; } int ret32() { return 32; }'
+    assert 10 'int main() { return (a() + b()) / 3; } int a() { return 18; } int b() { return 12; }'
 fi
 
-assert 33 'int main() { return ret32() + 1; } int ret32() { return 32; }'
-assert 10 'int main() { return (a() + b()) / 3; } int a() { return 18; } int b() { return 12; }'
+# Deref problem: *([*i32]) = -> [u64]
+assert 5 'int main() { int x=3; int *y=&x; *y=5; return x; }'

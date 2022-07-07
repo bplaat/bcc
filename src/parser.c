@@ -7,7 +7,7 @@
 
 /*
 
-type = (INT | SIGNED | UNSIGNED)+ STAR*
+type = (INT | LONG | SIGNED | UNSIGNED)+ STAR*
 
 program = funcdef*
 
@@ -37,16 +37,18 @@ primary = LPAREN logic RPAREN | NUMBER | VARIABLE (LPAREN (assign COMMA?)* RPARE
 
 */
 
+Arch *arch;
 char *text;
 List *tokens;
 int32_t position;
 Node *currentBlock = NULL;
 Type *declarationType = NULL;
 
-Node *parser(char *_text, List *_tokens) {
+Node *parser(char *_text, List *_tokens, Arch *_arch) {
     text = _text;
     tokens = _tokens;
     position = 0;
+    arch = _arch;
     return parser_program();
 }
 
@@ -70,10 +72,14 @@ void parser_eat(TokenKind kind) {
 }
 
 Type *parser_type(void) {
-    Type *type = type_new(TYPE_NUMBER, 8, true);
+    Type *type = type_new(TYPE_NUMBER, 4, true);
     while (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
         if (current()->kind == TOKEN_INT) {
             parser_eat(TOKEN_INT);
+            type->size = 4;
+        }
+        if (current()->kind == TOKEN_LONG) {
+            parser_eat(TOKEN_LONG);
             type->size = 8;
         }
         if (current()->kind == TOKEN_SIGNED) {
@@ -317,7 +323,7 @@ Node *parser_add(void) {
             parser_eat(TOKEN_ADD);
             Node *rhs = parser_mul();
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_NUMBER) {
-                rhs = node_new_operation(NODE_MUL, rhs, node_new_number(8));
+                rhs = node_new_operation(NODE_MUL, rhs, node_new_number(arch->stackAlign));
             }
             node = node_new_operation(NODE_ADD, node, rhs);
         }
@@ -326,11 +332,11 @@ Node *parser_add(void) {
             parser_eat(TOKEN_SUB);
             Node *rhs = parser_mul();
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_NUMBER) {
-                rhs = node_new_operation(NODE_MUL, rhs, node_new_number(8));
+                rhs = node_new_operation(NODE_MUL, rhs, node_new_number(arch->stackAlign));
             }
             node = node_new_operation(NODE_SUB, node, rhs);
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
-                node = node_new_operation(NODE_DIV, node, node_new_number(8));
+                node = node_new_operation(NODE_DIV, node, node_new_number(arch->stackAlign));
                 node->type = node->type->base;
             }
         }
@@ -417,7 +423,7 @@ Node *parser_primary(void) {
     if (current()->kind == TOKEN_VARIABLE) {
         if (next()->kind == TOKEN_LPAREN) {
             Node *node = node_new_multiple(NODE_FUNCCALL);
-            node->type = type_new(TYPE_NUMBER, 8, true);
+            node->type = type_new(TYPE_NUMBER, 4, true);
             node->string = current()->string;
             parser_eat(TOKEN_VARIABLE);
             parser_eat(TOKEN_LPAREN);
@@ -451,10 +457,10 @@ Node *parser_primary(void) {
                 local = malloc(sizeof(Local));
                 local->name = current()->string;
                 local->type = declarationType;
-                local->offset = local->type->size;
+                local->offset = align(local->type->size, arch->stackAlign);
                 for (size_t i = 0; i < currentBlock->locals->size; i++) {
                     Local *local = list_get(currentBlock->locals, i);
-                    local->offset += local->type->size;
+                    local->offset += align(local->type->size, arch->stackAlign);
                 }
                 list_add(currentBlock->locals, local);
             } else {

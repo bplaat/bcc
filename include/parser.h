@@ -5,7 +5,7 @@
 #include "node.h"
 #include "utils.h"
 
-Node *parser(char *text, List *tokens);
+Node *parser(char *text, List *tokens, Arch *arch);
 
 void parser_eat(TokenKind kind);
 
