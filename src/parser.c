@@ -7,6 +7,12 @@
 
 /*
 
+type = (INT | SIGNED | UNSIGNED)+ STAR*
+
+program = funcdef*
+
+funcdef = type VARIABLE LPAREN RPAREN block
+
 block = LCURLY statement* RCURLY | statement
 statement = LCURLY? block
     | IF LPAREN assign RPAREN block (ELSE block)?
@@ -16,7 +22,6 @@ statement = LCURLY? block
     | SEMICOLON
     | declarations SEMICOLON
 
-type = (INT | SIGNED | UNSIGNED)+ STAR*
 declarations = type (factor (ASSIGN assign)? COMMA?)*
     | assigns
 assigns = (assign COMMA?)*
@@ -42,7 +47,7 @@ Node *parser(char *_text, List *_tokens) {
     text = _text;
     tokens = _tokens;
     position = 0;
-    return parser_block();
+    return parser_program();
 }
 
 #define current() ((Token *)list_get(tokens, position))
@@ -62,6 +67,49 @@ void parser_eat(TokenKind kind) {
         fprintf(stderr, "^\nUnexpected: '%s' needed '%s'\n", gotTokenBuffer, wantedTokenBuffer);
         exit(EXIT_FAILURE);
     }
+}
+
+Type *parser_type(void) {
+    Type *type = type_new(TYPE_NUMBER, 8, true);
+    while (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
+        if (current()->kind == TOKEN_INT) {
+            parser_eat(TOKEN_INT);
+            type->size = 8;
+        }
+        if (current()->kind == TOKEN_SIGNED) {
+            parser_eat(TOKEN_SIGNED);
+            type->isSigned = true;
+        }
+        if (current()->kind == TOKEN_UNSIGNED) {
+            parser_eat(TOKEN_UNSIGNED);
+            type->isSigned = false;
+        }
+    }
+    while (current()->kind == TOKEN_STAR) {
+        parser_eat(TOKEN_STAR);
+        type = type_pointer(type);
+    }
+    return type;
+}
+
+Node *parser_program(void) {
+    Node *node = node_new_multiple(NODE_MULTIPLE);
+    while (current()->kind != TOKEN_EOF) {
+        list_add(node->nodes, parser_funcdef());
+    }
+    return node;
+}
+
+Node *parser_funcdef(void) {
+    Type *type = parser_type();
+    Node *node = node_new(NODE_FUNCTION);
+    node->type = type;
+    node->name = current()->string;
+    parser_eat(TOKEN_VARIABLE);
+    parser_eat(TOKEN_LPAREN);
+    parser_eat(TOKEN_RPAREN);
+    node->block = parser_block();
+    return node;
 }
 
 Node *parser_block(void) {
@@ -158,29 +206,6 @@ Node *parser_statement(void) {
     Node *node = parser_declarations();
     parser_eat(TOKEN_SEMICOLON);
     return node;
-}
-
-Type *parser_type(void) {
-    Type *type = type_new(TYPE_NUMBER, 8, true);
-    while (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
-        if (current()->kind == TOKEN_INT) {
-            parser_eat(TOKEN_INT);
-            type->size = 8;
-        }
-        if (current()->kind == TOKEN_SIGNED) {
-            parser_eat(TOKEN_SIGNED);
-            type->isSigned = true;
-        }
-        if (current()->kind == TOKEN_UNSIGNED) {
-            parser_eat(TOKEN_UNSIGNED);
-            type->isSigned = false;
-        }
-    }
-    while (current()->kind == TOKEN_STAR) {
-        parser_eat(TOKEN_STAR);
-        type = type_pointer(type);
-    }
-    return type;
 }
 
 Node *parser_declarations(void) {
@@ -391,7 +416,7 @@ Node *parser_primary(void) {
 
     if (current()->kind == TOKEN_VARIABLE) {
         if (next()->kind == TOKEN_LPAREN) {
-            Node *node = node_new_multiple(NODE_FNCALL);
+            Node *node = node_new_multiple(NODE_FUNCCALL);
             node->type = type_new(TYPE_NUMBER, 8, true);
             node->string = current()->string;
             parser_eat(TOKEN_VARIABLE);

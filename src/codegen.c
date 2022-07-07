@@ -9,7 +9,8 @@
 Arch arch;
 Node *currentBlock;
 int32_t depth = 0;
-int32_t unique = 0;
+int32_t unique = 1;
+int32_t returnId;
 bool inAssign = false;
 
 void node_asm(FILE *file, Node *node) {
@@ -22,6 +23,14 @@ void node_asm(FILE *file, Node *node) {
             }
         }
     }
+
+    if (node->kind == NODE_FUNCTION) {
+        fprintf(file, "_%s:\n", node->name);
+        returnId = unique++;
+        node_asm(file, node->block);
+        fprintf(file, "\n");
+    }
+
     if (node->kind == NODE_BLOCK) {
         size_t stackSize = 0;
         for (size_t i = 0; i < node->locals->size; i++) {
@@ -54,7 +63,7 @@ void node_asm(FILE *file, Node *node) {
         depth--;
 
         if (depth == 0) {
-            fprintf(file, ".return:\n");
+            fprintf(file, ".b%d:\n", returnId);
         }
         if (stackSize > 0) {
             if (arch == ARCH_ARM64) {
@@ -135,8 +144,8 @@ void node_asm(FILE *file, Node *node) {
 
     if (node->kind == NODE_RETURN) {
         node_asm(file, node->unary);
-        if (arch == ARCH_ARM64) fprintf(file, "    b .return\n");
-        if (arch == ARCH_X86_64) fprintf(file, "    jmp .return\n");
+        if (arch == ARCH_ARM64) fprintf(file, "    b .b%d\n", returnId);
+        if (arch == ARCH_X86_64) fprintf(file, "    jmp .b%d\n", returnId);
     }
 
     if (node->kind == NODE_NUMBER) {
@@ -170,7 +179,7 @@ void node_asm(FILE *file, Node *node) {
         }
     }
 
-    if (node->kind == NODE_FNCALL) {
+    if (node->kind == NODE_FUNCCALL) {
         fprintf(file, "    ; ");
         node_print(file, node);
         fprintf(file, "\n");
@@ -199,7 +208,6 @@ void node_asm(FILE *file, Node *node) {
                 fprintf(file, "    pop %s\n", argregs[i]);
             }
             fprintf(file, "    xor rax, rax\n");
-            fprintf(file, "    extern _%s\n", node->string);
             fprintf(file, "    call _%s\n", node->string);
         }
     }

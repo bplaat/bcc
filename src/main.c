@@ -30,18 +30,17 @@ int main(int argc, char **argv) {
 
     fprintf(out, "_start:\n");
     if (arch == ARCH_ARM64) {
-        fprintf(out, "    bl main\n");
+        fprintf(out, "    bl _main\n");
         fprintf(out, "    mov x16, #1\n");
         fprintf(out, "    svc #0x80\n\n");
     }
     if (arch == ARCH_X86_64) {
-        fprintf(out, "    call main\n");
+        fprintf(out, "    call _main\n");
         fprintf(out, "    mov edi, eax\n");
         fprintf(out, "    mov eax, 0x2000001\n");
         fprintf(out, "    syscall\n\n");
     }
 
-    fprintf(out, "main:\n");
     codegen(out, node, arch);
     fclose(out);
 

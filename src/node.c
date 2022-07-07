@@ -63,6 +63,12 @@ void node_print(FILE *file, Node *node) {
         }
         return;
     }
+    if (node->kind == NODE_FUNCTION) {
+        type_print(file, node->type);
+        fprintf(file, " %s()", node->name);
+        node_print(file, node->block);
+        return;
+    }
     if (node->kind == NODE_BLOCK) {
         fprintf(file, "{ ");
         for (size_t i = 0; i < node->locals->size; i++) {
@@ -84,7 +90,7 @@ void node_print(FILE *file, Node *node) {
     if (node->kind == NODE_VARIABLE) {
         fprintf(file, "%s", node->string);
     }
-    if (node->kind == NODE_FNCALL) {
+    if (node->kind == NODE_FUNCCALL) {
         fprintf(file, "%s(", node->string);
         for (size_t i = 0; i < node->nodes->size; i++) {
             node_print(file, list_get(node->nodes, i));

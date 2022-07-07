@@ -7,12 +7,13 @@
 
 typedef enum NodeKind {
     NODE_MULTIPLE,
+    NODE_FUNCTION,
     NODE_BLOCK,
     NODE_NULL,
 
     NODE_VARIABLE,
     NODE_NUMBER,
-    NODE_FNCALL,
+    NODE_FUNCCALL,
 
     NODE_IF,
     NODE_WHILE,
@@ -67,6 +68,10 @@ struct Node {
             Node *condition;
             Node *thenBlock;
             Node *elseBlock;
+        };
+        struct {
+            char *name;
+            Node *block;
         };
     };
 };

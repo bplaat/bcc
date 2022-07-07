@@ -9,11 +9,15 @@ Node *parser(char *text, List *tokens);
 
 void parser_eat(TokenKind kind);
 
+Type *parser_type(void);
+
+Node *parser_program(void);
+
+Node *parser_funcdef(void);
+
 Node *parser_block(void);
 
 Node *parser_statement(void);
-
-Type *parser_type(void);
 
 Node *parser_declarations(void);
 
