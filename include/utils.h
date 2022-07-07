@@ -13,6 +13,8 @@ typedef struct List {
 
 List *list_new(size_t capacity);
 
+#define list_get(list, index) ((list)->items[index])
+
 void list_add(List *list, void *item);
 
 #endif

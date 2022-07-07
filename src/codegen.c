@@ -1,9 +1,10 @@
 #include "codegen.h"
-#include <stdint.h>
+
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
-Arch arch = ARCH_ARM64;
+Arch arch;
 Node *currentBlock;
 int32_t depth = 0;
 int32_t unique = 0;
@@ -13,7 +14,7 @@ void node_asm(FILE *file, Node *node) {
     if (node->type == NODE_TYPE_BLOCK) {
         size_t stackSize = 0;
         for (size_t i = 0; i < node->locals->size; i++) {
-            Local *local = node->locals->items[i];
+            Local *local = list_get(node->locals, i);
             stackSize += local->size;
         }
         if (stackSize > 0) {
@@ -32,7 +33,7 @@ void node_asm(FILE *file, Node *node) {
 
         depth++;
         for (size_t i = 0; i < node->statements->size; i++) {
-            Node *statement = node->statements->items[i];
+            Node *statement = list_get(node->statements, i);
             currentBlock = node;
             if (statement->type != NODE_TYPE_NULL) {
                 fprintf(file, "    ; ");
@@ -284,4 +285,9 @@ void node_asm(FILE *file, Node *node) {
             if (arch == ARCH_X86_64) fprintf(file, "    or rax, rdx\n");
         }
     }
+}
+
+void codegen(FILE *file, Node *node, Arch _arch) {
+    arch = _arch;
+    node_asm(file, node);
 }

@@ -1,23 +1,23 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "codegen.h"
 #include "lexer.h"
 #include "parser.h"
-#include "codegen.h"
 
 int main(int argc, char **argv) {
     if (argc < 2) {
         return EXIT_FAILURE;
     }
 
+    Arch arch = ARCH_ARM64;
     if (argc >= 3 && !strcmp(argv[2], "--arch=x86_64")) {
         arch = ARCH_X86_64;
     }
 
-    text = argv[1];
-    token = lexer(text);
-    Node *node = parser_block();
-
+    List *tokens = lexer(argv[1]);
+    Node *node = parser(argv[1], tokens);
     FILE *out = fopen("a.s", "w");
 
     if (arch == ARCH_ARM64) {
@@ -42,8 +42,7 @@ int main(int argc, char **argv) {
     }
 
     fprintf(out, "main:\n");
-    node_asm(out, node);
-
+    codegen(out, node, arch);
     fclose(out);
 
     if (arch == ARCH_ARM64) {

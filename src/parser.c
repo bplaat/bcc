@@ -1,7 +1,8 @@
 #include "parser.h"
+
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 
 /*
@@ -25,19 +26,30 @@ primary = LPAREN logic RPAREN | NUMBER | VARIABLE
 */
 
 char *text;
+List *tokens;
+int32_t position;
 Node *currentBlock = NULL;
-Token *token;
+
+Node *parser(char *_text, List *_tokens) {
+    text = _text;
+    tokens = _tokens;
+    position = 0;
+    return parser_block();
+}
+
+#define token() ((Token *)list_get(tokens, position))
 
 void parser_eat(TokenType type) {
-    if (token->type == type) {
-        token++;
+    if (token()->type == type) {
+        position++;
     } else {
+        fprintf(stderr, "%d", token()->type);
         fprintf(stderr, "%s\n", text);
-        for (int32_t i = 0; i < token->pos; i++) fprintf(stderr, " ");
+        for (int32_t i = 0; i < token()->position; i++) fprintf(stderr, " ");
         char wantedTokenTypeBuffer[32];
         token_type_to_string(type, wantedTokenTypeBuffer);
         char gotTokenTypeBuffer[32];
-        token_type_to_string(token->type, gotTokenTypeBuffer);
+        token_type_to_string(token()->type, gotTokenTypeBuffer);
         fprintf(stderr, "^\nUnexpected: '%s' needed '%s'\n", gotTokenTypeBuffer, wantedTokenTypeBuffer);
         exit(EXIT_FAILURE);
     }
@@ -71,13 +83,13 @@ void block_create_locals(Node *node) {
                 local->size = 8;
                 local->offset = local->size;
                 for (size_t i = 0; i < currentBlock->locals->size; i++) {
-                    Local *local = currentBlock->locals->items[i];
+                    Local *local = list_get(currentBlock->locals, i);
                     local->offset += local->size;
                 }
                 list_add(currentBlock->locals, local);
             } else {
                 fprintf(stderr, "%s\n", text);
-                for (int32_t i = 0; i < node->token->pos; i++) fprintf(stderr, " ");
+                for (int32_t i = 0; i < node->token->position; i++) fprintf(stderr, " ");
                 fprintf(stderr, "^\nCan't find variable: %s\n", node->token->string);
                 exit(EXIT_FAILURE);
             }
@@ -92,9 +104,9 @@ Node *parser_block(void) {
     node->statements = list_new(8);
     node->locals = list_new(4);
 
-    if (token->type == TOKEN_TYPE_LCURLY) {
-        token++;
-        while (token->type != TOKEN_TYPE_RCURLY && token->type != TOKEN_TYPE_EOF) {
+    if (token()->type == TOKEN_TYPE_LCURLY) {
+        position++;
+        while (token()->type != TOKEN_TYPE_RCURLY && token()->type != TOKEN_TYPE_EOF) {
             currentBlock = node;
             Node *statement = parser_statement();
             block_create_locals(statement);
@@ -111,20 +123,20 @@ Node *parser_block(void) {
 }
 
 Node *parser_statement(void) {
-    if (token->type == TOKEN_TYPE_LCURLY) {
+    if (token()->type == TOKEN_TYPE_LCURLY) {
         return parser_block();
     }
 
-    if (token->type == TOKEN_TYPE_IF) {
+    if (token()->type == TOKEN_TYPE_IF) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_IF;
-        token++;
+        position++;
         parser_eat(TOKEN_TYPE_LPAREN);
         node->condition = parser_assign();
         parser_eat(TOKEN_TYPE_RPAREN);
         node->thenBlock = parser_block();
-        if (token->type == TOKEN_TYPE_ELSE) {
-            token++;
+        if (token()->type == TOKEN_TYPE_ELSE) {
+            position++;
             node->elseBlock = parser_block();
         } else {
             node->elseBlock = NULL;
@@ -132,10 +144,10 @@ Node *parser_statement(void) {
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_WHILE) {
+    if (token()->type == TOKEN_TYPE_WHILE) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_WHILE;
-        token++;
+        position++;
         parser_eat(TOKEN_TYPE_LPAREN);
         node->condition = parser_assign();
         parser_eat(TOKEN_TYPE_RPAREN);
@@ -143,24 +155,24 @@ Node *parser_statement(void) {
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_FOR) {
+    if (token()->type == TOKEN_TYPE_FOR) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_WHILE;
-        token++;
+        position++;
 
         parser_eat(TOKEN_TYPE_LPAREN);
-        if (token->type != TOKEN_TYPE_SEMICOLON) {
+        if (token()->type != TOKEN_TYPE_SEMICOLON) {
             list_add(currentBlock->statements, parser_assign());
         }
         parser_eat(TOKEN_TYPE_SEMICOLON);
-        if (token->type != TOKEN_TYPE_SEMICOLON) {
+        if (token()->type != TOKEN_TYPE_SEMICOLON) {
             node->condition = parser_assign();
         } else {
             node->condition = NULL;
         }
         parser_eat(TOKEN_TYPE_SEMICOLON);
         Node *increment = NULL;
-        if (token->type != TOKEN_TYPE_RPAREN) {
+        if (token()->type != TOKEN_TYPE_RPAREN) {
             increment = parser_assign();
         }
         parser_eat(TOKEN_TYPE_RPAREN);
@@ -172,20 +184,20 @@ Node *parser_statement(void) {
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_RETURN) {
+    if (token()->type == TOKEN_TYPE_RETURN) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_RETURN;
-        token++;
+        position++;
 
         node->unary = parser_assign();
         parser_eat(TOKEN_TYPE_SEMICOLON);
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_SEMICOLON) {
+    if (token()->type == TOKEN_TYPE_SEMICOLON) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_NULL;
-        token++;
+        position++;
         return node;
     }
 
@@ -196,7 +208,7 @@ Node *parser_statement(void) {
 
 Node *parser_assign(void) {
     Node *node = parser_logic();
-    if (token->type == TOKEN_TYPE_ASSIGN) {
+    if (token()->type == TOKEN_TYPE_ASSIGN) {
         Node *otherNode = malloc(sizeof(Node));
         otherNode->type = NODE_TYPE_ASSIGN;
         otherNode->lhs = node;
@@ -209,11 +221,11 @@ Node *parser_assign(void) {
 
 Node *parser_logic(void) {
     Node *node = parser_equality();
-    while (token->type == TOKEN_TYPE_LOGIC_AND || token->type == TOKEN_TYPE_LOGIC_OR) {
+    while (token()->type == TOKEN_TYPE_LOGIC_AND || token()->type == TOKEN_TYPE_LOGIC_OR) {
         Node *otherNode = malloc(sizeof(Node));
-        if (token->type == TOKEN_TYPE_LOGIC_AND) otherNode->type = NODE_TYPE_LOGIC_AND;
-        if (token->type == TOKEN_TYPE_LOGIC_OR) otherNode->type = NODE_TYPE_LOGIC_OR;
-        token++;
+        if (token()->type == TOKEN_TYPE_LOGIC_AND) otherNode->type = NODE_TYPE_LOGIC_AND;
+        if (token()->type == TOKEN_TYPE_LOGIC_OR) otherNode->type = NODE_TYPE_LOGIC_OR;
+        position++;
         otherNode->lhs = node;
         otherNode->rhs = parser_equality();
         node = otherNode;
@@ -223,11 +235,11 @@ Node *parser_logic(void) {
 
 Node *parser_equality(void) {
     Node *node = parser_relational();
-    while (token->type == TOKEN_TYPE_EQ || token->type == TOKEN_TYPE_NEQ) {
+    while (token()->type == TOKEN_TYPE_EQ || token()->type == TOKEN_TYPE_NEQ) {
         Node *otherNode = malloc(sizeof(Node));
-        if (token->type == TOKEN_TYPE_EQ) otherNode->type = NODE_TYPE_EQ;
-        if (token->type == TOKEN_TYPE_NEQ) otherNode->type = NODE_TYPE_NEQ;
-        token++;
+        if (token()->type == TOKEN_TYPE_EQ) otherNode->type = NODE_TYPE_EQ;
+        if (token()->type == TOKEN_TYPE_NEQ) otherNode->type = NODE_TYPE_NEQ;
+        position++;
         otherNode->lhs = node;
         otherNode->rhs = parser_relational();
         node = otherNode;
@@ -237,13 +249,14 @@ Node *parser_equality(void) {
 
 Node *parser_relational(void) {
     Node *node = parser_add();
-    while (token->type == TOKEN_TYPE_LT || token->type == TOKEN_TYPE_LTEQ || token->type == TOKEN_TYPE_GT || token->type == TOKEN_TYPE_GTEQ) {
+    while (token()->type == TOKEN_TYPE_LT || token()->type == TOKEN_TYPE_LTEQ || token()->type == TOKEN_TYPE_GT ||
+           token()->type == TOKEN_TYPE_GTEQ) {
         Node *otherNode = malloc(sizeof(Node));
-        if (token->type == TOKEN_TYPE_LT) otherNode->type = NODE_TYPE_LT;
-        if (token->type == TOKEN_TYPE_LTEQ) otherNode->type = NODE_TYPE_LTEQ;
-        if (token->type == TOKEN_TYPE_GT) otherNode->type = NODE_TYPE_GT;
-        if (token->type == TOKEN_TYPE_GTEQ) otherNode->type = NODE_TYPE_GTEQ;
-        token++;
+        if (token()->type == TOKEN_TYPE_LT) otherNode->type = NODE_TYPE_LT;
+        if (token()->type == TOKEN_TYPE_LTEQ) otherNode->type = NODE_TYPE_LTEQ;
+        if (token()->type == TOKEN_TYPE_GT) otherNode->type = NODE_TYPE_GT;
+        if (token()->type == TOKEN_TYPE_GTEQ) otherNode->type = NODE_TYPE_GTEQ;
+        position++;
         otherNode->lhs = node;
         otherNode->rhs = parser_add();
         node = otherNode;
@@ -253,11 +266,11 @@ Node *parser_relational(void) {
 
 Node *parser_add(void) {
     Node *node = parser_mul();
-    while (token->type == TOKEN_TYPE_ADD || token->type == TOKEN_TYPE_SUB) {
+    while (token()->type == TOKEN_TYPE_ADD || token()->type == TOKEN_TYPE_SUB) {
         Node *otherNode = malloc(sizeof(Node));
-        if (token->type == TOKEN_TYPE_ADD) otherNode->type = NODE_TYPE_ADD;
-        if (token->type == TOKEN_TYPE_SUB) otherNode->type = NODE_TYPE_SUB;
-        token++;
+        if (token()->type == TOKEN_TYPE_ADD) otherNode->type = NODE_TYPE_ADD;
+        if (token()->type == TOKEN_TYPE_SUB) otherNode->type = NODE_TYPE_SUB;
+        position++;
         otherNode->lhs = node;
         otherNode->rhs = parser_mul();
         node = otherNode;
@@ -267,12 +280,12 @@ Node *parser_add(void) {
 
 Node *parser_mul(void) {
     Node *node = parser_unary();
-    while (token->type == TOKEN_TYPE_STAR || token->type == TOKEN_TYPE_DIV || token->type == TOKEN_TYPE_MOD) {
+    while (token()->type == TOKEN_TYPE_STAR || token()->type == TOKEN_TYPE_DIV || token()->type == TOKEN_TYPE_MOD) {
         Node *otherNode = malloc(sizeof(Node));
-        if (token->type == TOKEN_TYPE_STAR) otherNode->type = NODE_TYPE_MUL;
-        if (token->type == TOKEN_TYPE_DIV) otherNode->type = NODE_TYPE_DIV;
-        if (token->type == TOKEN_TYPE_MOD) otherNode->type = NODE_TYPE_MOD;
-        token++;
+        if (token()->type == TOKEN_TYPE_STAR) otherNode->type = NODE_TYPE_MUL;
+        if (token()->type == TOKEN_TYPE_DIV) otherNode->type = NODE_TYPE_DIV;
+        if (token()->type == TOKEN_TYPE_MOD) otherNode->type = NODE_TYPE_MOD;
+        position++;
         otherNode->lhs = node;
         otherNode->rhs = parser_unary();
         node = otherNode;
@@ -281,43 +294,43 @@ Node *parser_mul(void) {
 }
 
 Node *parser_unary(void) {
-    if (token->type == TOKEN_TYPE_ADD) {
-        token++;
+    if (token()->type == TOKEN_TYPE_ADD) {
+        position++;
         return parser_unary();
     }
 
-    if (token->type == TOKEN_TYPE_SUB) {
-        token++;
+    if (token()->type == TOKEN_TYPE_SUB) {
+        position++;
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_NEG;
         node->unary = parser_unary();
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_ADDR) {
+    if (token()->type == TOKEN_TYPE_ADDR) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_ADDR;
-        token++;
+        position++;
         node->unary = parser_unary();
         if (node->unary->type != NODE_TYPE_VARIABLE) {
             fprintf(stderr, "%s\n", text);
-            for (int32_t i = 0; i < (token - 1)->pos; i++) fprintf(stderr, " ");
+            for (int32_t i = 0; i < ((Token *)list_get(tokens, position - 1))->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can only get an address from a variable\n");
             exit(EXIT_FAILURE);
         }
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_STAR) {
-        token++;
+    if (token()->type == TOKEN_TYPE_STAR) {
+        position++;
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_DEREF;
         node->unary = parser_unary();
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_LOGIC_NOT) {
-        token++;
+    if (token()->type == TOKEN_TYPE_LOGIC_NOT) {
+        position++;
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_LOGIC_NOT;
         node->unary = parser_unary();
@@ -328,33 +341,33 @@ Node *parser_unary(void) {
 }
 
 Node *parser_primary(void) {
-    if (token->type == TOKEN_TYPE_LPAREN) {
-        token++;
+    if (token()->type == TOKEN_TYPE_LPAREN) {
+        position++;
         Node *node = parser_logic();
         parser_eat(TOKEN_TYPE_RPAREN);
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_NUMBER) {
+    if (token()->type == TOKEN_TYPE_NUMBER) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_NUMBER;
-        node->number = token->number;
-        token++;
+        node->number = token()->number;
+        position++;
         return node;
     }
 
-    if (token->type == TOKEN_TYPE_VARIABLE) {
+    if (token()->type == TOKEN_TYPE_VARIABLE) {
         Node *node = malloc(sizeof(Node));
         node->type = NODE_TYPE_VARIABLE;
-        node->string = token->string;
-        node->token = token++;
+        node->string = token()->string;
+        node->token = list_get(tokens, position++);
         return node;
     }
 
     fprintf(stderr, "%s\n", text);
-    for (int32_t i = 0; i < token->pos; i++) fprintf(stderr, " ");
+    for (int32_t i = 0; i < token()->position; i++) fprintf(stderr, " ");
     char tokenTypeBuffer[32];
-    token_type_to_string(token->type, tokenTypeBuffer);
+    token_type_to_string(token()->type, tokenTypeBuffer);
     fprintf(stderr, "^\nUnexpected: %s\n", tokenTypeBuffer);
     exit(EXIT_FAILURE);
 }
@@ -368,7 +381,7 @@ Local *block_find_local(Node *block, char *name) {
     }
 
     for (size_t i = 0; i < block->locals->size; i++) {
-        Local *local = block->locals->items[i];
+        Local *local = list_get(block->locals, i);
         if (!strcmp(local->name, name)) {
             return local;
         }
@@ -380,11 +393,11 @@ void node_print(FILE *file, Node *node) {
     if (node->type == NODE_TYPE_BLOCK) {
         fprintf(file, "{ ");
         for (size_t i = 0; i < node->locals->size; i++) {
-            Local *local = node->locals->items[i];
+            Local *local = list_get(node->locals, i);
             fprintf(file, "int %s; ", local->name);
         }
         for (size_t i = 0; i < node->statements->size; i++) {
-            node_print(file, node->statements->items[i]);
+            node_print(file, list_get(node->statements, i));
             fprintf(file, "; ");
         }
         fprintf(file, " }");

@@ -1,8 +1,9 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "lexer.h"
 #include <stdio.h>
+
+#include "lexer.h"
 #include "utils.h"
 
 typedef enum NodeType {
@@ -69,8 +70,7 @@ struct Node {
     Token *token;
 };
 
-extern char *text;
-extern Token *token;
+Node *parser(char *text, List *tokens);
 
 void parser_eat(TokenType type);
 

@@ -1,8 +1,14 @@
 # Build and test script for the Bassie C Compiler
 # ./build.sh # Compile and run selected tests in this file
+# ./build.sh format # Run the clang formatter over the whole code base
 # ./build.sh debug # Compile and run selected tests via lldb
 # ./build.sh test # Compile and run selected tests on ARM64 and x86_64
 # ./build.sh test all # Compile and run all tests on ARM64 and x86_64
+
+if [[ $1 = "format" ]]; then
+    clang-format -i $(find . -name *.h -o -name *.c)
+    exit
+fi
 
 if [[ $1 == "debug" ]]; then
     debug="debug"
@@ -12,9 +18,9 @@ if [[ $1 == "test" ]]; then
 fi
 
 if [[ $debug = "debug" ]]; then
-    gcc -g -Iinclude $(find src -name *.c) -o bcc
+    gcc -g -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
 else
-    gcc -Iinclude $(find src -name *.c) -o bcc
+    gcc  -Ofast -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
     rm -fr bcc.dSYM
 fi
 

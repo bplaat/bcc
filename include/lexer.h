@@ -1,8 +1,10 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
+
+#include "utils.h"
 
 typedef enum TokenType {
     TOKEN_TYPE_EOF,
@@ -45,11 +47,13 @@ typedef struct Token {
         int64_t number;
         char *string;
     };
-    int32_t pos;
+    int32_t position;
 } Token;
 
-Token *lexer(char *text);
+Token *token_new(TokenType type);
 
 void token_type_to_string(TokenType type, char *buffer);
+
+List *lexer(char *text);
 
 #endif
