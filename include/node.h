@@ -8,6 +8,7 @@
 typedef enum NodeKind {
     NODE_MULTIPLE,
     NODE_FUNCTION,
+    NODE_FUNCARG,
     NODE_BLOCK,
     NODE_NULL,
 
@@ -60,27 +61,29 @@ struct Node {
             Node *rhs;
         };
         struct {
-            Node *parentBlock;
+            union {
+                char *functionName;
+                Node *parentBlock;
+            };
             List *nodes;
             List *locals;
+            size_t argsSize;
         };
         struct {
             Node *condition;
             Node *thenBlock;
             Node *elseBlock;
         };
-        struct {
-            char *name;
-            Node *block;
-        };
     };
 };
+
+Local *local_new(char *string, Type *type);
 
 Node *node_new(NodeKind kind);
 
 Node *node_new_integer(int64_t integer);
 
-Node *node_new_string(char *string);
+Node *node_new_string(NodeKind kind, char *string);
 
 Node *node_new_unary(NodeKind kind, Node *unary);
 

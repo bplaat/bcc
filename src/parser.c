@@ -10,8 +10,7 @@
 type = (INT | LONG | SIGNED | UNSIGNED)+ STAR*
 
 program = funcdef*
-
-funcdef = type VARIABLE LPAREN RPAREN block
+funcdef = type VARIABLE LPAREN (type VARIABLE COMMA?)* RPAREN LCURLY statement* RCURLY
 
 block = LCURLY statement* RCURLY | statement
 statement = LCURLY? block
@@ -108,13 +107,43 @@ Node *parser_program(void) {
 
 Node *parser_funcdef(void) {
     Type *type = parser_type();
-    Node *node = node_new(NODE_FUNCTION);
+    Node *node = node_new_multiple(NODE_FUNCTION);
+    node->functionName = current()->string;
     node->type = type;
-    node->name = current()->string;
+    node->locals = list_new(4);
+    node->argsSize = 0;
+
     parser_eat(TOKEN_VARIABLE);
     parser_eat(TOKEN_LPAREN);
+    if (current()->kind != TOKEN_RPAREN) {
+        for (;;) {
+            Type *type = parser_type();
+            Local *local = local_new(current()->string, type);
+            local->offset = align(local->type->size, arch->stackAlign);
+            for (size_t i = 0; i < node->locals->size; i++) {
+                Local *local = list_get(node->locals, i);
+                local->offset += align(local->type->size, arch->stackAlign);
+            }
+            list_add(node->locals, local);
+            node->argsSize++;
+            parser_eat(TOKEN_VARIABLE);
+
+            if (current()->kind == TOKEN_COMMA) {
+                parser_eat(TOKEN_COMMA);
+                continue;
+            } else {
+                break;
+            }
+        }
+    }
     parser_eat(TOKEN_RPAREN);
-    node->block = parser_block();
+
+    parser_eat(TOKEN_LCURLY);
+    while (current()->kind != TOKEN_RCURLY && current()->kind != TOKEN_EOF) {
+        currentBlock = node;
+        list_add(node->nodes, parser_statement());
+    }
+    parser_eat(TOKEN_RCURLY);
     return node;
 }
 
@@ -126,14 +155,12 @@ Node *parser_block(void) {
         parser_eat(TOKEN_LCURLY);
         while (current()->kind != TOKEN_RCURLY && current()->kind != TOKEN_EOF) {
             currentBlock = node;
-            Node *statement = parser_statement();
-            list_add(node->nodes, statement);
+            list_add(node->nodes, parser_statement());
         }
         parser_eat(TOKEN_RCURLY);
     } else {
         currentBlock = node;
-        Node *statement = parser_statement();
-        list_add(node->nodes, statement);
+        list_add(node->nodes, parser_statement());
     }
     return node;
 }
@@ -457,9 +484,7 @@ Node *parser_primary(void) {
                     }
                 }
 
-                local = malloc(sizeof(Local));
-                local->name = current()->string;
-                local->type = declarationType;
+                local = local_new(current()->string, declarationType);
                 local->offset = align(local->type->size, arch->stackAlign);
                 for (size_t i = 0; i < currentBlock->locals->size; i++) {
                     Local *local = list_get(currentBlock->locals, i);
@@ -474,9 +499,8 @@ Node *parser_primary(void) {
             }
         }
 
-        Node *node = node_new(NODE_VARIABLE);
+        Node *node = node_new_string(NODE_VARIABLE, local->name);
         node->type = local->type;
-        node->string = local->name;
         parser_eat(TOKEN_VARIABLE);
         return node;
     }

@@ -14,10 +14,12 @@ int main(int argc, char **argv) {
     Arch arch;
     arch.kind = ARCH_ARM64;
     arch.stackAlign = 16;
+    arch.argumentRegs = (char *[]){"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7"};
 
     if (argc >= 3 && !strcmp(argv[2], "--arch=x86_64")) {
         arch.kind = ARCH_X86_64;
         arch.stackAlign = 8;
+        arch.argumentRegs = (char *[]){"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     }
 
     List *tokens = lexer(argv[1]);
