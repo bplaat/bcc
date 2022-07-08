@@ -33,7 +33,7 @@ relational = add ((LT | LTEQ | GT | GTEQ) add)*
 add = mul ((ADD | SUB) mul)*
 mul = unary ((STAR | DIV | MOD) unary)*
 unary = ADD unary | SUB unary | STAR unary | ADDR unary | LOGIC_NOT unary | primary
-primary = LPAREN logic RPAREN | NUMBER | VARIABLE (LPAREN (assign COMMA?)* RPAREN)? | VARIABLE
+primary = LPAREN logic RPAREN | INTEGER | VARIABLE (LPAREN (assign COMMA?)* RPAREN)? | VARIABLE
 
 */
 
@@ -72,7 +72,7 @@ void parser_eat(TokenKind kind) {
 }
 
 Type *parser_type(void) {
-    Type *type = type_new(TYPE_NUMBER, 4, true);
+    Type *type = type_new(TYPE_INTEGER, 4, true);
     while (current()->kind == TOKEN_INT || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
         if (current()->kind == TOKEN_INT) {
             parser_eat(TOKEN_INT);
@@ -231,7 +231,7 @@ Node *parser_declarations(void) {
                 parser_eat(TOKEN_ASSIGN);
                 list_add(node->nodes, node_new_operation(NODE_ASSIGN, variable, parser_assign()));
             } else {
-                list_add(node->nodes, node_new_operation(NODE_ASSIGN, variable, node_new_number(0)));
+                list_add(node->nodes, node_new_operation(NODE_ASSIGN, variable, node_new_integer(0)));
             }
 
             if (current()->kind == TOKEN_COMMA) {
@@ -262,6 +262,9 @@ Node *parser_assign(void) {
     Node *node = parser_logic();
     if (current()->kind == TOKEN_ASSIGN) {
         parser_eat(TOKEN_ASSIGN);
+        if (node->kind == NODE_DEREF) {
+            node->type = type_new(TYPE_INTEGER, 8, false);
+        }
         return node_new_operation(NODE_ASSIGN, node, parser_assign());
     }
     return node;
@@ -322,8 +325,8 @@ Node *parser_add(void) {
         if (current()->kind == TOKEN_ADD) {
             parser_eat(TOKEN_ADD);
             Node *rhs = parser_mul();
-            if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_NUMBER) {
-                rhs = node_new_operation(NODE_MUL, rhs, node_new_number(arch->stackAlign));
+            if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
+                rhs = node_new_operation(NODE_MUL, rhs, node_new_integer(arch->stackAlign));
             }
             node = node_new_operation(NODE_ADD, node, rhs);
         }
@@ -331,12 +334,12 @@ Node *parser_add(void) {
         else if (current()->kind == TOKEN_SUB) {
             parser_eat(TOKEN_SUB);
             Node *rhs = parser_mul();
-            if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_NUMBER) {
-                rhs = node_new_operation(NODE_MUL, rhs, node_new_number(arch->stackAlign));
+            if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
+                rhs = node_new_operation(NODE_MUL, rhs, node_new_integer(arch->stackAlign));
             }
             node = node_new_operation(NODE_SUB, node, rhs);
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
-                node = node_new_operation(NODE_DIV, node, node_new_number(arch->stackAlign));
+                node = node_new_operation(NODE_DIV, node, node_new_integer(arch->stackAlign));
                 node->type = node->type->base;
             }
         }
@@ -414,16 +417,16 @@ Node *parser_primary(void) {
         return node;
     }
 
-    if (current()->kind == TOKEN_NUMBER) {
-        Node *node = node_new_number(current()->number);
-        parser_eat(TOKEN_NUMBER);
+    if (current()->kind == TOKEN_INTEGER) {
+        Node *node = node_new_integer(current()->integer);
+        parser_eat(TOKEN_INTEGER);
         return node;
     }
 
     if (current()->kind == TOKEN_VARIABLE) {
         if (next()->kind == TOKEN_LPAREN) {
             Node *node = node_new_multiple(NODE_FUNCCALL);
-            node->type = type_new(TYPE_NUMBER, 4, true);
+            node->type = type_new(TYPE_INTEGER, 4, true);
             node->string = current()->string;
             parser_eat(TOKEN_VARIABLE);
             parser_eat(TOKEN_LPAREN);

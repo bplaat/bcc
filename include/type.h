@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-typedef enum TypeKind { TYPE_NUMBER, TYPE_POINTER } TypeKind;
+typedef enum TypeKind { TYPE_INTEGER, TYPE_POINTER } TypeKind;
 
 typedef struct Type Type;
 struct Type {

@@ -12,7 +12,7 @@ typedef enum NodeKind {
     NODE_NULL,
 
     NODE_VARIABLE,
-    NODE_NUMBER,
+    NODE_INTEGER,
     NODE_FUNCCALL,
 
     NODE_IF,
@@ -51,7 +51,7 @@ struct Node {
     NodeKind kind;
     Type *type;
     union {
-        int64_t number;
+        int64_t integer;
         char *string;
 
         Node *unary;
@@ -78,7 +78,7 @@ struct Node {
 
 Node *node_new(NodeKind kind);
 
-Node *node_new_number(int64_t number);
+Node *node_new_integer(int64_t integer);
 
 Node *node_new_string(char *string);
 

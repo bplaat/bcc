@@ -15,7 +15,7 @@ typedef enum TokenKind {
     TOKEN_COMMA,
     TOKEN_SEMICOLON,
 
-    TOKEN_NUMBER,
+    TOKEN_INTEGER,
     TOKEN_VARIABLE,
 
     TOKEN_INT,
@@ -49,7 +49,7 @@ typedef enum TokenKind {
 typedef struct Token {
     TokenKind kind;
     union {
-        int64_t number;
+        int64_t integer;
         char *string;
     };
     int32_t position;

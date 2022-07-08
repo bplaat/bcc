@@ -151,19 +151,19 @@ void node_asm(FILE *file, Node *node, Node *next) {
         }
     }
 
-    if (node->kind == NODE_NUMBER) {
+    if (node->kind == NODE_INTEGER) {
         fprintf(file, "    ; ");
         node_print(file, node);
         fprintf(file, "\n");
 
         if (arch->kind == ARCH_ARM64) {
-            fprintf(file, "    mov w0, %d\n", (int32_t)node->number & 0xffff);
-            if (node->number >= 0xffff) {
-                fprintf(file, "    movk w0, %d, lsl 16\n", ((int32_t)node->number >> 16) & 0xffff);
+            fprintf(file, "    mov w0, %d\n", (int32_t)node->integer & 0xffff);
+            if (node->integer >= 0xffff) {
+                fprintf(file, "    movk w0, %d, lsl 16\n", ((int32_t)node->integer >> 16) & 0xffff);
             }
         }
         if (arch->kind == ARCH_X86_64) {
-            fprintf(file, "    mov eax, %lld\n", node->number);
+            fprintf(file, "    mov %cax, %lld\n", node->type->size == 8 ? 'r' : 'e', node->integer);
         }
     }
 
@@ -177,8 +177,12 @@ void node_asm(FILE *file, Node *node, Node *next) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", local->offset);
         } else {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', local->offset);
+            if (arch->kind == ARCH_ARM64) {
+                fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', local->offset);
+            }
+            if (arch->kind == ARCH_X86_64) {
+                fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', local->offset);
+            }
         }
     }
 
@@ -206,7 +210,7 @@ void node_asm(FILE *file, Node *node, Node *next) {
             fprintf(file, "    ldr x30, [sp], %d\n", arch->stackAlign);
         }
         if (arch->kind == ARCH_X86_64) {
-            char *argregs[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+            char *argregs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
             for (int32_t i = (int32_t)node->nodes->size - 1; i >= 0; i--) {
                 fprintf(file, "    pop %s\n", argregs[i]);
             }
@@ -274,8 +278,12 @@ void node_asm(FILE *file, Node *node, Node *next) {
         fprintf(file, "\n");
 
         if (node->kind == NODE_ASSIGN) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    str %c1, [x0]\n", node->lhs->type->size == 8 ? 'x' : 'w');
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    mov [rax], %cdx\n", node->lhs->type->size == 8 ? 'r' : 'e');
+            if (arch->kind == ARCH_ARM64) {
+                fprintf(file, "    str %c1, [x0]\n", node->lhs->type->size == 8 ? 'x' : 'w');
+            }
+            if (arch->kind == ARCH_X86_64) {
+                fprintf(file, "    mov [rax], %cdx\n", node->lhs->type->size == 8 ? 'r' : 'e');
+            }
         }
         if (node->kind == NODE_ADD) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    add x0, x0, x1\n");

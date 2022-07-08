@@ -10,10 +10,10 @@ Node *node_new(NodeKind kind) {
     return node;
 }
 
-Node *node_new_number(int64_t number) {
-    Node *node = node_new(NODE_NUMBER);
-    node->number = number;
-    node->type = type_new(TYPE_NUMBER, 4, true);
+Node *node_new_integer(int64_t integer) {
+    Node *node = node_new(NODE_INTEGER);
+    node->integer = integer;
+    node->type = type_new(TYPE_INTEGER, 4, true);
     return node;
 }
 
@@ -84,8 +84,8 @@ void node_print(FILE *file, Node *node) {
         return;
     }
 
-    if (node->kind == NODE_NUMBER) {
-        fprintf(file, "%lld", node->number);
+    if (node->kind == NODE_INTEGER) {
+        fprintf(file, "%lld", node->integer);
     }
     if (node->kind == NODE_VARIABLE) {
         fprintf(file, "%s", node->string);

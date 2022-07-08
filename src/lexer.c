@@ -16,7 +16,7 @@ Token *token_new(TokenKind kind) {
 
 void token_to_string(TokenKind kind, char *buffer) {
     if (kind == TOKEN_EOF) strcpy(buffer, "EOF");
-    if (kind == TOKEN_NUMBER) strcpy(buffer, "number");
+    if (kind == TOKEN_INTEGER) strcpy(buffer, "integer");
     if (kind == TOKEN_VARIABLE) strcpy(buffer, "variable");
     if (kind == TOKEN_LPAREN) strcpy(buffer, "(");
     if (kind == TOKEN_RPAREN) strcpy(buffer, ")");
@@ -63,8 +63,8 @@ List *lexer(char *_text) {
         }
 
         if (isdigit(*c)) {
-            Token *token = token_new(TOKEN_NUMBER);
-            token->number = strtol(c, &c, 10);
+            Token *token = token_new(TOKEN_INTEGER);
+            token->integer = strtol(c, &c, 10);
             list_add(tokens, token);
             continue;
         }

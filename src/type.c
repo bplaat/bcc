@@ -23,7 +23,7 @@ Type *type_pointer(Type *type) {
 void _type_print(FILE *file, Type *type, bool enclose) {
     if (enclose) fprintf(file, "[");
 
-    if (type->kind == TYPE_NUMBER) {
+    if (type->kind == TYPE_INTEGER) {
         if (type->isSigned) {
             fprintf(file, "i%lu", type->size * 8);
         } else {

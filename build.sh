@@ -179,6 +179,3 @@ if [[ $2 = "all" || $2 = "funcs" ]]; then
     assert 33 'int main() { return ret32() + 1; } int ret32() { return 32; }'
     assert 10 'int main() { return (a() + b()) / 3; } int a() { return 18; } int b() { return 12; }'
 fi
-
-# Deref problem: *([*i32]) = -> [u64]
-assert 5 'int main() { int x=3; int *y=&x; *y=5; return x; }'
