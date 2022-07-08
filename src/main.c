@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,8 +15,9 @@ int main(int argc, char **argv) {
 
     // Parse arguments
     char *text = NULL;
-    char *outputPath = "a.s";
+    char *outputPath = "a";
     List *objects = list_new(4);
+    bool dumpNode = false;
 
     Arch arch;
     arch.kind = ARCH_ARM64;
@@ -27,6 +29,12 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[position], "-o")) {
             position++;
             outputPath = argv[position++];
+            continue;
+        }
+
+        if (!strcmp(argv[position], "-d")) {
+            position++;
+            dumpNode = true;
             continue;
         }
 
@@ -51,6 +59,10 @@ int main(int argc, char **argv) {
     // Compile program and write assembly file
     List *tokens = lexer(text);
     Node *node = parser(text, tokens, &arch);
+    if (dumpNode) {
+        node_print(stdout, node);
+        return EXIT_SUCCESS;
+    }
 
     char assemblyPath[512];
     strcpy(assemblyPath, outputPath);
@@ -124,8 +136,5 @@ int main(int argc, char **argv) {
     }
 
     remove(objectPath);
-
-    // Print program node
-    node_print(stdout, node);
     return EXIT_SUCCESS;
 }

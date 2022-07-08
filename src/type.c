@@ -38,7 +38,7 @@ Type *type_array(Type *type, size_t count) {
     return pointerType;
 }
 
-void _type_print(FILE *file, Type *type) {
+void type_print(FILE *file, Type *type) {
     if (type->kind == TYPE_INTEGER) {
         if (type->isSigned) {
             fprintf(file, "i%lu", type->size * 8);
@@ -48,18 +48,12 @@ void _type_print(FILE *file, Type *type) {
     }
 
     if (type->kind == TYPE_POINTER) {
-        _type_print(file, type->base);
+        type_print(file, type->base);
         fprintf(file, "*");
     }
 
     if (type->kind == TYPE_ARRAY) {
-        _type_print(file, type->base);
+        type_print(file, type->base);
         fprintf(file, "[%zu]", type->count);
     }
-}
-
-void type_print(FILE *file, Type *type) {
-    fprintf(file, "[");
-    _type_print(file, type);
-    fprintf(file, "]");
 }

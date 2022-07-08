@@ -11,10 +11,10 @@ if [[ $1 = "format" ]]; then
     exit
 fi
 
-if [[ $1 == "debug" ]]; then
+if [[ $1 = "debug" ]]; then
     debug="debug"
 fi
-if [[ $1 == "test" ]]; then
+if [[ $1 = "test" ]]; then
     test="test"
 fi
 
@@ -25,7 +25,7 @@ else
     rm -fr bcc.dSYM
 fi
 
-# Compile shared lib
+# Compile shared libs
 cat <<EOF | gcc -xc -c -o lib-arm64.o -
 #include <stdint.h>
 int ret3(void) { return 3; }
@@ -52,7 +52,7 @@ assert() {
     expected=$1
     input=$2
 
-    # Compile for ARM64
+    # Compile for arm64
     if [[ $debug = "debug" ]]; then
         lldb -- ./bcc "$input" lib-arm64.o -o test
     else
@@ -60,10 +60,13 @@ assert() {
     fi
     ./test
     actual=$?
-    if [[ $actual = $expected ]]; then
-        echo " arm64 -> $actual == $expected OK"
-    else
-        echo " arm64 -> $actual != $expected ERROR"
+    if [[ $actual != $expected ]]; then
+        echo "Program:"
+        echo $input
+        echo
+        echo "Node:"
+        ./bcc -d "$input"
+        echo "Arch: arm64 | Return: $actual | Right: $expected"
         exit 1
     fi
 
@@ -72,10 +75,13 @@ assert() {
         ./bcc -arch x86_64 "$input" lib-x86_64.o -o test || exit
         ./test
         actual=$?
-        if [[ $actual = $expected ]]; then
-            echo " x86_64 -> $actual == $expected OK"
-        else
-            echo " x86_64 -> $actual != $expected ERROR"
+        if [[ $actual != $expected ]]; then
+            echo "Program:"
+            echo $input
+            echo
+            echo "Node:"
+            ./bcc -d "$input"
+            echo "Arch: x86_64 | Return: $actual | Right: $expected"
             exit 1
         fi
     fi
@@ -191,4 +197,6 @@ if [[ $2 = "all" || $2 = "array" ]]; then
     assert 5 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+2); }'
 fi
 
-assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; return *x; }'
+# Add selected tests below
+
+echo "OK"

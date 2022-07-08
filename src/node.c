@@ -63,45 +63,89 @@ Local *node_find_local(Node *block, char *name) {
 }
 
 void node_print(FILE *file, Node *node) {
+    static int indentDepth = 0;
+    static int nodeDepth;
+    nodeDepth++;
+
     if (node->kind == NODE_MULTIPLE) {
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_print(file, list_get(node->nodes, i));
-            if (i != node->nodes->size - 1) fprintf(file, "; ");
+            Node *childNode = list_get(node->nodes, i);
+            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
+                for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
+            }
+            nodeDepth = -1;
+            node_print(file, childNode);
+            if (indentDepth > 0) {
+                if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK && childNode->kind != NODE_IF &&
+                    childNode->kind != NODE_WHILE) {
+                    fprintf(file, ";\n");
+                }
+            } else {
+                fprintf(file, "\n");
+            }
         }
     }
+
     if (node->kind == NODE_FUNCTION) {
         type_print(file, node->type);
         fprintf(file, " %s(", node->functionName);
         for (size_t i = 0; i < node->argsSize; i++) {
             Local *local = list_get(node->locals, i);
             type_print(file, local->type);
-            fprintf(file, "%s", local->name);
+            fprintf(file, " %s", local->name);
             if (i != node->argsSize - 1) fprintf(file, ", ");
         }
-        fprintf(file, ") { ");
+        fprintf(file, ") {\n");
+        indentDepth++;
         for (size_t i = node->argsSize; i < node->locals->size; i++) {
             Local *local = list_get(node->locals, i);
+            for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
             type_print(file, local->type);
-            fprintf(file, " %s; ", local->name);
+            fprintf(file, " %s;\n", local->name);
         }
+
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_print(file, list_get(node->nodes, i));
-            fprintf(file, "; ");
+            Node *childNode = list_get(node->nodes, i);
+            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
+                for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
+            }
+            nodeDepth = -1;
+            node_print(file, childNode);
+            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK && childNode->kind != NODE_IF &&
+                childNode->kind != NODE_WHILE) {
+                fprintf(file, ";\n");
+            }
         }
-        fprintf(file, " }");
+        indentDepth--;
+        fprintf(file, "}\n");
     }
+
     if (node->kind == NODE_BLOCK) {
-        fprintf(file, "{ ");
+        for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
+        fprintf(file, "{\n");
+        indentDepth++;
         for (size_t i = 0; i < node->locals->size; i++) {
             Local *local = list_get(node->locals, i);
+            for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
             type_print(file, local->type);
-            fprintf(file, " %s; ", local->name);
+            fprintf(file, " %s;\n", local->name);
         }
+
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_print(file, list_get(node->nodes, i));
-            fprintf(file, "; ");
+            Node *childNode = list_get(node->nodes, i);
+            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
+                for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
+            }
+            nodeDepth = -1;
+            node_print(file, childNode);
+            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK && childNode->kind != NODE_IF &&
+                childNode->kind != NODE_WHILE) {
+                fprintf(file, ";\n");
+            }
         }
-        fprintf(file, " }");
+        indentDepth--;
+        for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
+        fprintf(file, "}\n");
     }
 
     if (node->kind == NODE_INTEGER) {
@@ -121,12 +165,12 @@ void node_print(FILE *file, Node *node) {
 
     if (node->kind == NODE_IF) {
         fprintf(file, "if (");
-        type_print(file, node->condition->type);
         node_print(file, node->condition);
-        fprintf(file, ") ");
+        fprintf(file, ")\n");
         node_print(file, node->thenBlock);
         if (node->elseBlock != NULL) {
-            fprintf(file, " else ");
+            for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
+            fprintf(file, "else\n");
             node_print(file, node->elseBlock);
         }
     }
@@ -134,34 +178,41 @@ void node_print(FILE *file, Node *node) {
     if (node->kind == NODE_WHILE) {
         fprintf(file, "while (");
         if (node->condition != NULL) {
-            type_print(file, node->condition->type);
             node_print(file, node->condition);
         } else {
             fprintf(file, "1");
         }
-        fprintf(file, ") ");
+        fprintf(file, ")\n");
         node_print(file, node->thenBlock);
     }
 
     if (node->kind == NODE_RETURN) {
         fprintf(file, "return ");
-        type_print(file, node->unary->type);
         node_print(file, node->unary);
     }
 
     if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
-        if (node->kind == NODE_NEG) fprintf(file, "(- ");
-        if (node->kind == NODE_ADDR) fprintf(file, "(& ");
-        if (node->kind == NODE_DEREF) fprintf(file, "(* ");
-        if (node->kind == NODE_LOGIC_NOT) fprintf(file, "(! ");
-        type_print(file, node->unary->type);
+        if (memcmp(node->type, node->unary->type, sizeof(Type))) {
+            fprintf(file, "[");
+            type_print(file, node->type);
+            fprintf(file, "]");
+        }
+        if (nodeDepth > 0) fprintf(file, "(");
+        if (node->kind == NODE_NEG) fprintf(file, "- ");
+        if (node->kind == NODE_ADDR) fprintf(file, "& ");
+        if (node->kind == NODE_DEREF) fprintf(file, "* ");
+        if (node->kind == NODE_LOGIC_NOT) fprintf(file, "! ");
         node_print(file, node->unary);
-        fprintf(file, ")");
+        if (nodeDepth > 0) fprintf(file, ")");
     }
 
     if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
-        fprintf(file, "(");
-        type_print(file, node->lhs->type);
+        if (memcmp(node->type, node->lhs->type, sizeof(Type))) {
+            fprintf(file, "[");
+            type_print(file, node->type);
+            fprintf(file, "]");
+        }
+        if (nodeDepth > 0) fprintf(file, "(");
         node_print(file, node->lhs);
         if (node->kind == NODE_ASSIGN) fprintf(file, " = ");
         if (node->kind == NODE_ADD) fprintf(file, " + ");
@@ -177,8 +228,9 @@ void node_print(FILE *file, Node *node) {
         if (node->kind == NODE_GTEQ) fprintf(file, " >= ");
         if (node->kind == NODE_LOGIC_AND) fprintf(file, " && ");
         if (node->kind == NODE_LOGIC_OR) fprintf(file, " || ");
-        type_print(file, node->rhs->type);
         node_print(file, node->rhs);
-        fprintf(file, ")");
+        if (nodeDepth > 0) fprintf(file, ")");
     }
+
+    nodeDepth--;
 }

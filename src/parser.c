@@ -264,7 +264,8 @@ Node *parser_statement(void) {
 }
 
 Node *parser_declarations(void) {
-    if (current()->kind == TOKEN_INT || current()->kind == TOKEN_LONG || current()->kind == TOKEN_SIGNED || current()->kind == TOKEN_UNSIGNED) {
+    if (current()->kind == TOKEN_INT || current()->kind == TOKEN_LONG || current()->kind == TOKEN_SIGNED ||
+        current()->kind == TOKEN_UNSIGNED) {
         Node *multipleNode = node_new_multiple(NODE_MULTIPLE);
         Node *variableNode = NULL;
         Type *type;
