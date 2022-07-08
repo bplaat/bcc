@@ -272,8 +272,10 @@ Node *parser_declarations(void) {
             if (variableNode == NULL) {
                 variableNode = parser_vardef();
                 type = variableNode->type;
+                variableNode->type = type_pointer(variableNode->type);
             } else {
                 variableNode = parser_variable(type);
+                variableNode->type = type_pointer(variableNode->type);
             }
 
             if (current()->kind == TOKEN_ASSIGN) {
@@ -310,12 +312,10 @@ Node *parser_assign(void) {
     if (current()->kind == TOKEN_ASSIGN) {
         parser_eat(TOKEN_ASSIGN);
         if (node->kind == NODE_DEREF) {
-            if (node->unary->type->kind == TYPE_POINTER || node->unary->type->kind == TYPE_ARRAY) {
-                node->type = type_new(TYPE_INTEGER, 8, false);
-            } else {
-                return node_new_operation(NODE_ASSIGN, node->unary, parser_assign());
-            }
+            node->unary->type = type_new(TYPE_INTEGER, 8, false);
+            return node_new_operation(NODE_ASSIGN, node->unary, parser_assign());
         }
+        node->type = type_pointer(node->type);
         return node_new_operation(NODE_ASSIGN, node, parser_assign());
     }
     return node;

@@ -21,60 +21,61 @@ fi
 if [[ $debug = "debug" ]]; then
     gcc -g -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
 else
-    gcc  -Ofast -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
+    gcc -Ofast -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
     rm -fr bcc.dSYM
 fi
+
+# Compile shared lib
+cat <<EOF | gcc -xc -c -o lib-arm64.o -
+#include <stdint.h>
+int ret3(void) { return 3; }
+int ret5(void) { return 5; }
+int add(int x, int y) { return x+y; }
+int sub(int x, int y) { return x-y; }
+int add6(int a, int b, int c, int d, int e, int f) {
+  return a+b+c+d+e+f;
+}
+EOF
+
+cat <<EOF | arch -x86_64 gcc -xc -c -o lib-x86_64.o -
+#include <stdint.h>
+int ret3(void) { return 3; }
+int ret5(void) { return 5; }
+int add(int x, int y) { return x+y; }
+int sub(int x, int y) { return x-y; }
+int add6(int a, int b, int c, int d, int e, int f) {
+  return a+b+c+d+e+f;
+}
+EOF
 
 assert() {
     expected=$1
     input=$2
 
     # Compile for ARM64
-cat <<EOF | gcc -xc -c -o b.o -
-#include <stdint.h>
-int ret3(void) { return 3; }
-int ret5(void) { return 5; }
-int add(int x, int y) { return x+y; }
-int sub(int x, int y) { return x-y; }
-int add6(int a, int b, int c, int d, int e, int f) {
-  return a+b+c+d+e+f;
-}
-EOF
-
     if [[ $debug = "debug" ]]; then
-        lldb -- ./bcc "$input"
+        lldb -- ./bcc "$input" lib-arm64.o -o test
     else
-        ./bcc "$input" || exit
+        ./bcc "$input" lib-arm64.o -o test || exit
     fi
-    ./a.out
+    ./test
     actual=$?
     if [[ $actual = $expected ]]; then
-        echo " arm64 ->  $actual == $expected OK"
+        echo " arm64 -> $actual == $expected OK"
     else
-        echo " arm64 ->  $actual != $expected ERROR"
-        # exit 1
+        echo " arm64 -> $actual != $expected ERROR"
+        exit 1
     fi
 
     # Compile for x86_64
-cat <<EOF | arch -x86_64 gcc -xc -c -o b.o -
-#include <stdint.h>
-int ret3(void) { return 3; }
-int ret5(void) { return 5; }
-int add(int x, int y) { return x+y; }
-int sub(int x, int y) { return x-y; }
-int add6(int a, int b, int c, int d, int e, int f) {
-  return a+b+c+d+e+f;
-}
-EOF
-
     if [[ $test = "test" ]]; then
-        ./bcc "$input" --arch=x86_64 || exit
-        ./a.out
+        ./bcc -arch x86_64 "$input" lib-x86_64.o -o test || exit
+        ./test
         actual=$?
         if [[ $actual = $expected ]]; then
-            echo " x86_64 ->  $actual == $expected OK"
+            echo " x86_64 -> $actual == $expected OK"
         else
-            echo " x86_64 ->  $actual != $expected ERROR"
+            echo " x86_64 -> $actual != $expected ERROR"
             exit 1
         fi
     fi
@@ -117,25 +118,25 @@ if [[ $2 = "all" || $2 = "basic"  ]]; then
     assert 0 'int main() { return 5 > 4 && 3 < 2; }'
     assert 1 'int main() { return 5 > 4 || 3 > 2; }'
     assert 0 'int main() { return 5 < 4 || 3 < 2; }'
+
+    assert 1 'int main() { return 1; 2; 3; }'
+    assert 2 'int main() { 1; return 2; 3; }'
+    assert 3 'int main() { 1; 2; return 3; }'
+    assert 3 'int main() { {1; {2;} return 3;} }'
+    assert 5 'int main() { ;;; return 5; }'
 fi
 
 if [[ $2 = "all" || $2 = "local" ]]; then
     assert 3 'int main() { int a; a=3; return a; }'
     assert 3 'int main() { int a=3; return a; }'
     assert 8 'int main() { int a=3; int z=5; return a+z; }'
-
     assert 3 'int main() { int a=3; return a; }'
     assert 8 'int main() { int a=3; int z=5; return a+z; }'
     assert 6 'int main() { int a; int b; a=b=3; return a+b; }'
     assert 3 'int main() { int foo=3; return foo; }'
     assert 8 'int main() { int foo123=3; int bar=5; return foo123+bar; }'
-
-    assert 1 'int main() { return 1; 2; 3; }'
-    assert 2 'int main() { 1; return 2; 3; }'
-    assert 3 'int main() { 1; 2; return 3; }'
-
-    assert 3 'int main() { {1; {2;} return 3;} }'
-    assert 5 'int main() { ;;; return 5; }'
+    assert 8 'int main() { int x, y; x=3, y=5; return x+y; }'
+    assert 8 'int main() { int x=3, y=5; return x+y; }'
 fi
 
 if [[ $2 = "all" || $2 = "if" ]]; then
@@ -159,13 +160,10 @@ if [[ $2 = "all" || $2 = "ptr" ]]; then
     assert 5 'int main() { int x=3; int y=5; return *(&x+1); }'
     assert 3 'int main() { int x=3; int y=5; return *(&y-1); }'
     assert 5 'int main() { int x=3; int y=5; return *(&x-(-1)); }'
-
     assert 5 'int main() { int x=3; int *y=&x; *y=5; return x; }'
     assert 7 'int main() { int x=3; int y=5; *(&x+1)=7; return y; }'
     assert 7 'int main() { int x=3; int y=5; *(&y-2+1)=7; return x; }'
     assert 5 'int main() { int x=3; return (&x+2)-&x+3; }'
-    assert 8 'int main() { int x, y; x=3, y=5; return x+y; }'
-    assert 8 'int main() { int x=3, y=5; return x+y; }'
 fi
 
 if [[ $2 = "all" || $2 = "funccall" ]]; then
@@ -193,4 +191,4 @@ if [[ $2 = "all" || $2 = "array" ]]; then
     assert 5 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+2); }'
 fi
 
-    assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; return *x; }'
+assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; return *x; }'

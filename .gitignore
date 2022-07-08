@@ -1,3 +1,5 @@
-a.out
-a.s
+.DS_Store
 bcc
+*.s
+*.o
+test

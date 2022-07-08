@@ -11,15 +11,14 @@ Node *currentBlock;
 int32_t depth = 0;
 int32_t unique = 1;
 int32_t returnId;
-bool inAssign = false;
 
-void node_asm(FILE *file, Node *node, Node *next) {
+void node_asm(FILE *file, Node *parent, Node *node, Node *next) {
     if (node->kind == NODE_MULTIPLE) {
         for (size_t i = 0; i < node->nodes->size; i++) {
             Node *statement = list_get(node->nodes, i);
             Node *next = i != node->nodes->size - 1 ? list_get(node->nodes, i + 1) : NULL;
             if (statement->kind != NODE_NULL) {
-                node_asm(file, statement, next);
+                node_asm(file, node, statement, next);
                 fprintf(file, "\n");
             }
         }
@@ -61,7 +60,7 @@ void node_asm(FILE *file, Node *node, Node *next) {
             Node *next = i != node->nodes->size - 1 ? list_get(node->nodes, i + 1) : NULL;
             currentBlock = node;
             if (statement->kind != NODE_NULL) {
-                node_asm(file, statement, next);
+                node_asm(file, node, statement, next);
                 fprintf(file, "\n");
             }
         }
@@ -105,7 +104,7 @@ void node_asm(FILE *file, Node *node, Node *next) {
             Node *next = i != node->nodes->size - 1 ? list_get(node->nodes, i + 1) : NULL;
             currentBlock = node;
             if (statement->kind != NODE_NULL) {
-                node_asm(file, statement, next);
+                node_asm(file, node, statement, next);
                 fprintf(file, "\n");
             }
         }
@@ -123,20 +122,20 @@ void node_asm(FILE *file, Node *node, Node *next) {
     }
 
     if (node->kind == NODE_IF) {
-        node_asm(file, node->condition, NULL);
+        node_asm(file, node, node->condition, NULL);
         int32_t endId = unique++;
         if (arch->kind == ARCH_ARM64) {
             if (node->elseBlock != NULL) {
                 int32_t elseId = unique++;
                 fprintf(file, "    cbz x0, .b%d\n", elseId);
-                node_asm(file, node->thenBlock, NULL);
+                node_asm(file, node, node->thenBlock, NULL);
                 fprintf(file, "    b .b%d\n", endId);
                 fprintf(file, ".b%d:\n", elseId);
-                node_asm(file, node->elseBlock, NULL);
+                node_asm(file, node, node->elseBlock, NULL);
                 fprintf(file, ".b%d:\n", endId);
             } else {
                 fprintf(file, "    cbz x0, .b%d\n", endId);
-                node_asm(file, node->thenBlock, NULL);
+                node_asm(file, node, node->thenBlock, NULL);
                 fprintf(file, ".b%d:\n", endId);
             }
         }
@@ -145,15 +144,15 @@ void node_asm(FILE *file, Node *node, Node *next) {
                 int32_t elseId = unique++;
                 fprintf(file, "    cmp rax, 0\n");
                 fprintf(file, "    je .b%d\n", elseId);
-                node_asm(file, node->thenBlock, NULL);
+                node_asm(file, node, node->thenBlock, NULL);
                 fprintf(file, "    jmp .b%d\n", endId);
                 fprintf(file, ".b%d:\n", elseId);
-                node_asm(file, node->elseBlock, NULL);
+                node_asm(file, node, node->elseBlock, NULL);
                 fprintf(file, ".b%d:\n", endId);
             } else {
                 fprintf(file, "    cmp rax, 0\n");
                 fprintf(file, "    je .b%d\n", endId);
-                node_asm(file, node->thenBlock, NULL);
+                node_asm(file, node, node->thenBlock, NULL);
                 fprintf(file, ".b%d:\n", endId);
             }
         }
@@ -162,11 +161,11 @@ void node_asm(FILE *file, Node *node, Node *next) {
     if (node->kind == NODE_WHILE) {
         int32_t beginId = unique++;
         fprintf(file, ".b%d:\n", beginId);
-        if (node->condition != NULL) node_asm(file, node->condition, NULL);
+        if (node->condition != NULL) node_asm(file, node, node->condition, NULL);
         int32_t endId = unique++;
         if (arch->kind == ARCH_ARM64) {
             if (node->condition != NULL) fprintf(file, "    cbz x0, .b%d\n", endId);
-            node_asm(file, node->thenBlock, NULL);
+            node_asm(file, node, node->thenBlock, NULL);
             fprintf(file, "    b .b%d\n", beginId);
             fprintf(file, ".b%d:\n", endId);
         }
@@ -175,14 +174,14 @@ void node_asm(FILE *file, Node *node, Node *next) {
                 fprintf(file, "    cmp rax, 0\n");
                 fprintf(file, "    je .b%d\n", endId);
             }
-            node_asm(file, node->thenBlock, NULL);
+            node_asm(file, node, node->thenBlock, NULL);
             fprintf(file, "    jmp .b%d\n", beginId);
             fprintf(file, ".b%d:\n", endId);
         }
     }
 
     if (node->kind == NODE_RETURN) {
-        node_asm(file, node->unary, NULL);
+        node_asm(file, node, node->unary, NULL);
         if (!(depth == 1 && next == NULL)) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    b .b%d\n", returnId);
             if (arch->kind == ARCH_X86_64) fprintf(file, "    jmp .b%d\n", returnId);
@@ -210,7 +209,7 @@ void node_asm(FILE *file, Node *node, Node *next) {
         node_print(file, node);
         fprintf(file, "\n");
 
-        if (inAssign) {
+        if (node->type->kind == TYPE_POINTER && parent->kind != NODE_DEREF) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", node->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", node->local->offset);
         } else {
@@ -231,7 +230,7 @@ void node_asm(FILE *file, Node *node, Node *next) {
         for (size_t i = 0; i < node->nodes->size; i++) {
             Node *statement = list_get(node->nodes, i);
             if (statement->kind != NODE_NULL) {
-                node_asm(file, statement, NULL);
+                node_asm(file, node, statement, NULL);
                 fprintf(file, "\n");
                 if (arch->kind == ARCH_ARM64) fprintf(file, "    str x0, [sp, -%d]!\n", arch->stackAlign);
                 if (arch->kind == ARCH_X86_64) fprintf(file, "    push rax\n");
@@ -257,24 +256,27 @@ void node_asm(FILE *file, Node *node, Node *next) {
     }
 
     if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
-        fprintf(file, "    ; ");
-        node_print(file, node);
-        fprintf(file, "\n");
-
         if (node->kind == NODE_ADDR) {
+            fprintf(file, "    ; ");
+            node_print(file, node);
+            fprintf(file, "\n");
+
             if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", node->unary->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", node->unary->local->offset);
             return;
         }
 
-        node_asm(file, node->unary, NULL);
+        node_asm(file, node, node->unary, NULL);
+
+        fprintf(file, "    ; ");
+        node_print(file, node);
+        fprintf(file, "\n");
 
         if (node->kind == NODE_NEG) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, xzr, x0\n");
             if (arch->kind == ARCH_X86_64) fprintf(file, "    neg rax\n");
         }
-
-        if (node->kind == NODE_DEREF && (!inAssign || node->unary->kind == NODE_VARIABLE)) {
+        if (node->kind == NODE_DEREF) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    ldr %c0, [x0]\n", node->type->size == 8 ? 'x' : 'w');
             if (arch->kind == ARCH_X86_64) fprintf(file, "    mov %cax, [rax]\n", node->type->size == 8 ? 'r' : 'e');
         }
@@ -293,16 +295,14 @@ void node_asm(FILE *file, Node *node, Node *next) {
     }
 
     if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
-        node_asm(file, node->rhs, NULL);
+        node_asm(file, node, node->rhs, NULL);
 
         if (!(node->kind == NODE_ASSIGN && node->rhs->kind == NODE_ASSIGN)) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    str x0, [sp, -%d]!\n", arch->stackAlign);
             if (arch->kind == ARCH_X86_64) fprintf(file, "    push rax\n");
         }
 
-        if (node->kind == NODE_ASSIGN) inAssign = true;
-        node_asm(file, node->lhs, NULL);
-        if (node->kind == NODE_ASSIGN) inAssign = false;
+        node_asm(file, node, node->lhs, NULL);
         if (!(node->kind == NODE_ASSIGN && node->rhs->kind == NODE_ASSIGN)) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    ldr x1, [sp], %d\n", arch->stackAlign);
             if (arch->kind == ARCH_X86_64) fprintf(file, "    pop rdx\n");
@@ -400,5 +400,5 @@ void node_asm(FILE *file, Node *node, Node *next) {
 
 void codegen(FILE *file, Node *node, Arch *_arch) {
     arch = _arch;
-    node_asm(file, node, NULL);
+    node_asm(file, NULL, node, NULL);
 }

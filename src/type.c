@@ -12,6 +12,13 @@ Type *type_new(TypeKind kind, size_t size, bool isSigned) {
     return type;
 }
 
+Type *type_base(Type *type) {
+    if (type->base != NULL) {
+        return type->base;
+    }
+    return type;
+}
+
 Type *type_pointer(Type *type) {
     Type *pointerType = malloc(sizeof(Type));
     pointerType->kind = TYPE_POINTER;
@@ -31,9 +38,7 @@ Type *type_array(Type *type, size_t count) {
     return pointerType;
 }
 
-void _type_print(FILE *file, Type *type, bool enclose) {
-    if (enclose) fprintf(file, "[");
-
+void _type_print(FILE *file, Type *type) {
     if (type->kind == TYPE_INTEGER) {
         if (type->isSigned) {
             fprintf(file, "i%lu", type->size * 8);
@@ -43,16 +48,18 @@ void _type_print(FILE *file, Type *type, bool enclose) {
     }
 
     if (type->kind == TYPE_POINTER) {
-        _type_print(file, type->base, false);
+        _type_print(file, type->base);
         fprintf(file, "*");
     }
 
     if (type->kind == TYPE_ARRAY) {
-        _type_print(file, type->base, false);
+        _type_print(file, type->base);
         fprintf(file, "[%zu]", type->count);
     }
-
-    if (enclose) fprintf(file, "]");
 }
 
-void type_print(FILE *file, Type *type) { _type_print(file, type, true); }
+void type_print(FILE *file, Type *type) {
+    fprintf(file, "[");
+    _type_print(file, type);
+    fprintf(file, "]");
+}

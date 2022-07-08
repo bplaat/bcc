@@ -3,7 +3,7 @@
 #include "parser.h"
 #include "utils.h"
 
-void node_asm(FILE *file, Node *node, Node *next);
+void node_asm(FILE *file, Node *parent, Node *node, Node *next);
 
 void codegen(FILE *file, Node *node, Arch *arch);
 

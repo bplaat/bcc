@@ -17,6 +17,8 @@ struct Type {
 
 Type *type_new(TypeKind kind, size_t size, bool isSigned);
 
+Type *type_base(Type *type);
+
 Type *type_pointer(Type *type);
 
 Type *type_array(Type *type, size_t count);
