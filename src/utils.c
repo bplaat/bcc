@@ -1,6 +1,8 @@
 #include "utils.h"
 
-size_t align(size_t size, size_t alignment) { return size + (alignment - (size % alignment)); }
+size_t align(size_t size, size_t alignment) {
+    return (size + alignment - 1) / alignment * alignment;
+}
 
 List *list_new(size_t capacity) {
     List *list = malloc(sizeof(List));

@@ -22,6 +22,8 @@ void token_to_string(TokenKind kind, char *buffer) {
     if (kind == TOKEN_RPAREN) strcpy(buffer, ")");
     if (kind == TOKEN_LCURLY) strcpy(buffer, "{");
     if (kind == TOKEN_RCURLY) strcpy(buffer, "}");
+    if (kind == TOKEN_LBRACKET) strcpy(buffer, "[");
+    if (kind == TOKEN_RBRACKET) strcpy(buffer, "]");
     if (kind == TOKEN_COMMA) strcpy(buffer, ",");
     if (kind == TOKEN_SEMICOLON) strcpy(buffer, ";");
 
@@ -147,6 +149,16 @@ List *lexer(char *_text) {
         }
         if (*c == '}') {
             list_add(tokens, token_new(TOKEN_RCURLY));
+            c++;
+            continue;
+        }
+        if (*c == '[') {
+            list_add(tokens, token_new(TOKEN_LBRACKET));
+            c++;
+            continue;
+        }
+        if (*c == ']') {
+            list_add(tokens, token_new(TOKEN_RBRACKET));
             c++;
             continue;
         }

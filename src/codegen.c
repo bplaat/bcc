@@ -49,8 +49,10 @@ void node_asm(FILE *file, Node *node, Node *next) {
 
         for (size_t i = 0; i < node->argsSize; i++) {
             Local *local = list_get(node->locals, i);
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    str %s, [x29, -%zu]\n", arch->argumentRegs[i], local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    mov [rbp - %zu], %s\n", local->offset, arch->argumentRegs[i]);
+            if (arch->kind == ARCH_ARM64)
+                fprintf(file, "    str %s, [x29, -%zu]\n", arch->argumentRegs[i], local->offset);
+            if (arch->kind == ARCH_X86_64)
+                fprintf(file, "    mov [rbp - %zu], %s\n", local->offset, arch->argumentRegs[i]);
         }
 
         depth++;
@@ -208,16 +210,15 @@ void node_asm(FILE *file, Node *node, Node *next) {
         node_print(file, node);
         fprintf(file, "\n");
 
-        Local *local = node_find_local(currentBlock, node->string);
         if (inAssign) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", local->offset);
+            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", node->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", node->local->offset);
         } else {
             if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', local->offset);
+                fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', node->local->offset);
             }
             if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', local->offset);
+                fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', node->local->offset);
             }
         }
     }
@@ -242,7 +243,7 @@ void node_asm(FILE *file, Node *node, Node *next) {
                 fprintf(file, "    ldr %s, [sp], %d\n", arch->argumentRegs[i], arch->stackAlign);
             }
             fprintf(file, "    str x30, [sp, -%d]!\n", arch->stackAlign);
-            fprintf(file, "    bl _%s\n", node->string);
+            fprintf(file, "    bl _%s\n", node->functionName);
             fprintf(file, "    ldr x30, [sp], %d\n", arch->stackAlign);
         }
         if (arch->kind == ARCH_X86_64) {
@@ -250,8 +251,8 @@ void node_asm(FILE *file, Node *node, Node *next) {
                 fprintf(file, "    pop %s\n", arch->argumentRegs[i]);
             }
             fprintf(file, "    xor rax, rax\n");
-            fprintf(file, "    extern _%s\n", node->string);
-            fprintf(file, "    call _%s\n", node->string);
+            fprintf(file, "    extern _%s\n", node->functionName);
+            fprintf(file, "    call _%s\n", node->functionName);
         }
     }
 
@@ -261,9 +262,8 @@ void node_asm(FILE *file, Node *node, Node *next) {
         fprintf(file, "\n");
 
         if (node->kind == NODE_ADDR) {
-            Local *local = node_find_local(currentBlock, node->unary->string);
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", local->offset);
+            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", node->unary->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", node->unary->local->offset);
             return;
         }
 

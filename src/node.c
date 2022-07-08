@@ -24,12 +24,6 @@ Node *node_new_integer(int64_t integer) {
     return node;
 }
 
-Node *node_new_string(NodeKind kind, char *string) {
-    Node *node = node_new(kind);
-    node->string = string;
-    return node;
-}
-
 Node *node_new_unary(NodeKind kind, Node *unary) {
     Node *node = node_new(kind);
     node->unary = unary;
@@ -72,20 +66,24 @@ void node_print(FILE *file, Node *node) {
     if (node->kind == NODE_MULTIPLE) {
         for (size_t i = 0; i < node->nodes->size; i++) {
             node_print(file, list_get(node->nodes, i));
-            fprintf(file, "; ");
+            if (i != node->nodes->size - 1) fprintf(file, "; ");
         }
     }
     if (node->kind == NODE_FUNCTION) {
         type_print(file, node->type);
         fprintf(file, " %s(", node->functionName);
-        for (size_t i = 0; i < node->locals->size; i++) {
+        for (size_t i = 0; i < node->argsSize; i++) {
             Local *local = list_get(node->locals, i);
             type_print(file, local->type);
             fprintf(file, "%s", local->name);
-            if (i != node->locals->size - 1) fprintf(file, ", ");
+            if (i != node->argsSize - 1) fprintf(file, ", ");
         }
-        fprintf(file, ")");
-        fprintf(file, "{ ");
+        fprintf(file, ") { ");
+        for (size_t i = node->argsSize; i < node->locals->size; i++) {
+            Local *local = list_get(node->locals, i);
+            type_print(file, local->type);
+            fprintf(file, " %s; ", local->name);
+        }
         for (size_t i = 0; i < node->nodes->size; i++) {
             node_print(file, list_get(node->nodes, i));
             fprintf(file, "; ");
@@ -110,10 +108,10 @@ void node_print(FILE *file, Node *node) {
         fprintf(file, "%lld", node->integer);
     }
     if (node->kind == NODE_VARIABLE) {
-        fprintf(file, "%s", node->string);
+        fprintf(file, "%s", node->local->name);
     }
     if (node->kind == NODE_FUNCCALL) {
-        fprintf(file, "%s(", node->string);
+        fprintf(file, "%s(", node->functionName);
         for (size_t i = 0; i < node->nodes->size; i++) {
             node_print(file, list_get(node->nodes, i));
             if (i != node->nodes->size - 1) fprintf(file, ", ");

@@ -26,6 +26,7 @@ typedef enum NodeKind {
     NODE_LOGIC_NOT,
 
     NODE_ASSIGN,
+    NODE_ASSIGN_PTR,
     NODE_ADD,
     NODE_SUB,
     NODE_MUL,
@@ -53,7 +54,7 @@ struct Node {
     Type *type;
     union {
         int64_t integer;
-        char *string;
+        Local *local;
 
         Node *unary;
         struct {
@@ -82,8 +83,6 @@ Local *local_new(char *string, Type *type);
 Node *node_new(NodeKind kind);
 
 Node *node_new_integer(int64_t integer);
-
-Node *node_new_string(NodeKind kind, char *string);
 
 Node *node_new_unary(NodeKind kind, Node *unary);
 

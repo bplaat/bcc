@@ -7,9 +7,13 @@
 
 Node *parser(char *text, List *tokens, Arch *arch);
 
+void parser_check(TokenKind kind);
+
 void parser_eat(TokenKind kind);
 
 Type *parser_type(void);
+
+Node *parser_vardef(void);
 
 Node *parser_program(void);
 
@@ -38,5 +42,7 @@ Node *parser_mul(void);
 Node *parser_unary(void);
 
 Node *parser_primary(void);
+
+Node *parser_variable(Type *type);
 
 #endif
