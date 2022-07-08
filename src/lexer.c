@@ -5,12 +5,12 @@
 #include <string.h>
 
 char *text;
-char *c;
+char *tokenStart;
 
 Token *token_new(TokenKind kind) {
     Token *token = malloc(sizeof(Token));
     token->kind = kind;
-    token->position = c - text;
+    token->position = tokenStart - text;
     return token;
 }
 
@@ -55,10 +55,12 @@ void token_to_string(TokenKind kind, char *buffer) {
 
 List *lexer(char *_text) {
     text = _text;
-    c = text;
+    char *c = text;
     List *tokens = list_new(512);
 
     while (*c != '\0') {
+        tokenStart = c;
+
         if (*c == ' ') {
             c++;
             continue;
@@ -261,7 +263,7 @@ List *lexer(char *_text) {
         }
 
         fprintf(stderr, "%s\n", text);
-        for (int32_t i = 0; i < c - text - 1; i++) fprintf(stderr, " ");
+        for (int32_t i = 0; i < tokenStart - text; i++) fprintf(stderr, " ");
         fprintf(stderr, "^\nUnexpected character: '%c'\n", *c);
         exit(EXIT_FAILURE);
     }

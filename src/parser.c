@@ -59,7 +59,7 @@ Node *parser(char *_text, List *_tokens, Arch *_arch) {
 void parser_check(TokenKind kind) {
     if (current()->kind != kind) {
         fprintf(stderr, "%s\n", text);
-        for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
+        for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
         char wantedTokenBuffer[32];
         token_to_string(kind, wantedTokenBuffer);
         char gotTokenBuffer[32];
@@ -79,6 +79,13 @@ void parser_eat(TokenKind kind) {
 
 Type *parser_type(void) {
     Type *type = type_new(TYPE_INTEGER, 4, true);
+    if (!(current()->kind == TOKEN_INT || current()->kind == TOKEN_LONG || current()->kind == TOKEN_SIGNED ||
+        current()->kind == TOKEN_UNSIGNED)) {
+        fprintf(stderr, "%s %d\n", text, position);
+        for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
+        fprintf(stderr, "^\nExpected a type keyword\n");
+        exit(EXIT_FAILURE);
+    }
     while (current()->kind == TOKEN_INT || current()->kind == TOKEN_LONG || current()->kind == TOKEN_SIGNED ||
            current()->kind == TOKEN_UNSIGNED) {
         if (current()->kind == TOKEN_INT) {
@@ -444,7 +451,7 @@ Node *parser_unary(void) {
         Node *addrNode = node_new_unary(NODE_ADDR, parser_unary());
         if (addrNode->unary->kind != NODE_VARIABLE) {
             fprintf(stderr, "%s\n", text);
-            for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
+            for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can only get an address from a variable\n");
             exit(EXIT_FAILURE);
         }
@@ -461,7 +468,7 @@ Node *parser_unary(void) {
         Node *derefNode = node_new_unary(NODE_DEREF, parser_unary());
         if (derefNode->unary->type->base == NULL) {
             fprintf(stderr, "%s\n", text);
-            for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
+            for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can't dereference a ");
             type_print(stderr, derefNode->unary->type);
             fprintf(stderr, " type\n");
@@ -549,7 +556,7 @@ Node *parser_variable(Type *type) {
             list_add(currentBlock->locals, local);
         } else {
             fprintf(stderr, "%s\n", text);
-            for (int32_t i = 0; i < current()->position - 1; i++) fprintf(stderr, " ");
+            for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nCan't find variable: %s\n", current()->string);
             exit(EXIT_FAILURE);
         }

@@ -70,6 +70,7 @@ void node_print(FILE *file, Node *node) {
     if (node->kind == NODE_MULTIPLE) {
         for (size_t i = 0; i < node->nodes->size; i++) {
             Node *childNode = list_get(node->nodes, i);
+            if (childNode->kind == NODE_NULL) continue;
             if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
                 for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
             }
@@ -106,6 +107,7 @@ void node_print(FILE *file, Node *node) {
 
         for (size_t i = 0; i < node->nodes->size; i++) {
             Node *childNode = list_get(node->nodes, i);
+            if (childNode->kind == NODE_NULL) continue;
             if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
                 for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
             }
@@ -133,6 +135,7 @@ void node_print(FILE *file, Node *node) {
 
         for (size_t i = 0; i < node->nodes->size; i++) {
             Node *childNode = list_get(node->nodes, i);
+            if (childNode->kind == NODE_NULL) continue;
             if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
                 for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
             }
@@ -193,9 +196,9 @@ void node_print(FILE *file, Node *node) {
 
     if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
         if (memcmp(node->type, node->unary->type, sizeof(Type))) {
-            fprintf(file, "[");
+            fprintf(file, "|");
             type_print(file, node->type);
-            fprintf(file, "]");
+            fprintf(file, "|");
         }
         if (nodeDepth > 0) fprintf(file, "(");
         if (node->kind == NODE_NEG) fprintf(file, "- ");
@@ -208,9 +211,9 @@ void node_print(FILE *file, Node *node) {
 
     if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
         if (memcmp(node->type, node->lhs->type, sizeof(Type))) {
-            fprintf(file, "[");
+            fprintf(file, "|");
             type_print(file, node->type);
-            fprintf(file, "]");
+            fprintf(file, "|");
         }
         if (nodeDepth > 0) fprintf(file, "(");
         node_print(file, node->lhs);
