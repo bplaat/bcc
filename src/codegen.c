@@ -13,6 +13,16 @@ int32_t unique = 1;
 int32_t returnId;
 
 void node_asm(FILE *file, Node *parent, Node *node, Node *next) {
+    (void)parent;
+
+    if (node->kind == NODE_PROGRAM) {
+        for (size_t i = 0; i < node->funcs->size; i++) {
+            Node *funcdef = list_get(node->funcs, i);
+            node_asm(file, node, funcdef, NULL);
+            fprintf(file, "\n");
+        }
+    }
+
     if (node->kind == NODE_MULTIPLE) {
         for (size_t i = 0; i < node->nodes->size; i++) {
             Node *statement = list_get(node->nodes, i);
@@ -24,7 +34,7 @@ void node_asm(FILE *file, Node *parent, Node *node, Node *next) {
         }
     }
 
-    if (node->kind == NODE_FUNCTION) {
+    if (node->kind == NODE_FUNCDEF) {
         fprintf(file, "_%s:\n", node->functionName);
         returnId = unique++;
 
@@ -209,16 +219,11 @@ void node_asm(FILE *file, Node *parent, Node *node, Node *next) {
         node_print(file, node);
         fprintf(file, "\n");
 
-        if (node->type->kind == TYPE_POINTER && parent->kind != NODE_DEREF) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", node->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", node->local->offset);
-        } else {
-            if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', node->local->offset);
-            }
-            if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', node->local->offset);
-            }
+        if (arch->kind == ARCH_ARM64) {
+            fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', node->local->offset);
+        }
+        if (arch->kind == ARCH_X86_64) {
+            fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', node->local->offset);
         }
     }
 
@@ -276,7 +281,7 @@ void node_asm(FILE *file, Node *parent, Node *node, Node *next) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, xzr, x0\n");
             if (arch->kind == ARCH_X86_64) fprintf(file, "    neg rax\n");
         }
-        if (node->kind == NODE_DEREF) {
+        if (node->kind == NODE_DEREF && node->unary->type->kind != TYPE_ARRAY) {
             if (arch->kind == ARCH_ARM64) fprintf(file, "    ldr %c0, [x0]\n", node->type->size == 8 ? 'x' : 'w');
             if (arch->kind == ARCH_X86_64) fprintf(file, "    mov %cax, [rax]\n", node->type->size == 8 ? 'r' : 'e');
         }

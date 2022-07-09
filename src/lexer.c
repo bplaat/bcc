@@ -14,43 +14,44 @@ Token *token_new(TokenKind kind) {
     return token;
 }
 
-void token_to_string(TokenKind kind, char *buffer) {
-    if (kind == TOKEN_EOF) strcpy(buffer, "EOF");
-    if (kind == TOKEN_INTEGER) strcpy(buffer, "integer");
-    if (kind == TOKEN_VARIABLE) strcpy(buffer, "variable");
-    if (kind == TOKEN_LPAREN) strcpy(buffer, "(");
-    if (kind == TOKEN_RPAREN) strcpy(buffer, ")");
-    if (kind == TOKEN_LCURLY) strcpy(buffer, "{");
-    if (kind == TOKEN_RCURLY) strcpy(buffer, "}");
-    if (kind == TOKEN_LBRACKET) strcpy(buffer, "[");
-    if (kind == TOKEN_RBRACKET) strcpy(buffer, "]");
-    if (kind == TOKEN_COMMA) strcpy(buffer, ",");
-    if (kind == TOKEN_SEMICOLON) strcpy(buffer, ";");
+char *token_to_string(TokenKind kind) {
+    if (kind == TOKEN_EOF) return strdup("EOF");
+    if (kind == TOKEN_INTEGER) return strdup("integer");
+    if (kind == TOKEN_VARIABLE) return strdup("variable");
+    if (kind == TOKEN_LPAREN) return strdup("(");
+    if (kind == TOKEN_RPAREN) return strdup(")");
+    if (kind == TOKEN_LCURLY) return strdup("{");
+    if (kind == TOKEN_RCURLY) return strdup("}");
+    if (kind == TOKEN_LBRACKET) return strdup("[");
+    if (kind == TOKEN_RBRACKET) return strdup("]");
+    if (kind == TOKEN_COMMA) return strdup(",");
+    if (kind == TOKEN_SEMICOLON) return strdup(";");
 
-    if (kind == TOKEN_INT) strcpy(buffer, "int");
-    if (kind == TOKEN_LONG) strcpy(buffer, "long");
-    if (kind == TOKEN_IF) strcpy(buffer, "if");
-    if (kind == TOKEN_ELSE) strcpy(buffer, "else");
-    if (kind == TOKEN_WHILE) strcpy(buffer, "while");
-    if (kind == TOKEN_FOR) strcpy(buffer, "for");
-    if (kind == TOKEN_RETURN) strcpy(buffer, "return");
+    if (kind == TOKEN_INT) return strdup("int");
+    if (kind == TOKEN_LONG) return strdup("long");
+    if (kind == TOKEN_IF) return strdup("if");
+    if (kind == TOKEN_ELSE) return strdup("else");
+    if (kind == TOKEN_WHILE) return strdup("while");
+    if (kind == TOKEN_FOR) return strdup("for");
+    if (kind == TOKEN_RETURN) return strdup("return");
 
-    if (kind == TOKEN_ASSIGN) strcpy(buffer, "=");
-    if (kind == TOKEN_ADD) strcpy(buffer, "+");
-    if (kind == TOKEN_SUB) strcpy(buffer, "-");
-    if (kind == TOKEN_STAR) strcpy(buffer, "*");
-    if (kind == TOKEN_DIV) strcpy(buffer, "/");
-    if (kind == TOKEN_MOD) strcpy(buffer, "%");
-    if (kind == TOKEN_ADDR) strcpy(buffer, "&");
-    if (kind == TOKEN_EQ) strcpy(buffer, "==");
-    if (kind == TOKEN_NEQ) strcpy(buffer, "!=");
-    if (kind == TOKEN_LT) strcpy(buffer, "<");
-    if (kind == TOKEN_LTEQ) strcpy(buffer, "<=");
-    if (kind == TOKEN_GT) strcpy(buffer, ">");
-    if (kind == TOKEN_GTEQ) strcpy(buffer, ">=");
-    if (kind == TOKEN_LOGIC_NOT) strcpy(buffer, "!");
-    if (kind == TOKEN_LOGIC_AND) strcpy(buffer, "&&");
-    if (kind == TOKEN_LOGIC_OR) strcpy(buffer, "||");
+    if (kind == TOKEN_ASSIGN) return strdup("=");
+    if (kind == TOKEN_ADD) return strdup("+");
+    if (kind == TOKEN_SUB) return strdup("-");
+    if (kind == TOKEN_STAR) return strdup("*");
+    if (kind == TOKEN_DIV) return strdup("/");
+    if (kind == TOKEN_MOD) return strdup("%");
+    if (kind == TOKEN_ADDR) return strdup("&");
+    if (kind == TOKEN_EQ) return strdup("==");
+    if (kind == TOKEN_NEQ) return strdup("!=");
+    if (kind == TOKEN_LT) return strdup("<");
+    if (kind == TOKEN_LTEQ) return strdup("<=");
+    if (kind == TOKEN_GT) return strdup(">");
+    if (kind == TOKEN_GTEQ) return strdup(">=");
+    if (kind == TOKEN_LOGIC_NOT) return strdup("!");
+    if (kind == TOKEN_LOGIC_AND) return strdup("&&");
+    if (kind == TOKEN_LOGIC_OR) return strdup("||");
+    return NULL;
 }
 
 List *lexer(char *_text) {

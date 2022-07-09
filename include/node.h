@@ -5,12 +5,19 @@
 #include "type.h"
 #include "utils.h"
 
+typedef struct Local {
+    char *name;
+    Type *type;
+    size_t offset;
+} Local;
+
 typedef enum NodeKind {
-    NODE_MULTIPLE,
-    NODE_FUNCTION,
-    NODE_FUNCARG,
-    NODE_BLOCK,
     NODE_NULL,
+    NODE_PROGRAM,
+    NODE_FUNCDEF,
+    NODE_FUNCARG,
+    NODE_MULTIPLE,
+    NODE_BLOCK,
 
     NODE_VARIABLE,
     NODE_INTEGER,
@@ -26,7 +33,6 @@ typedef enum NodeKind {
     NODE_LOGIC_NOT,
 
     NODE_ASSIGN,
-    NODE_ASSIGN_PTR,
     NODE_ADD,
     NODE_SUB,
     NODE_MUL,
@@ -42,25 +48,30 @@ typedef enum NodeKind {
     NODE_LOGIC_OR
 } NodeKind;
 
-typedef struct Local {
-    char *name;
-    Type *type;
-    size_t offset;
-} Local;
-
 typedef struct Node Node;
 struct Node {
     NodeKind kind;
     Type *type;
     union {
+        // Integer kind
         int64_t integer;
+
+        // Variable kind
         Local *local;
 
+        // Unary kind
         Node *unary;
+
+        // Operation kind
         struct {
             Node *lhs;
             Node *rhs;
         };
+
+        // Program kind
+        List *funcs;
+
+        // Funcdef, funccall, multiple and block kind
         struct {
             union {
                 char *functionName;
@@ -70,6 +81,8 @@ struct Node {
             List *locals;
             size_t argsSize;
         };
+
+        // If and while kind
         struct {
             Node *condition;
             Node *thenBlock;

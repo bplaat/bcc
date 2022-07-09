@@ -65,8 +65,7 @@ int main(int argc, char **argv) {
     }
 
     char assemblyPath[512];
-    strcpy(assemblyPath, outputPath);
-    strcat(assemblyPath, ".s");
+    sprintf(assemblyPath, "%s.s", outputPath);
     FILE *assembly = fopen(assemblyPath, "w");
 
     if (arch.kind == ARCH_ARM64) {
@@ -95,16 +94,12 @@ int main(int argc, char **argv) {
 
     // Assemble assembly file and link executable
     char objectPath[512];
-    strcpy(objectPath, outputPath);
-    strcat(objectPath, ".o");
+    sprintf(objectPath, "%s.o", outputPath);
     list_add(objects, objectPath);
 
     if (arch.kind == ARCH_ARM64) {
         char command[512];
-        strcpy(command, "as ");
-        strcat(command, assemblyPath);
-        strcat(command, " -o ");
-        strcat(command, objectPath);
+        sprintf(command, "as %s -o %s", assemblyPath, objectPath);
         system(command);
 
         strcpy(command, "ld ");
@@ -119,10 +114,7 @@ int main(int argc, char **argv) {
 
     if (arch.kind == ARCH_X86_64) {
         char command[512];
-        strcpy(command, "nasm -f macho64 ");
-        strcat(command, assemblyPath);
-        strcat(command, " -o ");
-        strcat(command, objectPath);
+        sprintf(command, "nasm -f macho64 %s -o %s", assemblyPath, objectPath);
         system(command);
 
         strcpy(command, "arch -x86_64 ld ");

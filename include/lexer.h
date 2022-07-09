@@ -50,16 +50,16 @@ typedef enum TokenKind {
 
 typedef struct Token {
     TokenKind kind;
+    int32_t position;
     union {
         int64_t integer;
         char *string;
     };
-    int32_t position;
 } Token;
 
 Token *token_new(TokenKind kind);
 
-void token_to_string(TokenKind kind, char *buffer);
+char *token_to_string(TokenKind kind);
 
 List *lexer(char *text);
 

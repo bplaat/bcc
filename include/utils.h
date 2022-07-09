@@ -13,6 +13,8 @@ typedef struct Arch {
 
 size_t align(size_t size, size_t alignment);
 
+char *strdup(const char *string);
+
 typedef struct List {
     void **items;
     size_t capacity;

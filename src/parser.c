@@ -60,11 +60,7 @@ void parser_check(TokenKind kind) {
     if (current()->kind != kind) {
         fprintf(stderr, "%s\n", text);
         for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
-        char wantedTokenBuffer[32];
-        token_to_string(kind, wantedTokenBuffer);
-        char gotTokenBuffer[32];
-        token_to_string(current()->kind, gotTokenBuffer);
-        fprintf(stderr, "^\nUnexpected: '%s' needed '%s'\n", gotTokenBuffer, wantedTokenBuffer);
+        fprintf(stderr, "^\nUnexpected: '%s' needed '%s'\n", token_to_string(kind), token_to_string(current()->kind));
         exit(EXIT_FAILURE);
     }
 }
@@ -135,16 +131,17 @@ Node *parser_vardef(void) {
 }
 
 Node *parser_program(void) {
-    Node *multipleNode = node_new_multiple(NODE_MULTIPLE);
+    Node *programNode = node_new(NODE_PROGRAM);
+    programNode->funcs = list_new(4);
     while (current()->kind != TOKEN_EOF) {
-        list_add(multipleNode->nodes, parser_funcdef());
+        list_add(programNode->funcs, parser_funcdef());
     }
-    return multipleNode;
+    return programNode;
 }
 
 Node *parser_funcdef(void) {
     Type *type = parser_type();
-    Node *funcdefNode = node_new_multiple(NODE_FUNCTION);
+    Node *funcdefNode = node_new_multiple(NODE_FUNCDEF);
     funcdefNode->functionName = current()->string;
     funcdefNode->type = type;
     funcdefNode->locals = list_new(4);
@@ -280,15 +277,23 @@ Node *parser_declarations(void) {
             if (variableNode == NULL) {
                 variableNode = parser_vardef();
                 type = variableNode->type;
-                variableNode->type = type_pointer(variableNode->type);
             } else {
                 variableNode = parser_variable(type);
-                variableNode->type = type_pointer(variableNode->type);
             }
 
             if (current()->kind == TOKEN_ASSIGN) {
                 parser_eat(TOKEN_ASSIGN);
-                list_add(multipleNode->nodes, node_new_operation(NODE_ASSIGN, variableNode, parser_assign()));
+
+                if (variableNode->kind == NODE_DEREF) {
+                    list_add(multipleNode->nodes, node_new_operation(NODE_ASSIGN, variableNode->unary, parser_assign()));
+                }
+                else if (variableNode->kind == NODE_VARIABLE) {
+                    list_add(multipleNode->nodes, node_new_operation(NODE_ASSIGN, node_new_unary(NODE_ADDR, variableNode), parser_assign()));
+                }
+                else {
+                    fprintf(stderr, "parser_declarations() TODO\n");
+                    exit(1);
+                }
             }
 
             if (current()->kind == TOKEN_COMMA) {
@@ -320,11 +325,18 @@ Node *parser_assign(void) {
     if (current()->kind == TOKEN_ASSIGN) {
         parser_eat(TOKEN_ASSIGN);
         if (node->kind == NODE_DEREF) {
-            node->unary->type = type_new(TYPE_INTEGER, 8, false);
+            if (node->unary->type->kind == TYPE_ARRAY) {
+                // node->unary->type = type_pointer(node->unary->type->base);
+                node->unary->type = type_pointer(node->unary->type->base);
+                node->unary = node_new_unary(NODE_ADDR, node->unary);
+            }
             return node_new_operation(NODE_ASSIGN, node->unary, parser_assign());
         }
-        node->type = type_pointer(node->type);
-        return node_new_operation(NODE_ASSIGN, node, parser_assign());
+        if (node->kind == NODE_VARIABLE) {
+            return node_new_operation(NODE_ASSIGN, node_new_unary(NODE_ADDR, node), parser_assign());
+        }
+        fprintf(stderr, "parser_assign() TODO\n");
+        exit(1);
     }
     return node;
 }
@@ -388,12 +400,10 @@ Node *parser_add(void) {
                 rhs = node_new_operation(NODE_MUL, rhs, node_new_integer(align(node->type->size, arch->stackAlign)));
             }
             if (node->type->kind == TYPE_ARRAY && rhs->type->kind == TYPE_INTEGER) {
+                node = node_new_unary(NODE_ADDR, node);
                 rhs = node_new_operation(NODE_MUL, rhs, node_new_integer(node->type->base->size));
             }
             node = node_new_operation(NODE_ADD, node, rhs);
-            if (node->type->kind == TYPE_ARRAY && rhs->type->kind == TYPE_INTEGER) {
-                node->type = type_pointer(node->type->base);
-            }
         }
 
         else if (current()->kind == TOKEN_SUB) {
@@ -402,13 +412,7 @@ Node *parser_add(void) {
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
                 rhs = node_new_operation(NODE_MUL, rhs, node_new_integer(align(node->type->size, arch->stackAlign)));
             }
-            if (node->type->kind == TYPE_ARRAY && rhs->type->kind == TYPE_INTEGER) {
-                rhs = node_new_operation(NODE_MUL, rhs, node_new_integer(node->type->base->size));
-            }
             node = node_new_operation(NODE_SUB, node, rhs);
-            if (node->type->kind == TYPE_ARRAY && rhs->type->kind == TYPE_INTEGER) {
-                node->type = type_pointer(node->type->base);
-            }
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
                 node = node_new_operation(NODE_DIV, node, node_new_integer(align(node->type->size, arch->stackAlign)));
                 node->type = node->type->base;
@@ -526,9 +530,7 @@ Node *parser_primary(void) {
 
     fprintf(stderr, "%s\n", text);
     for (int32_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
-    char tokenBuffer[32];
-    token_to_string(current()->kind, tokenBuffer);
-    fprintf(stderr, "^\nUnexpected: %s token\n", tokenBuffer);
+    fprintf(stderr, "^\nUnexpected: %s token\n", token_to_string(current()->kind));
     exit(EXIT_FAILURE);
 }
 

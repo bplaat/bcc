@@ -1,6 +1,13 @@
 #include "utils.h"
+#include <string.h>
 
 size_t align(size_t size, size_t alignment) { return (size + alignment - 1) / alignment * alignment; }
+
+char *strdup(const char *string) {
+    char *newString = malloc(strlen(string) + 1);
+    strcpy(newString, string);
+    return newString;
+}
 
 List *list_new(size_t capacity) {
     List *list = malloc(sizeof(List));

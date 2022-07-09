@@ -191,6 +191,7 @@ if [[ $2 = "all" || $2 = "funcdef" ]]; then
 fi
 
 if [[ $2 = "all" || $2 = "array" ]]; then
+    # Still some problems
     assert 3 'int main() { int x[2]; int *y=&x; *y=3; return *y; }'
     assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; return *x; }'
     assert 4 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1); }'
@@ -198,5 +199,8 @@ if [[ $2 = "all" || $2 = "array" ]]; then
 fi
 
 # Add selected tests below
+# ...
 
-echo "OK"
+if [[ $1 = "test" ]]; then
+    echo "OK"
+fi
