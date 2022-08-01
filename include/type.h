@@ -21,6 +21,8 @@ Type *type_new_pointer(Type *type);
 
 Type *type_new_array(Type *type, int32_t count);
 
+Type *type_base(Type *type);
+
 bool type_is_32(Type *type);
 
 bool type_is_64(Type *type);

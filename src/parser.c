@@ -61,6 +61,17 @@ Type *parser_type(Parser *parser) {
     return type;
 }
 
+Type *parser_type_suffix(Parser *parser, Type *type) {
+    if (current()->kind == TOKEN_LBRACKET) {
+        parser_eat(parser, TOKEN_LBRACKET);
+        int32_t size = current()->integer;
+        parser_eat(parser, TOKEN_INTEGER);
+        parser_eat(parser, TOKEN_RBRACKET);
+        type = type_new_array(parser_type_suffix(parser, type), size);
+    }
+    return type;
+}
+
 Local *parser_find_local(Parser *parser, char *name) {
     Local *local = NULL;
     for (size_t i = 0; i < parser->currentFuncdef->locals->size; i++) {
@@ -277,12 +288,7 @@ Node *parser_assign(Parser *parser, Type *declType) {
             }
             char *name = current()->string;
             parser_eat(parser, TOKEN_VARIABLE);
-            if (current()->kind == TOKEN_LBRACKET) {
-                parser_eat(parser, TOKEN_LBRACKET);
-                declType = type_new_array(declType, current()->integer);
-                parser_eat(parser, TOKEN_INTEGER);
-                parser_eat(parser, TOKEN_RBRACKET);
-            }
+            declType = parser_type_suffix(parser, declType);
 
             local = local_new(name, declType, align(declType->size, parser->arch->stackAlign));
             for (size_t i = 0; i < parser->currentFuncdef->locals->size; i++) {
@@ -432,12 +438,6 @@ Node *parser_unary(Parser *parser) {
         parser_eat(parser, TOKEN_AND);
         Node *node = node_new_unary(NODE_REF, parser_unary(parser));
         if (node->unary->kind != NODE_LOCAL) {
-            // For know parse all array local refs as pointers to the first element of the array
-            // So the ref is already there so skip this operator
-            if (node->unary->kind == NODE_REF && node->unary->unary->type->kind == TYPE_ARRAY) {
-                return node->unary;
-            }
-
             fprintf(stderr, "%s\n", parser->text);
             for (size_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can only reference a variable\n");
@@ -462,19 +462,23 @@ Node *parser_unary(Parser *parser) {
         node->type = node->unary->type->base;
         return node;
     }
+    if (current()->kind == TOKEN_SIZEOF) {
+        parser_eat(parser, TOKEN_SIZEOF);
+        return node_new_integer(parser_unary(parser)->type->size);
+    }
     return parser_primary(parser);
 }
 
 Node *parser_primary(Parser *parser) {
+    if (current()->kind == TOKEN_LPAREN) {
+        parser_eat(parser, TOKEN_LPAREN);
+        Node *node = parser_assign(parser, NULL);
+        parser_eat(parser, TOKEN_RPAREN);
+        return node;
+    }
     if (current()->kind == TOKEN_INTEGER) {
         Node *node = node_new_integer(current()->integer);
         parser_eat(parser, TOKEN_INTEGER);
-        return node;
-    }
-    if (current()->kind == TOKEN_LPAREN) {
-        parser_eat(parser, TOKEN_LPAREN);
-        Node *node = parser_logic(parser);
-        parser_eat(parser, TOKEN_RPAREN);
         return node;
     }
     if (current()->kind == TOKEN_VARIABLE) {
@@ -499,13 +503,6 @@ Node *parser_primary(Parser *parser) {
 
         Local *local = parser_find_local(parser, current()->string);
         parser_eat(parser, TOKEN_VARIABLE);
-
-        // For know parse all array local refs as pointers to the first element of the array
-        if (local->type->kind == TYPE_ARRAY) {
-            Node *node = node_new_unary(NODE_REF, node_new_local(local));
-            node->type = type_new_pointer(node->unary->type->base);
-            return node;
-        }
         return node_new_local(local);
     }
 

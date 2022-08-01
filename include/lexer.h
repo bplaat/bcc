@@ -25,6 +25,7 @@ typedef enum TokenKind {
     TOKEN_LONG,
     TOKEN_SIGNED,
     TOKEN_UNSIGNED,
+    TOKEN_SIZEOF,
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_WHILE,

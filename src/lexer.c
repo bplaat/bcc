@@ -39,6 +39,9 @@ char *token_kind_to_string(TokenKind kind) {
 
     if (kind == TOKEN_INT) return strdup("int");
     if (kind == TOKEN_LONG) return strdup("long");
+    if (kind == TOKEN_SIGNED) return strdup("signed");
+    if (kind == TOKEN_UNSIGNED) return strdup("unsigned");
+    if (kind == TOKEN_SIZEOF) return strdup("sizeof");
     if (kind == TOKEN_IF) return strdup("if");
     if (kind == TOKEN_ELSE) return strdup("else");
     if (kind == TOKEN_WHILE) return strdup("while");
@@ -69,8 +72,8 @@ bool token_kind_is_type(TokenKind kind) { return kind == TOKEN_INT || kind == TO
 List *lexer(char *text) {
     List *tokens = list_new(1024);
     char *c = text;
-    Keyword keywords[] = {{"int", TOKEN_INT},   {"long", TOKEN_LONG},   {"signed", TOKEN_SIGNED}, {"unsigned", TOKEN_UNSIGNED}, {"if", TOKEN_IF},
-                          {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"for", TOKEN_FOR},       {"return", TOKEN_RETURN}};
+    Keyword keywords[] = {{"int", TOKEN_INT}, {"long", TOKEN_LONG}, {"signed", TOKEN_SIGNED}, {"unsigned", TOKEN_UNSIGNED}, {"sizeof", TOKEN_SIZEOF},
+                          {"if", TOKEN_IF},   {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE},   {"for", TOKEN_FOR},           {"return", TOKEN_RETURN}};
     while (*c != '\0') {
         size_t position = c - text;
 

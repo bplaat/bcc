@@ -20,6 +20,6 @@ int32_t codegen_alloc(Codegen *codegen, int32_t requestReg);
 
 void codegen_free(Codegen *codegen, int32_t reg);
 
-int32_t codegen_part(Codegen *codegen, Node *node, int32_t requestReg);
+int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg);
 
 #endif

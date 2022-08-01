@@ -25,12 +25,17 @@ Type *type_new_array(Type *baseType, int32_t count) {
     return type;
 }
 
-bool type_is_32(Type *type) {
-    return type->size == 4;
+Type *type_base(Type *type) {
+    if (type->kind == TYPE_POINTER || type->kind == TYPE_ARRAY) {
+        return type->base;
+    }
+    return type;
 }
 
+bool type_is_32(Type *type) { return type->size == 4; }
+
 bool type_is_64(Type *type) {
-    return type->size == 8;
+    return type->kind == TYPE_ARRAY || type->size == 8;
 }
 
 char *type_to_string(Type *type) {
