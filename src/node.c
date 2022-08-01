@@ -1,13 +1,13 @@
 #include "node.h"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-Local *local_new(char *string, Type *type) {
+Local *local_new(char *string, Type *type, size_t offset) {
     Local *local = malloc(sizeof(Local));
     local->name = string;
     local->type = type;
+    local->offset = offset;
     return local;
 }
 
@@ -19,23 +19,30 @@ Node *node_new(NodeKind kind) {
 
 Node *node_new_integer(int64_t integer) {
     Node *node = node_new(NODE_INTEGER);
-    node->integer = integer;
     node->type = type_new(TYPE_INTEGER, 4, true);
+    node->integer = integer;
+    return node;
+}
+
+Node *node_new_local(Local *local) {
+    Node *node = node_new(NODE_LOCAL);
+    node->type = local->type;
+    node->local = local;
     return node;
 }
 
 Node *node_new_unary(NodeKind kind, Node *unary) {
     Node *node = node_new(kind);
-    node->unary = unary;
     node->type = unary->type;
+    node->unary = unary;
     return node;
 }
 
 Node *node_new_operation(NodeKind kind, Node *lhs, Node *rhs) {
     Node *node = node_new(kind);
+    node->type = kind == NODE_ASSIGN || kind == NODE_ASSIGN_PTR ? rhs->type : lhs->type;
     node->lhs = lhs;
     node->rhs = rhs;
-    node->type = lhs->type;
     return node;
 }
 
@@ -45,209 +52,151 @@ Node *node_new_multiple(NodeKind kind) {
     return node;
 }
 
-Local *node_find_local(Node *block, char *name) {
-    if (block->kind == NODE_BLOCK && block->parentBlock != NULL) {
-        Local *local = node_find_local(block->parentBlock, name);
-        if (local != NULL) {
-            return local;
-        }
-    }
-
-    for (size_t i = 0; i < block->locals->size; i++) {
-        Local *local = list_get(block->locals, i);
-        if (!strcmp(local->name, name)) {
-            return local;
-        }
-    }
-    return NULL;
-}
-
-void node_print(FILE *file, Node *node) {
-    static int indentDepth = 0;
-
+char *node_to_string(Node *node) {
     if (node->kind == NODE_PROGRAM) {
-        for (size_t i = 0; i < node->funcs->size; i++) {
-            Node *functionNode = list_get(node->funcs, i);
-            node_print(file, functionNode);
-            fprintf(file, "\n");
-        }
-    }
-
-    if (node->kind == NODE_MULTIPLE) {
+        List *sb = list_new(8);
         for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *childNode = list_get(node->nodes, i);
-            if (childNode->kind == NODE_NULL) continue;
-            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
-                for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-            }
-            node_print(file, childNode);
-            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK && childNode->kind != NODE_IF &&
-                childNode->kind != NODE_WHILE) {
-                fprintf(file, ";\n");
-            }
+            list_add(sb, node_to_string(list_get(node->nodes, i)));
+            list_add(sb, "\n");
         }
+        return list_to_string(sb);
     }
-
     if (node->kind == NODE_FUNCDEF) {
-        type_print(file, node->type);
-        fprintf(file, " %s(", node->functionName);
-        for (size_t i = 0; i < node->argsSize; i++) {
-            Local *local = list_get(node->locals, i);
-            type_print(file, local->type);
-            fprintf(file, " %s", local->name);
-            if (i != node->argsSize - 1) fprintf(file, ", ");
+        List *sb = list_new(8);
+        list_add(sb, type_to_string(node->type));
+        list_add(sb, " ");
+        list_add(sb, node->funcname);
+        list_add(sb, "(");
+        if (node->argsSize > 0) {
+            for (size_t i = 0; i < node->argsSize; i++) {
+                Local *local = list_get(node->locals, i);
+                list_add(sb, type_to_string(local->type));
+                list_add(sb, " ");
+                list_add(sb, local->name);
+                if (i != node->argsSize - 1) list_add(sb, ", ");
+            }
         }
-        fprintf(file, ") {\n");
-        indentDepth++;
+        list_add(sb, ") { ");
         for (size_t i = node->argsSize; i < node->locals->size; i++) {
             Local *local = list_get(node->locals, i);
-            for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-            type_print(file, local->type);
-            fprintf(file, " %s;\n", local->name);
+            list_add(sb, type_to_string(local->type));
+            list_add(sb, " ");
+            list_add(sb, local->name);
+            list_add(sb, "; ");
         }
-
         for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *childNode = list_get(node->nodes, i);
-            if (childNode->kind == NODE_NULL) continue;
-            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
-                for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-            }
-            node_print(file, childNode);
-            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK && childNode->kind != NODE_IF &&
-                childNode->kind != NODE_WHILE) {
-                fprintf(file, ";\n");
-            }
+            list_add(sb, node_to_string(list_get(node->nodes, i)));
+            list_add(sb, "; ");
         }
-        indentDepth--;
-        fprintf(file, "}\n");
+        list_add(sb, "}");
+        return list_to_string(sb);
     }
-
     if (node->kind == NODE_BLOCK) {
-        for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-        fprintf(file, "{\n");
-        indentDepth++;
-        for (size_t i = 0; i < node->locals->size; i++) {
-            Local *local = list_get(node->locals, i);
-            for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-            type_print(file, local->type);
-            fprintf(file, " %s;\n", local->name);
-        }
-
+        List *sb = list_new(8);
+        list_add(sb, "{ ");
         for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *childNode = list_get(node->nodes, i);
-            if (childNode->kind == NODE_NULL) continue;
-            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK) {
-                for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-            }
-            node_print(file, childNode);
-            if (childNode->kind != NODE_MULTIPLE && childNode->kind != NODE_BLOCK && childNode->kind != NODE_IF &&
-                childNode->kind != NODE_WHILE) {
-                fprintf(file, ";\n");
-            }
+            list_add(sb, node_to_string(list_get(node->nodes, i)));
+            list_add(sb, "; ");
         }
-        indentDepth--;
-        for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-        fprintf(file, "}\n");
-    }
-
-    if (node->kind == NODE_IF) {
-        fprintf(file, "if (");
-        node_print(file, node->condition);
-        fprintf(file, ")\n");
-        node_print(file, node->thenBlock);
-        if (node->elseBlock != NULL) {
-            for (int32_t i = 0; i < indentDepth * 4; i++) fprintf(file, " ");
-            fprintf(file, "else\n");
-            node_print(file, node->elseBlock);
-        }
-    }
-
-    if (node->kind == NODE_WHILE) {
-        fprintf(file, "while (");
-        if (node->condition != NULL) {
-            node_print(file, node->condition);
-        } else {
-            fprintf(file, "1");
-        }
-        fprintf(file, ")\n");
-        node_print(file, node->thenBlock);
-    }
-
-    if (node->kind == NODE_RETURN) {
-        fprintf(file, "return ");
-        node_print(file, node->unary);
+        list_add(sb, "}");
+        return list_to_string(sb);
     }
 
     if (node->kind == NODE_INTEGER) {
-        fprintf(file, "%lld", node->integer);
+        return format("%lld", node->integer);
     }
-    if (node->kind == NODE_VARIABLE) {
-        fprintf(file, "%s", node->local->name);
+    if (node->kind == NODE_LOCAL) {
+        return strdup(node->local->name);
     }
     if (node->kind == NODE_FUNCCALL) {
-        fprintf(file, "%s(", node->functionName);
+        List *sb = list_new(8);
+        list_add(sb, node->funcname);
+        list_add(sb, "(");
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_print(file, list_get(node->nodes, i));
-            if (i != node->nodes->size - 1) fprintf(file, ", ");
+            list_add(sb, node_to_string(list_get(node->nodes, i)));
+            if (i != node->nodes->size - 1) list_add(sb, ", ");
         }
-        fprintf(file, ")");
+        list_add(sb, ")");
+        return list_to_string(sb);
     }
 
-    if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
-        bool hasTypeChanged = memcmp(node->type, node->lhs->type, sizeof(Type));
-        if (hasTypeChanged) {
-            fprintf(file, "[");
-            type_print(file, node->type);
-            fprintf(file, "]");
+    if (node->kind == NODE_IF) {
+        List *sb = list_new(8);
+        list_add(sb, "if (");
+        list_add(sb, node_to_string(node->condition));
+        list_add(sb, ") ");
+        list_add(sb, node_to_string(node->thenBlock));
+        if (node->elseBlock != NULL) {
+            list_add(sb, "else ");
+            list_add(sb, node_to_string(node->elseBlock));
         }
-        fprintf(file, "(");
-        if (node->kind == NODE_NEG) fprintf(file, "- ");
-        if (node->kind == NODE_ADDR) fprintf(file, "& ");
-        if (node->kind == NODE_DEREF) fprintf(file, "* ");
-        if (node->kind == NODE_LOGIC_NOT) fprintf(file, "! ");
-        if (hasTypeChanged) {
-            fprintf(file, "[");
-            type_print(file, node->unary->type);
-            fprintf(file, "]");
-        }
-        node_print(file, node->unary);
-        fprintf(file, ")");
+        return list_to_string(sb);
+    }
+    if (node->kind == NODE_WHILE) {
+        List *sb = list_new(8);
+        list_add(sb, "while (");
+        list_add(sb, node->condition != NULL ? node_to_string(node->condition) : "1");
+        list_add(sb, ") ");
+        list_add(sb, node_to_string(node->thenBlock));
+        return list_to_string(sb);
+    }
+    if (node->kind == NODE_RETURN) {
+        List *sb = list_new(8);
+        list_add(sb, "return ");
+        list_add(sb, node_to_string(node->unary));
+        return list_to_string(sb);
     }
 
-    if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
-        bool hasTypeChanged = memcmp(node->type, node->lhs->type, sizeof(Type)) || node->kind == NODE_ASSIGN;
-        if (hasTypeChanged) {
-            fprintf(file, "[");
-            type_print(file, node->type);
-            fprintf(file, "]");
+    if (node->kind >= NODE_NEG && node->kind <= NODE_DEREF) {
+        List *sb = list_new(8);
+        if (memcmp(node->type, node->unary->type, sizeof(Type))) {
+            list_add(sb, "[");
+            list_add(sb, type_to_string(node->type));
+            list_add(sb, "]");
         }
-        fprintf(file, "(");
-        if (hasTypeChanged) {
-            fprintf(file, "[");
-            type_print(file, node->lhs->type);
-            fprintf(file, "]");
-        }
-        node_print(file, node->lhs);
-        if (node->kind == NODE_ASSIGN) fprintf(file, " = ");
-        if (node->kind == NODE_ADD) fprintf(file, " + ");
-        if (node->kind == NODE_SUB) fprintf(file, " - ");
-        if (node->kind == NODE_MUL) fprintf(file, " * ");
-        if (node->kind == NODE_DIV) fprintf(file, " / ");
-        if (node->kind == NODE_MOD) fprintf(file, " %% ");
-        if (node->kind == NODE_EQ) fprintf(file, " == ");
-        if (node->kind == NODE_NEQ) fprintf(file, " != ");
-        if (node->kind == NODE_LT) fprintf(file, " < ");
-        if (node->kind == NODE_LTEQ) fprintf(file, " <= ");
-        if (node->kind == NODE_GT) fprintf(file, " > ");
-        if (node->kind == NODE_GTEQ) fprintf(file, " >= ");
-        if (node->kind == NODE_LOGIC_AND) fprintf(file, " && ");
-        if (node->kind == NODE_LOGIC_OR) fprintf(file, " || ");
-        if (hasTypeChanged) {
-            fprintf(file, "[");
-            type_print(file, node->rhs->type);
-            fprintf(file, "]");
-        }
-        node_print(file, node->rhs);
-        fprintf(file, ")");
+        if (node->kind == NODE_NEG) list_add(sb, "(- ");
+        if (node->kind == NODE_LOGIC_NOT) list_add(sb, "(! ");
+        if (node->kind == NODE_REF) list_add(sb, "(& ");
+        if (node->kind == NODE_DEREF) list_add(sb, "(* ");
+        list_add(sb, node_to_string(node->unary));
+        list_add(sb, ")");
+        return list_to_string(sb);
     }
+
+    if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_AND) {
+        List *sb = list_new(8);
+        bool typeChanged = memcmp(node->type, node->rhs->type, sizeof(Type));
+        if (node->kind != NODE_ASSIGN && node->kind != NODE_ASSIGN_PTR && typeChanged) {
+            list_add(sb, "[");
+            list_add(sb, type_to_string(node->type));
+            list_add(sb, "]");
+        }
+        list_add(sb, "(");
+        if (node->kind == NODE_ASSIGN_PTR) list_add(sb, "*(");
+        list_add(sb, node_to_string(node->lhs));
+        if (node->kind == NODE_ASSIGN_PTR) list_add(sb, ")");
+        if (node->kind == NODE_ASSIGN || node->kind == NODE_ASSIGN_PTR) list_add(sb, " = ");
+        if (node->kind == NODE_ADD) list_add(sb, " + ");
+        if (node->kind == NODE_SUB) list_add(sb, " - ");
+        if (node->kind == NODE_MUL) list_add(sb, " * ");
+        if (node->kind == NODE_DIV) list_add(sb, " / ");
+        if (node->kind == NODE_MOD) list_add(sb, " %% ");
+        if (node->kind == NODE_EQ) list_add(sb, " == ");
+        if (node->kind == NODE_NEQ) list_add(sb, " != ");
+        if (node->kind == NODE_LT) list_add(sb, " < ");
+        if (node->kind == NODE_LTEQ) list_add(sb, " <= ");
+        if (node->kind == NODE_GT) list_add(sb, " > ");
+        if (node->kind == NODE_GTEQ) list_add(sb, " >= ");
+        if (node->kind == NODE_LOGIC_OR) list_add(sb, " || ");
+        if (node->kind == NODE_LOGIC_AND) list_add(sb, " && ");
+        if ((node->kind == NODE_ASSIGN || node->kind == NODE_ASSIGN_PTR) && typeChanged) {
+            list_add(sb, "[");
+            list_add(sb, type_to_string(node->type));
+            list_add(sb, "]");
+        }
+        list_add(sb, node_to_string(node->rhs));
+        list_add(sb, ")");
+        return list_to_string(sb);
+    }
+    return NULL;
 }

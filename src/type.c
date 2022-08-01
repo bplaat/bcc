@@ -1,59 +1,47 @@
 #include "type.h"
 
-#include <stdbool.h>
 #include <stdlib.h>
 
-Type *type_new(TypeKind kind, size_t size, bool isSigned) {
+#include "utils.h"
+
+Type *type_new(TypeKind kind, int32_t size, bool isSigned) {
     Type *type = malloc(sizeof(Type));
     type->kind = kind;
     type->size = size;
     type->isSigned = isSigned;
-    type->base = NULL;
     return type;
 }
 
-Type *type_base(Type *type) {
-    if (type->base != NULL) {
-        return type->base;
-    }
+Type *type_new_pointer(Type *baseType) {
+    Type *type = type_new(TYPE_POINTER, 8, false);
+    type->base = baseType;
     return type;
 }
 
-Type *type_pointer(Type *type) {
-    Type *pointerType = malloc(sizeof(Type));
-    pointerType->kind = TYPE_POINTER;
-    pointerType->size = 8;
-    pointerType->isSigned = false;
-    pointerType->base = type;
-    return pointerType;
+Type *type_new_array(Type *baseType, int32_t count) {
+    Type *type = type_new(TYPE_ARRAY, count * baseType->size, false);
+    type->base = baseType;
+    type->count = count;
+    return type;
 }
 
-Type *type_array(Type *type, size_t count) {
-    Type *pointerType = malloc(sizeof(Type));
-    pointerType->kind = TYPE_ARRAY;
-    pointerType->size = type->size * count;
-    pointerType->isSigned = type->isSigned;
-    pointerType->base = type;
-    pointerType->count = count;
-    return pointerType;
+bool type_is_32(Type *type) {
+    return type->size == 4;
 }
 
-void type_print(FILE *file, Type *type) {
+bool type_is_64(Type *type) {
+    return type->size == 8;
+}
+
+char *type_to_string(Type *type) {
     if (type->kind == TYPE_INTEGER) {
-        if (type->isSigned) {
-            fprintf(file, "i%lu", type->size * 8);
-        } else {
-            fprintf(file, "u%lu", type->size * 8);
-        }
+        return format("%c%d", type->isSigned ? 'i' : 'u', type->size * 8);
     }
-
     if (type->kind == TYPE_POINTER) {
-        type_print(file, type->base);
-        fprintf(file, "*");
+        return format("%s*", type_to_string(type->base));
     }
-
     if (type->kind == TYPE_ARRAY) {
-        type_print(file, type->base);
-        fprintf(file, "[%zu]", type->count);
+        return format("%s[%d]", type_to_string(type->base), type->count);
     }
+    return NULL;
 }

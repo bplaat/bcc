@@ -3,8 +3,8 @@
 # ./build.sh # Compile and run selected tests in this file
 # ./build.sh format # Run the clang formatter over the whole code base
 # ./build.sh debug # Compile and run selected tests via lldb
-# ./build.sh test # Compile and run selected tests on ARM64 and x86_64
-# ./build.sh test all # Compile and run all tests on ARM64 and x86_64
+# ./build.sh # Compile and run selected tests on ARM64 and x86_64
+# ./build.sh all # Compile and run all tests on ARM64 and x86_64
 
 if [[ $1 = "format" ]]; then
     clang-format -i $(find . -name *.h -o -name *.c)
@@ -14,19 +14,16 @@ fi
 if [[ $1 = "debug" ]]; then
     debug="debug"
 fi
-if [[ $1 = "test" ]]; then
-    test="test"
-fi
 
 if [[ $debug = "debug" ]]; then
-    gcc -g -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
+    gcc -g -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc || exit
 else
-    gcc -Ofast -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc
+    gcc -Ofast -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc || exit
     rm -fr bcc.dSYM
 fi
 
 # Compile shared libs
-cat <<EOF | gcc -xc -c -o lib-arm64.o -
+cat <<EOF | gcc -Os -xc -c -o lib-arm64.o -
 #include <stdint.h>
 int ret3(void) { return 3; }
 int ret5(void) { return 5; }
@@ -37,7 +34,7 @@ int add6(int a, int b, int c, int d, int e, int f) {
 }
 EOF
 
-cat <<EOF | arch -x86_64 gcc -xc -c -o lib-x86_64.o -
+cat <<EOF | arch -x86_64 gcc -Os -xc -c -o lib-x86_64.o -
 #include <stdint.h>
 int ret3(void) { return 3; }
 int ret5(void) { return 5; }
@@ -52,42 +49,38 @@ assert() {
     expected=$1
     input=$2
 
-    # Compile for arm64
+    ./bcc -d "$input" || exit
+
+    # Compile for x86_64
     if [[ $debug = "debug" ]]; then
-        lldb -- ./bcc "$input" lib-arm64.o -o test
+        lldb -- ./bcc -arch x86_64 "$input" lib-x86_64.o -o test
     else
-        ./bcc "$input" lib-arm64.o -o test || exit
+        ./bcc -arch x86_64 "$input" lib-x86_64.o -o test || exit
     fi
     ./test
     actual=$?
     if [[ $actual != $expected ]]; then
         echo "Program:"
         echo $input
-        echo
-        echo "Node:"
-        ./bcc -d "$input"
-        echo "Arch: arm64 | Return: $actual | Right: $expected"
+        echo "Arch: x86_64 | Return: $actual | Correct: $expected"
         exit 1
     fi
 
-    # Compile for x86_64
-    if [[ $test = "test" ]]; then
-        ./bcc -arch x86_64 "$input" lib-x86_64.o -o test || exit
-        ./test
-        actual=$?
-        if [[ $actual != $expected ]]; then
-            echo "Program:"
-            echo $input
-            echo
-            echo "Node:"
-            ./bcc -d "$input"
-            echo "Arch: x86_64 | Return: $actual | Right: $expected"
-            exit 1
-        fi
+    # Compile for arm64
+    ./bcc "$input" lib-arm64.o -o test || exit
+    ./test
+    actual=$?
+    if [[ $actual != $expected ]]; then
+        echo "Program:"
+        echo $input
+        echo "Arch: arm64 | Return: $actual | Correct: $expected"
+        exit 1
     fi
+
+    echo
 }
 
-if [[ $2 = "all" || $2 = "basic"  ]]; then
+if [[ $1 = "all" || $1 = "basic"  ]]; then
     assert 0 'int main() { return 0; }'
     assert 42 'int main() { return 42; }'
     assert 21 'int main() { return 5+20-4; }'
@@ -132,7 +125,7 @@ if [[ $2 = "all" || $2 = "basic"  ]]; then
     assert 5 'int main() { ;;; return 5; }'
 fi
 
-if [[ $2 = "all" || $2 = "local" ]]; then
+if [[ $1 = "all" || $1 = "local" ]]; then
     assert 3 'int main() { int a; a=3; return a; }'
     assert 3 'int main() { int a=3; return a; }'
     assert 8 'int main() { int a=3; int z=5; return a+z; }'
@@ -145,7 +138,7 @@ if [[ $2 = "all" || $2 = "local" ]]; then
     assert 8 'int main() { int x=3, y=5; return x+y; }'
 fi
 
-if [[ $2 = "all" || $2 = "if" ]]; then
+if [[ $1 = "all" || $1 = "if" ]]; then
     assert 3 'int main() { if (0) return 2; return 3; }'
     assert 3 'int main() { if (1-1) return 2; return 3; }'
     assert 2 'int main() { if (1) return 2; return 3; }'
@@ -154,13 +147,13 @@ if [[ $2 = "all" || $2 = "if" ]]; then
     assert 3 'int main() { if (1) { 1; 2; return 3; } else { return 4; } }'
 fi
 
-if [[ $2 = "all" || $2 = "loop" ]]; then
+if [[ $1 = "all" || $1 = "loop" ]]; then
     assert 10 'int main() { int i=0; while(i<10) i=i+1; return i; }'
     assert 55 'int main() { int i=0; int j=0; while(i<=10) {j=i+j; i=i+1;} return j; }'
     assert 3 'int main() { for (;;) {return 3;} return 5; }'
 fi
 
-if [[ $2 = "all" || $2 = "ptr" ]]; then
+if [[ $1 = "all" || $1 = "ptr" ]]; then
     assert 3 'int main() { int x=3; return *&x; }'
     assert 3 'int main() { int x=3; int *y=&x; int **z=&y; return **z; }'
     assert 5 'int main() { int x=3; int y=5; return *(&x+1); }'
@@ -172,17 +165,18 @@ if [[ $2 = "all" || $2 = "ptr" ]]; then
     assert 5 'int main() { int x=3; return (&x+2)-&x+3; }'
 fi
 
-if [[ $2 = "all" || $2 = "funccall" ]]; then
+if [[ $1 = "all" || $1 = "funccall" ]]; then
     assert 3 'int main() { return ret3(); }'
     assert 5 'int main() { return ret5(); }'
     assert 8 'int main() { return add(3, 5); }'
     assert 2 'int main() { return sub(5, 3); }'
     assert 21 'int main() { return add6(1,2,3,4,5,6); }'
+    assert 15 'int main() { return add(add(1, 2), add(add(3, 4), 5)); }'
     assert 66 'int main() { return add6(1,2,add6(3,4,5,6,7,8),9,10,11); }'
     assert 136 'int main() { return add6(1,2,add6(3,add6(4,5,6,7,8,9),10,11,12,13),14,15,16); }'
 fi
 
-if [[ $2 = "all" || $2 = "funcdef" ]]; then
+if [[ $1 = "all" || $1 = "funcdef" ]]; then
     assert 33 'int main() { return ret32() + 1; } int ret32() { return 32; }'
     assert 10 'int main() { return (a() + b()) / 3; } int a() { return 18; } int b() { return 12; }'
     assert 7 'int main() { return add2(3,4); } int add2(int x, int y) { return x+y; }'
@@ -190,8 +184,7 @@ if [[ $2 = "all" || $2 = "funcdef" ]]; then
     assert 55 'int main() { return fib(9); } int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); }'
 fi
 
-if [[ $2 = "all" || $2 = "array" ]]; then
-    # Still some problems
+if [[ $1 = "all" || $1 = "array" ]]; then
     assert 3 'int main() { int x[2]; int *y=&x; *y=3; return *y; }'
     assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; return *x; }'
     assert 4 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1); }'
@@ -201,6 +194,4 @@ fi
 # Add selected tests below
 # ...
 
-if [[ $1 = "test" ]]; then
-    echo "OK"
-fi
+echo "OK"

@@ -4,20 +4,29 @@
 #include <stdio.h>
 #include <string.h>
 
-char *text;
-char *tokenStart;
-
-Token *token_new(TokenKind kind) {
+Token *token_new(TokenKind kind, size_t position) {
     Token *token = malloc(sizeof(Token));
     token->kind = kind;
-    token->position = tokenStart - text;
+    token->position = position;
     return token;
 }
 
-char *token_to_string(TokenKind kind) {
-    if (kind == TOKEN_EOF) return strdup("EOF");
+Token *token_new_integer(size_t position, int64_t integer) {
+    Token *token = token_new(TOKEN_INTEGER, position);
+    token->integer = integer;
+    return token;
+}
+
+Token *token_new_string(TokenKind kind, size_t position, char *string) {
+    Token *token = token_new(kind, position);
+    token->string = string;
+    return token;
+}
+
+char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_INTEGER) return strdup("integer");
     if (kind == TOKEN_VARIABLE) return strdup("variable");
+
     if (kind == TOKEN_LPAREN) return strdup("(");
     if (kind == TOKEN_RPAREN) return strdup(")");
     if (kind == TOKEN_LCURLY) return strdup("{");
@@ -26,6 +35,7 @@ char *token_to_string(TokenKind kind) {
     if (kind == TOKEN_RBRACKET) return strdup("]");
     if (kind == TOKEN_COMMA) return strdup(",");
     if (kind == TOKEN_SEMICOLON) return strdup(";");
+    if (kind == TOKEN_EOF) return strdup("EOF");
 
     if (kind == TOKEN_INT) return strdup("int");
     if (kind == TOKEN_LONG) return strdup("long");
@@ -41,234 +51,198 @@ char *token_to_string(TokenKind kind) {
     if (kind == TOKEN_STAR) return strdup("*");
     if (kind == TOKEN_DIV) return strdup("/");
     if (kind == TOKEN_MOD) return strdup("%");
-    if (kind == TOKEN_ADDR) return strdup("&");
+    if (kind == TOKEN_AND) return strdup("&");
     if (kind == TOKEN_EQ) return strdup("==");
     if (kind == TOKEN_NEQ) return strdup("!=");
     if (kind == TOKEN_LT) return strdup("<");
     if (kind == TOKEN_LTEQ) return strdup("<=");
     if (kind == TOKEN_GT) return strdup(">");
     if (kind == TOKEN_GTEQ) return strdup(">=");
-    if (kind == TOKEN_LOGIC_NOT) return strdup("!");
-    if (kind == TOKEN_LOGIC_AND) return strdup("&&");
     if (kind == TOKEN_LOGIC_OR) return strdup("||");
+    if (kind == TOKEN_LOGIC_AND) return strdup("&&");
+    if (kind == TOKEN_LOGIC_NOT) return strdup("!");
     return NULL;
 }
 
-List *lexer(char *_text) {
-    text = _text;
+bool token_kind_is_type(TokenKind kind) { return kind == TOKEN_INT || kind == TOKEN_LONG || kind == TOKEN_SIGNED || kind == TOKEN_UNSIGNED; }
+
+List *lexer(char *text) {
+    List *tokens = list_new(1024);
     char *c = text;
-    List *tokens = list_new(512);
-
+    Keyword keywords[] = {{"int", TOKEN_INT},   {"long", TOKEN_LONG},   {"signed", TOKEN_SIGNED}, {"unsigned", TOKEN_UNSIGNED}, {"if", TOKEN_IF},
+                          {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"for", TOKEN_FOR},       {"return", TOKEN_RETURN}};
     while (*c != '\0') {
-        tokenStart = c;
+        size_t position = c - text;
 
-        if (*c == ' ') {
-            c++;
-            continue;
-        }
-
-        if (isdigit(*c)) {
-            Token *token = token_new(TOKEN_INTEGER);
-            token->integer = strtol(c, &c, 10);
-            list_add(tokens, token);
-            continue;
-        }
-
-        if (!strncmp(c, "int", 3)) {
-            list_add(tokens, token_new(TOKEN_INT));
-            c += 3;
-            continue;
-        }
-        if (!strncmp(c, "long", 4)) {
-            list_add(tokens, token_new(TOKEN_LONG));
-            c += 4;
-            continue;
-        }
-        if (!strncmp(c, "signed", 6)) {
-            list_add(tokens, token_new(TOKEN_SIGNED));
-            c += 6;
-            continue;
-        }
-        if (!strncmp(c, "unsigned", 8)) {
-            list_add(tokens, token_new(TOKEN_UNSIGNED));
-            c += 8;
-            continue;
-        }
-        if (!strncmp(c, "if", 2)) {
-            list_add(tokens, token_new(TOKEN_IF));
+        if (*c == '0' && *(c + 1) == 'b') {
             c += 2;
+            list_add(tokens, token_new_integer(position, strtol(c, &c, 2)));
             continue;
         }
-        if (!strncmp(c, "else", 4)) {
-            list_add(tokens, token_new(TOKEN_ELSE));
-            c += 4;
+        if (*c == '0' && *(c + 1) == 'x') {
+            c += 2;
+            list_add(tokens, token_new_integer(position, strtol(c, &c, 16)));
             continue;
         }
-        if (!strncmp(c, "while", 5)) {
-            list_add(tokens, token_new(TOKEN_WHILE));
-            c += 5;
-            continue;
-        }
-        if (!strncmp(c, "for", 3)) {
-            list_add(tokens, token_new(TOKEN_FOR));
-            c += 3;
-            continue;
-        }
-        if (!strncmp(c, "return", 6)) {
-            list_add(tokens, token_new(TOKEN_RETURN));
-            c += 6;
+        if (isdigit(*c)) {
+            list_add(tokens, token_new_integer(position, strtol(c, &c, 10)));
             continue;
         }
 
         if (isalpha(*c) || *c == '_') {
             char *ptr = c;
-            size_t size = 0;
-            while (isalnum(*c) || *c == '_') {
-                size++;
-                c++;
+            while (isalnum(*c) || *c == '_') c++;
+            size_t size = c - ptr;
+            char *string = malloc(size + 1);
+            memcpy(string, ptr, size);
+            string[size] = '\0';
+
+            bool found = false;
+            for (size_t i = 0; i < sizeof(keywords) / sizeof(Keyword); i++) {
+                Keyword *keyword = &keywords[i];
+                if (!strcmp(string, keyword->keyword)) {
+                    list_add(tokens, token_new(keyword->kind, position));
+                    found = true;
+                    break;
+                }
             }
-            Token *token = token_new(TOKEN_VARIABLE);
-            token->string = malloc(size + 1);
-            memcpy(token->string, ptr, size);
-            token->string[size] = '\0';
-            list_add(tokens, token);
+            if (!found) {
+                list_add(tokens, token_new_string(TOKEN_VARIABLE, position, string));
+            }
             continue;
         }
 
         if (*c == '(') {
-            list_add(tokens, token_new(TOKEN_LPAREN));
+            list_add(tokens, token_new(TOKEN_LPAREN, position));
             c++;
             continue;
         }
         if (*c == ')') {
-            list_add(tokens, token_new(TOKEN_RPAREN));
+            list_add(tokens, token_new(TOKEN_RPAREN, position));
             c++;
             continue;
         }
         if (*c == '{') {
-            list_add(tokens, token_new(TOKEN_LCURLY));
+            list_add(tokens, token_new(TOKEN_LCURLY, position));
             c++;
             continue;
         }
         if (*c == '}') {
-            list_add(tokens, token_new(TOKEN_RCURLY));
+            list_add(tokens, token_new(TOKEN_RCURLY, position));
             c++;
             continue;
         }
         if (*c == '[') {
-            list_add(tokens, token_new(TOKEN_LBRACKET));
+            list_add(tokens, token_new(TOKEN_LBRACKET, position));
             c++;
             continue;
         }
         if (*c == ']') {
-            list_add(tokens, token_new(TOKEN_RBRACKET));
+            list_add(tokens, token_new(TOKEN_RBRACKET, position));
             c++;
             continue;
         }
         if (*c == ',') {
-            list_add(tokens, token_new(TOKEN_COMMA));
+            list_add(tokens, token_new(TOKEN_COMMA, position));
             c++;
             continue;
         }
         if (*c == ';') {
-            list_add(tokens, token_new(TOKEN_SEMICOLON));
-            c++;
-            continue;
-        }
-
-        if (*c == '+') {
-            list_add(tokens, token_new(TOKEN_ADD));
-            c++;
-            continue;
-        }
-        if (*c == '-') {
-            list_add(tokens, token_new(TOKEN_SUB));
-            c++;
-            continue;
-        }
-        if (*c == '*') {
-            list_add(tokens, token_new(TOKEN_STAR));
-            c++;
-            continue;
-        }
-        if (*c == '/') {
-            list_add(tokens, token_new(TOKEN_DIV));
-            c++;
-            continue;
-        }
-        if (*c == '%') {
-            list_add(tokens, token_new(TOKEN_MOD));
-            c++;
-            continue;
-        }
-        if (*c == '&') {
-            if (*(c + 1) == '&') {
-                list_add(tokens, token_new(TOKEN_LOGIC_AND));
-                c += 2;
-                continue;
-            }
-
-            list_add(tokens, token_new(TOKEN_ADDR));
+            list_add(tokens, token_new(TOKEN_SEMICOLON, position));
             c++;
             continue;
         }
 
         if (*c == '=') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_EQ));
+                list_add(tokens, token_new(TOKEN_EQ, position));
                 c += 2;
                 continue;
             }
-
-            list_add(tokens, token_new(TOKEN_ASSIGN));
+            list_add(tokens, token_new(TOKEN_ASSIGN, position));
             c++;
             continue;
         }
-        if (*c == '!') {
-            if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_NEQ));
-                c += 2;
-                continue;
-            }
-
-            list_add(tokens, token_new(TOKEN_LOGIC_NOT));
+        if (*c == '+') {
+            list_add(tokens, token_new(TOKEN_ADD, position));
+            c++;
+            continue;
+        }
+        if (*c == '-') {
+            list_add(tokens, token_new(TOKEN_SUB, position));
+            c++;
+            continue;
+        }
+        if (*c == '*') {
+            list_add(tokens, token_new(TOKEN_STAR, position));
+            c++;
+            continue;
+        }
+        if (*c == '/') {
+            list_add(tokens, token_new(TOKEN_DIV, position));
+            c++;
+            continue;
+        }
+        if (*c == '%') {
+            list_add(tokens, token_new(TOKEN_MOD, position));
             c++;
             continue;
         }
         if (*c == '<') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_LTEQ));
+                list_add(tokens, token_new(TOKEN_LTEQ, position));
                 c += 2;
                 continue;
             }
-
-            list_add(tokens, token_new(TOKEN_LT));
+            list_add(tokens, token_new(TOKEN_LT, position));
             c++;
             continue;
         }
         if (*c == '>') {
             if (*(c + 1) == '=') {
-                list_add(tokens, token_new(TOKEN_GTEQ));
+                list_add(tokens, token_new(TOKEN_GTEQ, position));
                 c += 2;
                 continue;
             }
-
-            list_add(tokens, token_new(TOKEN_GT));
+            list_add(tokens, token_new(TOKEN_GT, position));
+            c++;
+            continue;
+        }
+        if (*c == '!') {
+            if (*(c + 1) == '=') {
+                list_add(tokens, token_new(TOKEN_NEQ, position));
+                c += 2;
+                continue;
+            }
+            list_add(tokens, token_new(TOKEN_LOGIC_NOT, position));
             c++;
             continue;
         }
         if (*c == '|' && *(c + 1) == '|') {
-            list_add(tokens, token_new(TOKEN_LOGIC_OR));
+            list_add(tokens, token_new(TOKEN_LOGIC_OR, position));
             c += 2;
+            continue;
+        }
+        if (*c == '&') {
+            if (*(c + 1) == '&') {
+                list_add(tokens, token_new(TOKEN_LOGIC_AND, position));
+                c += 2;
+                continue;
+            }
+            list_add(tokens, token_new(TOKEN_AND, position));
+            c++;
+            continue;
+        }
+        if (isspace(*c)) {
+            c++;
             continue;
         }
 
         fprintf(stderr, "%s\n", text);
-        for (int32_t i = 0; i < tokenStart - text; i++) fprintf(stderr, " ");
+        for (size_t i = 0; i < position; i++) fprintf(stderr, " ");
         fprintf(stderr, "^\nUnexpected character: '%c'\n", *c);
         exit(EXIT_FAILURE);
     }
-
-    list_add(tokens, token_new(TOKEN_EOF));
+    list_add(tokens, token_new(TOKEN_EOF, c - text));
     return tokens;
 }

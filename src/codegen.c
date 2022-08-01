@@ -6,404 +6,430 @@
 
 #include "type.h"
 
-Arch *arch;
-Node *currentBlock;
-int32_t depth = 0;
-int32_t unique = 1;
-int32_t returnId;
+void codegen(FILE *file, Arch *arch, Node *node) {
+    Codegen codegen;
+    codegen.file = file;
+    codegen.arch = arch;
+    codegen.regsUsed = malloc(sizeof(bool) * arch->regsSize);
+    codegen.nestedAssign = false;
+    codegen_part(&codegen, node, -1);
+}
 
-void node_asm(FILE *file, Node *parent, Node *node, Node *next) {
-    (void)parent;
-
-    if (node->kind == NODE_PROGRAM) {
-        for (size_t i = 0; i < node->funcs->size; i++) {
-            Node *funcdef = list_get(node->funcs, i);
-            node_asm(file, node, funcdef, NULL);
-            fprintf(file, "\n");
+int32_t codegen_alloc(Codegen *codegen, int32_t requestReg) {
+    if  (requestReg != -1 && !codegen->regsUsed[requestReg]) {
+        codegen->regsUsed[requestReg] = true;
+        return requestReg;
+    }
+    for (int32_t i = 0; i < codegen->arch->regsSize; i++) {
+        if (!codegen->regsUsed[i]) {
+            codegen->regsUsed[i] = true;
+            return i;
         }
     }
+    fprintf(stderr, "All regs are used up!\n");
+    exit(1);
+}
 
-    if (node->kind == NODE_MULTIPLE) {
+void codegen_free(Codegen *codegen, int32_t reg) { codegen->regsUsed[reg] = false; }
+
+int32_t codegen_part(Codegen *codegen, Node *node, int32_t requestReg) {
+    FILE *f = codegen->file;
+    Arch *arch = codegen->arch;
+
+    if (node->kind == NODE_PROGRAM) {
         for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *statement = list_get(node->nodes, i);
-            Node *next = i != node->nodes->size - 1 ? list_get(node->nodes, i + 1) : NULL;
-            if (statement->kind != NODE_NULL) {
-                node_asm(file, node, statement, next);
-                fprintf(file, "\n");
-            }
+            codegen_part(codegen, list_get(node->nodes, i), -1);
         }
     }
 
     if (node->kind == NODE_FUNCDEF) {
-        fprintf(file, "_%s:\n", node->functionName);
-        returnId = unique++;
+        fprintf(f, "\n.global _%s\n", node->funcname);
+        fprintf(f, "_%s:\n", node->funcname);
+        if (!node->isLeaf && arch->kind == ARCH_ARM64) fprintf(f, "    push lr\n");
 
-        size_t stackSize = 0;
-        for (size_t i = 0; i < node->locals->size; i++) {
-            Local *local = list_get(node->locals, i);
-            stackSize += align(local->type->size, arch->stackAlign);
-        }
-        if (stackSize > 0) {
+        if (node->locals->size > 0) {
+            size_t stackSize = ((Local *)list_get(node->locals, node->locals->size - 1))->offset;
             if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    str x29, [sp, -%d]!\n", arch->stackAlign);
-                fprintf(file, "    mov x29, sp\n");
-                fprintf(file, "    sub sp, sp, %zu\n\n", stackSize);
+                fprintf(f, "    push fp\n");
+                fprintf(f, "    mov fp, sp\n");
+                fprintf(f, "    sub sp, sp, %zu\n", stackSize);
             }
             if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    push rbp\n");
-                fprintf(file, "    mov rbp, rsp\n");
-                fprintf(file, "    sub rsp, %zu\n\n", stackSize);
+                fprintf(f, "    push rbp\n");
+                fprintf(f, "    mov rbp, rsp\n");
+                fprintf(f, "    sub rsp, %zu\n", stackSize);
             }
         }
 
-        for (size_t i = 0; i < node->argsSize; i++) {
+        for (int32_t i = (int32_t)node->argsSize - 1; i >= 0; i--) {
             Local *local = list_get(node->locals, i);
-            if (arch->kind == ARCH_ARM64)
-                fprintf(file, "    str %s, [x29, -%zu]\n", arch->argumentRegs[i], local->offset);
-            if (arch->kind == ARCH_X86_64)
-                fprintf(file, "    mov [rbp - %zu], %s\n", local->offset, arch->argumentRegs[i]);
+            if (type_is_32(local->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", local->offset, arch->regs32[arch->argRegs[i]]);
+            }
+            if (type_is_64(local->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs64[arch->argRegs[i]], local->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [rbp - %zu], %s\n", local->offset, arch->regs64[arch->argRegs[i]]);
+            }
         }
 
-        depth++;
+        codegen->currentFuncdef = node;
+        codegen->uniqueLabel = 1;
         for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *statement = list_get(node->nodes, i);
-            Node *next = i != node->nodes->size - 1 ? list_get(node->nodes, i + 1) : NULL;
-            currentBlock = node;
-            if (statement->kind != NODE_NULL) {
-                node_asm(file, node, statement, next);
-                fprintf(file, "\n");
-            }
+            codegen_part(codegen, list_get(node->nodes, i), -1);
+            fprintf(f, "\n");
         }
-        depth--;
 
-        fprintf(file, ".b%d:\n", returnId);
-        if (stackSize > 0) {
-            if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    mov sp, x29\n");
-                fprintf(file, "    ldr x29, [sp], %d\n", arch->stackAlign);
+        if (node->nodes->size == 0 || ((Node *)list_get(node->nodes, node->nodes->size - 1))->kind != NODE_RETURN) {
+            if (node->locals->size > 0) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    mov sp, fp\n");
+                    fprintf(f, "    pop fp\n");
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    leave\n");
+                }
             }
-            if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    leave\n");
+            if (arch->kind == ARCH_ARM64 && !node->isLeaf) {
+                fprintf(f, "    pop lr\n");
             }
+            fprintf(f, "    ret\n");
         }
-        fprintf(file, "    ret\n");
     }
 
     if (node->kind == NODE_BLOCK) {
-        size_t stackSize = 0;
-        for (size_t i = 0; i < node->locals->size; i++) {
-            Local *local = list_get(node->locals, i);
-            stackSize += align(local->type->size, arch->stackAlign);
-        }
-        if (stackSize > 0) {
-            if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    str x29, [sp, -%d]!\n", arch->stackAlign);
-                fprintf(file, "    mov x29, sp\n");
-                fprintf(file, "    sub sp, sp, %zu\n\n", stackSize);
-            }
-            if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    push rbp\n");
-                fprintf(file, "    mov rbp, rsp\n");
-                fprintf(file, "    sub rsp, %zu\n\n", stackSize);
-            }
-        }
-
-        depth++;
         for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *statement = list_get(node->nodes, i);
-            Node *next = i != node->nodes->size - 1 ? list_get(node->nodes, i + 1) : NULL;
-            currentBlock = node;
-            if (statement->kind != NODE_NULL) {
-                node_asm(file, node, statement, next);
-                fprintf(file, "\n");
-            }
-        }
-        depth--;
-
-        if (stackSize > 0) {
-            if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    mov sp, x29\n");
-                fprintf(file, "    ldr x29, [sp], %d\n", arch->stackAlign);
-            }
-            if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    leave\n");
-            }
-        }
-    }
-
-    if (node->kind == NODE_IF) {
-        node_asm(file, node, node->condition, NULL);
-        int32_t endId = unique++;
-        if (arch->kind == ARCH_ARM64) {
-            if (node->elseBlock != NULL) {
-                int32_t elseId = unique++;
-                fprintf(file, "    cbz x0, .b%d\n", elseId);
-                node_asm(file, node, node->thenBlock, NULL);
-                fprintf(file, "    b .b%d\n", endId);
-                fprintf(file, ".b%d:\n", elseId);
-                node_asm(file, node, node->elseBlock, NULL);
-                fprintf(file, ".b%d:\n", endId);
-            } else {
-                fprintf(file, "    cbz x0, .b%d\n", endId);
-                node_asm(file, node, node->thenBlock, NULL);
-                fprintf(file, ".b%d:\n", endId);
-            }
-        }
-        if (arch->kind == ARCH_X86_64) {
-            if (node->elseBlock != NULL) {
-                int32_t elseId = unique++;
-                fprintf(file, "    cmp rax, 0\n");
-                fprintf(file, "    je .b%d\n", elseId);
-                node_asm(file, node, node->thenBlock, NULL);
-                fprintf(file, "    jmp .b%d\n", endId);
-                fprintf(file, ".b%d:\n", elseId);
-                node_asm(file, node, node->elseBlock, NULL);
-                fprintf(file, ".b%d:\n", endId);
-            } else {
-                fprintf(file, "    cmp rax, 0\n");
-                fprintf(file, "    je .b%d\n", endId);
-                node_asm(file, node, node->thenBlock, NULL);
-                fprintf(file, ".b%d:\n", endId);
-            }
-        }
-    }
-
-    if (node->kind == NODE_WHILE) {
-        int32_t beginId = unique++;
-        fprintf(file, ".b%d:\n", beginId);
-        if (node->condition != NULL) node_asm(file, node, node->condition, NULL);
-        int32_t endId = unique++;
-        if (arch->kind == ARCH_ARM64) {
-            if (node->condition != NULL) fprintf(file, "    cbz x0, .b%d\n", endId);
-            node_asm(file, node, node->thenBlock, NULL);
-            fprintf(file, "    b .b%d\n", beginId);
-            fprintf(file, ".b%d:\n", endId);
-        }
-        if (arch->kind == ARCH_X86_64) {
-            if (node->condition != NULL) {
-                fprintf(file, "    cmp rax, 0\n");
-                fprintf(file, "    je .b%d\n", endId);
-            }
-            node_asm(file, node, node->thenBlock, NULL);
-            fprintf(file, "    jmp .b%d\n", beginId);
-            fprintf(file, ".b%d:\n", endId);
-        }
-    }
-
-    if (node->kind == NODE_RETURN) {
-        node_asm(file, node, node->unary, NULL);
-        if (!(depth == 1 && next == NULL)) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    b .b%d\n", returnId);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    jmp .b%d\n", returnId);
+            codegen_part(codegen, list_get(node->nodes, i), -1);
+            fprintf(f, "\n");
         }
     }
 
     if (node->kind == NODE_INTEGER) {
-        fprintf(file, "    ; ");
-        node_print(file, node);
-        fprintf(file, "\n");
-
+        int32_t reg = codegen_alloc(codegen, requestReg);
         if (arch->kind == ARCH_ARM64) {
-            fprintf(file, "    mov w0, %d\n", (int32_t)node->integer & 0xffff);
-            if (node->integer >= 0xffff) {
-                fprintf(file, "    movk w0, %d, lsl 16\n", ((int32_t)node->integer >> 16) & 0xffff);
+            if (node->integer < 0) {
+                fprintf(f, "    mov %s, %lld\n", arch->regs64[reg], -node->integer & 0xffff);
+                if (node->integer >= 0xffff) {
+                    fprintf(f, "    movk %s, %lld, lsl 16\n", arch->regs64[reg], (-node->integer >> 16) & 0xffff);
+                }
+                fprintf(f, "    sub %s, xzr, %s\n", arch->regs64[reg], arch->regs64[reg]);
+            } else {
+                fprintf(f, "    mov %s, %lld\n", arch->regs64[reg], node->integer & 0xffff);
+                if (node->integer >= 0xffff) {
+                    fprintf(f, "    movk %s, %lld, lsl 16\n", arch->regs64[reg], (node->integer >> 16) & 0xffff);
+                }
             }
         }
         if (arch->kind == ARCH_X86_64) {
-            fprintf(file, "    mov %cax, %lld\n", node->type->size == 8 ? 'r' : 'e', node->integer);
+            if (node->integer == 0) {
+                fprintf(f, "    xor %s, %s\n", arch->regs32[reg], arch->regs32[reg]);
+            } else {
+                fprintf(f, "    mov %s, %lld\n", arch->regs64[reg], node->integer);
+            }
         }
+        return reg;
     }
-
-    if (node->kind == NODE_VARIABLE) {
-        fprintf(file, "    ; ");
-        node_print(file, node);
-        fprintf(file, "\n");
-
-        if (arch->kind == ARCH_ARM64) {
-            fprintf(file, "    ldr %c0, [x29, -%zu]\n", node->type->size == 8 ? 'x' : 'w', node->local->offset);
+    if (node->kind == NODE_LOCAL) {
+        int32_t reg = codegen_alloc(codegen, requestReg);
+        if (type_is_32(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [rbp - %zu]\n", arch->regs32[reg], node->local->offset);
         }
-        if (arch->kind == ARCH_X86_64) {
-            fprintf(file, "    mov %cax, [rbp - %zu]\n", node->type->size == 8 ? 'r' : 'e', node->local->offset);
+        if (type_is_64(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs64[reg], node->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, qword ptr [rbp - %zu]\n", arch->regs64[reg], node->local->offset);
         }
+        return reg;
     }
-
     if (node->kind == NODE_FUNCCALL) {
-        fprintf(file, "    ; ");
-        node_print(file, node);
-        fprintf(file, "\n");
-
-        for (size_t i = 0; i < node->nodes->size; i++) {
-            Node *statement = list_get(node->nodes, i);
-            if (statement->kind != NODE_NULL) {
-                node_asm(file, node, statement, NULL);
-                fprintf(file, "\n");
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    str x0, [sp, -%d]!\n", arch->stackAlign);
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    push rax\n");
+        bool regsPushed[16] = {0};
+        for (int32_t i = arch->regsSize - 1; i >= 0; i--) {
+            if (codegen->regsUsed[i]) {
+                regsPushed[i] = true;
+                fprintf(f, "    push %s\n", arch->regs64[i]);
+                codegen_free(codegen, i);
             }
+        }
+        for (int32_t i = (int32_t)node->nodes->size - 1; i >= 0; i--) {
+            codegen_part(codegen, list_get(node->nodes, i), arch->argRegs[i]);
         }
 
-        if (arch->kind == ARCH_ARM64) {
-            for (int32_t i = (int32_t)node->nodes->size - 1; i >= 0; i--) {
-                fprintf(file, "    ldr %s, [sp], %d\n", arch->argumentRegs[i], arch->stackAlign);
-            }
-            fprintf(file, "    str x30, [sp, -%d]!\n", arch->stackAlign);
-            fprintf(file, "    bl _%s\n", node->functionName);
-            fprintf(file, "    ldr x30, [sp], %d\n", arch->stackAlign);
+        if (arch->kind == ARCH_ARM64) fprintf(f, "    bl _%s\n", node->funcname);
+        if (arch->kind == ARCH_X86_64) fprintf(f, "    call _%s\n", node->funcname);
+
+        for (int32_t i = 0; i < arch->regsSize; i++) {
+            codegen->regsUsed[i] = regsPushed[i];
         }
-        if (arch->kind == ARCH_X86_64) {
-            for (int32_t i = (int32_t)node->nodes->size - 1; i >= 0; i--) {
-                fprintf(file, "    pop %s\n", arch->argumentRegs[i]);
-            }
-            fprintf(file, "    xor rax, rax\n");
-            fprintf(file, "    extern _%s\n", node->functionName);
-            fprintf(file, "    call _%s\n", node->functionName);
+
+        int32_t returnReg = codegen_alloc(codegen, requestReg);
+        if (returnReg != arch->returnReg) {
+            fprintf(f, "    mov %s, %s\n", arch->regs64[returnReg], arch->regs64[arch->returnReg]);
         }
+        for (int32_t i = 0; i < arch->regsSize; i++) {
+            if (regsPushed[i]) {
+                fprintf(f, "    pop %s\n", arch->regs64[i]);
+            }
+        }
+        return returnReg;
     }
 
-    if (node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) {
-        if (node->kind == NODE_ADDR) {
-            fprintf(file, "    ; ");
-            node_print(file, node);
-            fprintf(file, "\n");
+    if (node->kind == NODE_IF) {
+        int32_t skipLabel = codegen->uniqueLabel++;
+        int32_t elseLabel;
+        if (node->elseBlock != NULL) elseLabel = codegen->uniqueLabel++;
 
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x29, %zu\n", node->unary->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    lea rax, [rbp - %zu]\n", node->unary->local->offset);
-            return;
+        int32_t reg = codegen_part(codegen, node->condition, -1);
+        if (arch->kind == ARCH_ARM64) fprintf(f, "    cbz %s, .L%d\n", arch->regs64[reg], node->elseBlock != NULL ? elseLabel : skipLabel);
+        if (arch->kind == ARCH_X86_64) {
+            fprintf(f, "    cmp %s, 0\n", arch->regs64[reg]);
+            fprintf(f, "    je .L%d\n", node->elseBlock != NULL ? elseLabel : skipLabel);
+        }
+        codegen_free(codegen, reg);
+
+        codegen_part(codegen, node->thenBlock, -1);
+        if (node->elseBlock != NULL) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    b .L%d\n", skipLabel);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    jmp .L%d\n", skipLabel);
+            fprintf(f, ".L%d:\n", elseLabel);
+            codegen_part(codegen, node->elseBlock, -1);
+        }
+        fprintf(f, ".L%d:\n", skipLabel);
+        return -1;
+    }
+
+    if (node->kind == NODE_WHILE) {
+        int32_t repeatLabel = codegen->uniqueLabel++;
+        int32_t breakLabel;
+        if (node->condition != NULL) breakLabel = codegen->uniqueLabel++;
+
+        fprintf(f, ".L%d:\n", repeatLabel);
+        if (node->condition != NULL) {
+            int32_t reg = codegen_part(codegen, node->condition, -1);
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    cbz %s, .L%d\n", arch->regs64[reg], breakLabel);
+            if (arch->kind == ARCH_X86_64) {
+                fprintf(f, "    cmp %s, 0\n", arch->regs64[reg]);
+                fprintf(f, "    je .L%d\n", breakLabel);
+            }
+            codegen_free(codegen, reg);
         }
 
-        node_asm(file, node, node->unary, NULL);
+        codegen_part(codegen, node->thenBlock, -1);
+        if (arch->kind == ARCH_ARM64) fprintf(f, "    b .L%d\n", repeatLabel);
+        if (arch->kind == ARCH_X86_64) fprintf(f, "    jmp .L%d\n", repeatLabel);
+        if (node->condition != NULL) fprintf(f, ".L%d:\n", breakLabel);
+        return -1;
+    }
 
-        fprintf(file, "    ; ");
-        node_print(file, node);
-        fprintf(file, "\n");
+    if (node->kind == NODE_RETURN) {
+        int32_t reg = codegen_part(codegen, node->unary, arch->returnReg);
+        if (arch->kind == ARCH_ARM64 && reg != 0) fprintf(f, "    mov x0, %s\n", arch->regs64[reg]);
+        if (arch->kind == ARCH_X86_64 && reg != 0) fprintf(f, "    mov rax, %s\n", arch->regs64[reg]);
 
+        if (codegen->currentFuncdef->locals->size > 0) {
+            if (arch->kind == ARCH_ARM64) {
+                fprintf(f, "    mov sp, fp\n");
+                fprintf(f, "    pop fp\n");
+            }
+            if (arch->kind == ARCH_X86_64) {
+                fprintf(f, "    leave\n");
+            }
+        }
+        if (arch->kind == ARCH_ARM64 && !codegen->currentFuncdef->isLeaf) {
+            fprintf(f, "    pop lr\n");
+        }
+        fprintf(f, "    ret\n");
+        codegen_free(codegen, reg);
+    }
+
+    if ((node->kind >= NODE_NEG && node->kind <= NODE_LOGIC_NOT) || node->kind == NODE_DEREF) {
+        int32_t reg = codegen_part(codegen, node->unary, requestReg);
         if (node->kind == NODE_NEG) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, xzr, x0\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    neg rax\n");
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, xzr, %s\n", arch->regs64[reg], arch->regs64[reg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    neg %s\n", arch->regs64[reg]);
         }
-        if (node->kind == NODE_DEREF && node->unary->type->kind != TYPE_ARRAY) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    ldr %c0, [x0]\n", node->type->size == 8 ? 'x' : 'w');
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    mov %cax, [rax]\n", node->type->size == 8 ? 'r' : 'e');
-        }
-
         if (node->kind == NODE_LOGIC_NOT) {
             if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    cmp x0, 0\n");
-                fprintf(file, "    cset x0, eq\n");
+                fprintf(f, "    cmp %s, 0\n", arch->regs64[reg]);
+                fprintf(f, "    cset %s, eq\n", arch->regs64[reg]);
             }
             if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    cmp rax, 0\n");
-                fprintf(file, "    sete al\n");
-                fprintf(file, "    movzx rax, al\n");
+                fprintf(f, "    cmp %s, 0\n", arch->regs64[reg]);
+                fprintf(f, "    sete %s\n", arch->regs8[reg]);
+                fprintf(f, "    movzx %s, %s\n", arch->regs64[reg], arch->regs8[reg]);
             }
+        }
+        if (node->kind == NODE_DEREF) {
+            if (type_is_32(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [%s]\n", arch->regs32[reg], arch->regs64[reg]);
+            }
+            if (type_is_64(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [%s]\n", arch->regs64[reg], arch->regs64[reg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, qword ptr [%s]\n", arch->regs64[reg], arch->regs64[reg]);
+            }
+        }
+        return reg;
+    }
+    if (node->kind == NODE_REF) {
+        int32_t reg = codegen_alloc(codegen, requestReg);
+        if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->unary->local->offset);
+        if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->unary->local->offset);
+        return reg;
+    }
+
+    if (node->kind == NODE_ASSIGN) {
+        if (!codegen->nestedAssign && arch->kind == ARCH_X86_64 && node->rhs->kind == NODE_INTEGER) {
+            if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
+            if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
+            return -1;
+        }
+
+        if (node->rhs->kind == NODE_ASSIGN) codegen->nestedAssign = true;
+        int32_t rhsReg = codegen_part(codegen, node->rhs, requestReg);
+        if (type_is_32(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs32[rhsReg]);
+        }
+        if (type_is_64(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs64[rhsReg], node->lhs->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs64[rhsReg]);
+        }
+        if (codegen->nestedAssign) {
+            codegen->nestedAssign = false;
+            return rhsReg;
+        } else {
+            codegen_free(codegen, rhsReg);
+            return -1;
+        }
+    }
+    if (node->kind == NODE_ASSIGN_PTR) {
+        if (!codegen->nestedAssign && arch->kind == ARCH_X86_64 && node->rhs->kind == NODE_INTEGER) {
+            int32_t lhsReg = codegen_part(codegen, node->lhs, requestReg);
+            if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [%s], %lld\n", arch->regs64[lhsReg], node->rhs->integer);
+            if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [%s], %lld\n", arch->regs64[lhsReg], node->rhs->integer);
+            codegen_free(codegen, lhsReg);
+            return -1;
+        }
+
+        if (node->rhs->kind == NODE_ASSIGN) codegen->nestedAssign = true;
+        int32_t lhsReg = codegen_part(codegen, node->lhs, requestReg);
+        int32_t rhsReg = codegen_part(codegen, node->rhs, -1);
+        if (type_is_32(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [%s]\n", arch->regs32[rhsReg], arch->regs64[lhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [%s], %s\n", arch->regs64[lhsReg], arch->regs32[rhsReg]);
+        }
+        if (type_is_64(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [%s]\n", arch->regs64[rhsReg], arch->regs64[lhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [%s], %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
+        }
+        if (codegen->nestedAssign) {
+            codegen->nestedAssign = false;
+            return rhsReg;
+        } else {
+            codegen_free(codegen, rhsReg);
+            return -1;
         }
     }
 
-    if (node->kind >= NODE_ASSIGN && node->kind <= NODE_LOGIC_OR) {
-        node_asm(file, node, node->rhs, NULL);
-
-        if (!(node->kind == NODE_ASSIGN && node->rhs->kind == NODE_ASSIGN)) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    str x0, [sp, -%d]!\n", arch->stackAlign);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    push rax\n");
+    if (node->kind >= NODE_ADD && node->kind <= NODE_LOGIC_AND) {
+        int32_t lhsReg = codegen_part(codegen, node->lhs, requestReg);
+        if (node->kind == NODE_ADD && node->rhs->kind == NODE_INTEGER) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    add %s, %s, %lld\n", arch->regs64[lhsReg], arch->regs64[lhsReg], node->rhs->integer);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    add %s, %lld\n", arch->regs64[lhsReg], node->rhs->integer);
+            return lhsReg;
+        }
+        if (node->kind == NODE_SUB && node->rhs->kind == NODE_INTEGER) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, %s, %lld\n", arch->regs64[lhsReg], arch->regs64[lhsReg], node->rhs->integer);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    sub %s, %lld\n", arch->regs64[lhsReg], node->rhs->integer);
+            return lhsReg;
+        }
+        if (arch->kind == ARCH_X86_64 && node->kind == NODE_MUL && node->rhs->kind == NODE_INTEGER) {
+            fprintf(f, "    imul %s, %lld\n", arch->regs64[lhsReg], node->rhs->integer);
+            return lhsReg;
         }
 
-        node_asm(file, node, node->lhs, NULL);
-        if (!(node->kind == NODE_ASSIGN && node->rhs->kind == NODE_ASSIGN)) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    ldr x1, [sp], %d\n", arch->stackAlign);
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    pop rdx\n");
-        }
-
-        fprintf(file, "    ; ");
-        node_print(file, node);
-        fprintf(file, "\n");
-
-        if (node->kind == NODE_ASSIGN) {
-            if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    str %c1, [x0]\n", node->lhs->type->size == 8 ? 'x' : 'w');
-            }
-            if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    mov [rax], %cdx\n", node->lhs->type->size == 8 ? 'r' : 'e');
-            }
-        }
+        int32_t rhsReg = codegen_part(codegen, node->rhs, -1);
         if (node->kind == NODE_ADD) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    add x0, x0, x1\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    add rax, rdx\n");
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    add %s, %s, %s\n", arch->regs64[lhsReg], arch->regs64[lhsReg], arch->regs64[rhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    add %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
         }
         if (node->kind == NODE_SUB) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    sub x0, x0, x1\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    sub rax, rdx\n");
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, %s, %s\n", arch->regs64[lhsReg], arch->regs64[lhsReg], arch->regs64[rhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    sub %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
         }
         if (node->kind == NODE_MUL) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    mul x0, x0, x1\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    imul rdx\n");
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    mul %s, %s, %s\n", arch->regs64[lhsReg], arch->regs64[lhsReg], arch->regs64[rhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    imul %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
         }
         if (node->kind == NODE_DIV) {
-            if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    sdiv x0, x0, x1\n");
-            }
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    sdiv %s, %s, %s\n", arch->regs64[lhsReg], arch->regs64[lhsReg], arch->regs64[rhsReg]);
             if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    mov rcx, rdx\n");
-                fprintf(file, "    xor rdx, rdx\n");
-                fprintf(file, "    idiv rcx\n");
+                if (lhsReg != 0) fprintf(f, "    mov r12, rax\n");
+                if (lhsReg != 3 && codegen->regsUsed[3]) fprintf(f, "    mov r13, rdx\n");
+                if (lhsReg != 0) fprintf(f, "    mov rax, %s\n", arch->regs64[lhsReg]);
+                fprintf(f, "    cqo\n");
+                fprintf(f, "    idiv %s\n", arch->regs64[rhsReg]);
+                if (lhsReg != 0) fprintf(f, "    mov %s, rax\n", arch->regs64[lhsReg]);
+                if (lhsReg != 0) fprintf(f, "    mov rax, r12\n");
+                if (lhsReg != 3 && codegen->regsUsed[3]) fprintf(f, "    mov rdx, r13\n");;
             }
         }
         if (node->kind == NODE_MOD) {
             if (arch->kind == ARCH_ARM64) {
-                fprintf(file, "    udiv x2, x0, x1\n");
-                fprintf(file, "    msub x0, x2, x1, x0\n");
+                fprintf(f, "    udiv x8, %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
+                fprintf(f, "    msub %s, x8, %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg], arch->regs64[lhsReg]);
             }
             if (arch->kind == ARCH_X86_64) {
-                fprintf(file, "    mov rcx, rdx\n");
-                fprintf(file, "    xor rdx, rdx\n");
-                fprintf(file, "    idiv rcx\n");
-                fprintf(file, "    mov rax, rdx\n");
+                if (lhsReg != 0) fprintf(f, "    mov r12, rax\n");
+                if (lhsReg != 3 && codegen->regsUsed[3]) fprintf(f, "    mov r13, rdx\n");
+                if (lhsReg != 0) fprintf(f, "    mov rax, %s\n", arch->regs64[lhsReg]);
+                fprintf(f, "    cqo\n");
+                fprintf(f, "    idiv %s\n", arch->regs64[rhsReg]);
+                if (lhsReg != 3) fprintf(f, "    mov %s, rdx\n", arch->regs64[lhsReg]);
+                if (lhsReg != 0) fprintf(f, "    mov rax, r12\n");
+                if (lhsReg != 3 && codegen->regsUsed[3]) fprintf(f, "    mov rdx, r13\n");
             }
         }
 
         if (node->kind >= NODE_EQ && node->kind <= NODE_GTEQ) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    cmp x0, x1\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    cmp rax, rdx\n");
-
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    cmp %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    cmp %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
             if (node->kind == NODE_EQ) {
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    cset x0, eq\n");
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    sete al\n");
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    cset %s, eq\n", arch->regs64[lhsReg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    sete %s\n", arch->regs8[lhsReg]);
             }
             if (node->kind == NODE_NEQ) {
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    cset x0, ne\n");
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    setne al\n");
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    cset %s, ne\n", arch->regs64[lhsReg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    setne %s\n", arch->regs8[lhsReg]);
             }
             if (node->kind == NODE_LT) {
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    cset x0, lt\n");
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    setl al\n");
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    cset %s, lt\n", arch->regs64[lhsReg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    setl %s\n", arch->regs8[lhsReg]);
             }
             if (node->kind == NODE_LTEQ) {
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    cset x0, le\n");
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    setle al\n");
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    cset %s, le\n", arch->regs64[lhsReg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    setle %s\n", arch->regs8[lhsReg]);
             }
             if (node->kind == NODE_GT) {
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    cset x0, gt\n");
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    setg al\n");
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    cset %s, gt\n", arch->regs64[lhsReg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    setg %s\n", arch->regs8[lhsReg]);
             }
             if (node->kind == NODE_GTEQ) {
-                if (arch->kind == ARCH_ARM64) fprintf(file, "    cset x0, ge\n");
-                if (arch->kind == ARCH_X86_64) fprintf(file, "    setge al\n");
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    cset %s, ge\n", arch->regs64[lhsReg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    setge %s\n", arch->regs8[lhsReg]);
             }
-
-            if (arch->kind == ARCH_X86_64) fprintf(file, "   movzx rax, al\n");
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, %s\n", arch->regs64[lhsReg], arch->regs8[lhsReg]);
         }
-
         if (node->kind == NODE_LOGIC_AND) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    and x0, x0, x1\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    and rax, rdx\n");
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    and %s, %s, %s\n", arch->regs64[lhsReg], arch->regs64[lhsReg], arch->regs64[rhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    and %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
         }
         if (node->kind == NODE_LOGIC_OR) {
-            if (arch->kind == ARCH_ARM64) fprintf(file, "    orr x0, x0, x1\n");
-            if (arch->kind == ARCH_X86_64) fprintf(file, "    or rax, rdx\n");
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    orr %s, %s, %s\n", arch->regs64[lhsReg], arch->regs64[lhsReg], arch->regs64[rhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    or %s, %s\n", arch->regs64[lhsReg], arch->regs64[rhsReg]);
         }
+        codegen_free(codegen, rhsReg);
+        return lhsReg;
     }
-}
-
-void codegen(FILE *file, Node *node, Arch *_arch) {
-    arch = _arch;
-    node_asm(file, NULL, node, NULL);
+    return -1;
 }

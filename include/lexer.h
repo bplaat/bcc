@@ -1,13 +1,16 @@
 #ifndef LEXER_H
 #define LEXER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 
 #include "utils.h"
 
 typedef enum TokenKind {
-    TOKEN_EOF,
+    TOKEN_INTEGER,
+    TOKEN_VARIABLE,
+
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LCURLY,
@@ -16,9 +19,7 @@ typedef enum TokenKind {
     TOKEN_RBRACKET,
     TOKEN_COMMA,
     TOKEN_SEMICOLON,
-
-    TOKEN_INTEGER,
-    TOKEN_VARIABLE,
+    TOKEN_EOF,
 
     TOKEN_INT,
     TOKEN_LONG,
@@ -36,30 +37,41 @@ typedef enum TokenKind {
     TOKEN_STAR,
     TOKEN_DIV,
     TOKEN_MOD,
+    TOKEN_AND,
     TOKEN_EQ,
     TOKEN_NEQ,
     TOKEN_LT,
     TOKEN_LTEQ,
     TOKEN_GT,
     TOKEN_GTEQ,
-    TOKEN_ADDR,
-    TOKEN_LOGIC_NOT,
     TOKEN_LOGIC_AND,
-    TOKEN_LOGIC_OR
+    TOKEN_LOGIC_OR,
+    TOKEN_LOGIC_NOT
 } TokenKind;
 
 typedef struct Token {
     TokenKind kind;
-    int32_t position;
+    size_t position;
     union {
         int64_t integer;
         char *string;
     };
 } Token;
 
-Token *token_new(TokenKind kind);
+Token *token_new(TokenKind kind, size_t position);
 
-char *token_to_string(TokenKind kind);
+Token *token_new_integer(size_t position, int64_t integer);
+
+Token *token_new_string(TokenKind kind, size_t position, char *string);
+
+char *token_kind_to_string(TokenKind kind);
+
+bool token_kind_is_type(TokenKind kind);
+
+typedef struct Keyword {
+    char *keyword;
+    TokenKind kind;
+} Keyword;
 
 List *lexer(char *text);
 

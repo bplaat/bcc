@@ -5,44 +5,34 @@
 #include "node.h"
 #include "utils.h"
 
-Node *parser(char *text, List *tokens, Arch *arch);
+typedef struct Parser {
+    Arch *arch;
+    char *text;
+    List *tokens;
+    int32_t position;
+    Node *currentFuncdef;
+} Parser;
 
-void parser_check(TokenKind kind);
+Node *parser(Arch *arch, char *text, List *tokens);
 
-void parser_eat(TokenKind kind);
+void parser_eat(Parser *parser, TokenKind kind);
 
-Type *parser_type(void);
+Type *parser_type(Parser *parser);
 
-Node *parser_vardef(void);
+Local *parser_find_local(Parser *parser, char *name);
 
-Node *parser_program(void);
-
-Node *parser_funcdef(void);
-
-Node *parser_block(void);
-
-Node *parser_statement(void);
-
-Node *parser_declarations(void);
-
-Node *parser_assigns(void);
-
-Node *parser_assign(void);
-
-Node *parser_logic(void);
-
-Node *parser_equality(void);
-
-Node *parser_relational(void);
-
-Node *parser_add(void);
-
-Node *parser_mul(void);
-
-Node *parser_unary(void);
-
-Node *parser_primary(void);
-
-Node *parser_variable(Type *type);
+Node *parser_program(Parser *parser);
+Node *parser_block(Parser *parser);
+Node *parser_statement(Parser *parser);
+Node *parser_decls(Parser *parser);
+Node *parser_assigns(Parser *parser, Type *declType);
+Node *parser_assign(Parser *parser, Type *declType);
+Node *parser_logic(Parser *parser);
+Node *parser_equality(Parser *parser);
+Node *parser_relational(Parser *parser);
+Node *parser_add(Parser *parser);
+Node *parser_mul(Parser *parser);
+Node *parser_unary(Parser *parser);
+Node *parser_primary(Parser *parser);
 
 #endif
