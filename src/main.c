@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
 
     // Compile
     List *tokens = lexer(text);
-    Node *node = parser(arch, text, tokens);
+    Node *node = parser(text, tokens);
     if (dumpNode) {
         printf("%s", node_to_string(node));
         return EXIT_SUCCESS;

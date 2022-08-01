@@ -13,7 +13,7 @@ typedef struct Parser {
     Node *currentFuncdef;
 } Parser;
 
-Node *parser(Arch *arch, char *text, List *tokens);
+Node *parser(char *text, List *tokens);
 
 void parser_eat(Parser *parser, TokenKind kind);
 

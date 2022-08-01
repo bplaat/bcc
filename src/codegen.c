@@ -26,7 +26,7 @@ int32_t codegen_alloc(Codegen *codegen, int32_t requestReg) {
             return i;
         }
     }
-    fprintf(stderr, "All regs are used up!\n");
+    fprintf(stderr, "All regs are used up\n");
     exit(1);
 }
 
@@ -48,7 +48,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         if (!node->isLeaf && arch->kind == ARCH_ARM64) fprintf(f, "    push lr\n");
 
         if (node->locals->size > 0) {
-            size_t stackSize = ((Local *)list_get(node->locals, 0))->offset;
+            size_t stackSize = align(((Local *)list_get(node->locals, 0))->offset, arch->stackAlign);
             if (arch->kind == ARCH_ARM64) {
                 fprintf(f, "    push fp\n");
                 fprintf(f, "    mov fp, sp\n");
@@ -138,12 +138,10 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         if (node->type->kind == TYPE_ARRAY) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->local->offset);
-        }
-        else if (type_is_32(node->type)) {
+        } else if (type_is_32(node->type)) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [rbp - %zu]\n", arch->regs32[reg], node->local->offset);
-        }
-        else if (type_is_64(node->type)) {
+        } else if (type_is_64(node->type)) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs64[reg], node->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, qword ptr [rbp - %zu]\n", arch->regs64[reg], node->local->offset);
         }

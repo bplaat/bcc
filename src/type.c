@@ -34,9 +34,7 @@ Type *type_base(Type *type) {
 
 bool type_is_32(Type *type) { return type->size == 4; }
 
-bool type_is_64(Type *type) {
-    return type->kind == TYPE_ARRAY || type->size == 8;
-}
+bool type_is_64(Type *type) { return type->kind == TYPE_ARRAY || type->size == 8; }
 
 char *type_to_string(Type *type) {
     if (type->kind == TYPE_INTEGER) {
