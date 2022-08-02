@@ -89,6 +89,11 @@ List *lexer(char *text) {
             list_add(tokens, token_new_integer(TOKEN_INTEGER, position, strtol(c, &c, 2)));
             continue;
         }
+        if (*c == '0') {
+            c++;
+            list_add(tokens, token_new_integer(TOKEN_INTEGER, position, strtol(c, &c, 8)));
+            continue;
+        }
         if (*c == '0' && *(c + 1) == 'x') {
             c += 2;
             list_add(tokens, token_new_integer(TOKEN_INTEGER, position, strtol(c, &c, 16)));
@@ -118,7 +123,30 @@ List *lexer(char *text) {
             for (size_t i = 0; i < size; i++) {
                 if (ptr[i] == '\\') {
                     i++;
-                    if (ptr[i] == 'a') string[strpos++] = '\a';
+                    if (ptr[i] >= '0' && ptr[i] <= '7') {
+                        int32_t num = ptr[i++] - '0';
+                        if (ptr[i] >= '0' && ptr[i] <= '7') {
+                            num = (num << 3) + (ptr[i++] - '0');
+                            if (ptr[i] >= '0' && ptr[i] <= '7') {
+                                num = (num << 3) + (ptr[i++] - '0');
+                            }
+                        }
+                        string[strpos++] = num;
+                    }
+                    else if (ptr[i] == 'x') {
+                        i++;
+                        int32_t num = 0;
+                        while (isxdigit(ptr[i])) {
+                            int32_t part;
+                            if (ptr[i] >= '0' && ptr[i] <= '9') part = ptr[i] - '0';
+                            if (ptr[i] >= 'a' && ptr[i] <= 'f') part = ptr[i] - 'a' + 10;
+                            if (ptr[i] >= 'A' && ptr[i] <= 'F') part = ptr[i] - 'A' + 10;
+                            num = (num << 4) + part;
+                            i++;
+                        }
+                        string[strpos++] = num;
+                    }
+                    else if (ptr[i] == 'a') string[strpos++] = '\a';
                     else if (ptr[i] == 'b') string[strpos++] = '\b';
                     else if (ptr[i] == 'e') string[strpos++] = 27;
                     else if (ptr[i] == 'f') string[strpos++] = '\f';
