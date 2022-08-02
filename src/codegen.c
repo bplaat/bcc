@@ -37,8 +37,17 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
     Arch *arch = codegen->arch;
 
     if (node->kind == NODE_PROGRAM) {
+        codegen->currentProgram = node;
         for (size_t i = 0; i < node->nodes->size; i++) {
             codegen_node(codegen, list_get(node->nodes, i), -1);
+        }
+
+        if (node->vars->size > 0) {
+            fprintf(f, ".data\n");
+            for (size_t i = 0; i < node->vars->size; i++) {
+                Var *var = list_get(node->vars, i);
+                fprintf(f, "_%s: .zero %d\n", var->name, var->type->size);
+            }
         }
     }
 
@@ -47,8 +56,8 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         fprintf(f, "_%s:\n", node->funcname);
         if (!node->isLeaf && arch->kind == ARCH_ARM64) fprintf(f, "    push lr\n");
 
-        if (node->locals->size > 0) {
-            size_t stackSize = align(((Local *)list_get(node->locals, 0))->offset, arch->stackAlign);
+        if (node->vars->size > 0) {
+            size_t stackSize = align(((Var *)list_get(node->vars, 0))->offset, arch->stackAlign);
             if (arch->kind == ARCH_ARM64) {
                 fprintf(f, "    push fp\n");
                 fprintf(f, "    mov fp, sp\n");
@@ -62,22 +71,22 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         }
 
         for (int32_t i = (int32_t)node->argsSize - 1; i >= 0; i--) {
-            Local *local = list_get(node->locals, i);
-            if (type_is_8(local->type)) {
-                if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
-                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [rbp - %zu], %s\n", local->offset, arch->regs8[arch->argRegs[i]]);
+            Var *var = list_get(node->vars, i);
+            if (type_is_8(var->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [rbp - %zu], %s\n", var->offset, arch->regs8[arch->argRegs[i]]);
             }
-            if (type_is_16(local->type)) {
-                if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
-                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [rbp - %zu], %s\n", local->offset, arch->regs16[arch->argRegs[i]]);
+            if (type_is_16(var->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [rbp - %zu], %s\n", var->offset, arch->regs16[arch->argRegs[i]]);
             }
-            if (type_is_32(local->type)) {
-                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
-                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", local->offset, arch->regs32[arch->argRegs[i]]);
+            if (type_is_32(var->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", var->offset, arch->regs32[arch->argRegs[i]]);
             }
-            if (type_is_64(local->type)) {
-                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs64[arch->argRegs[i]], local->offset);
-                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [rbp - %zu], %s\n", local->offset, arch->regs64[arch->argRegs[i]]);
+            if (type_is_64(var->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs64[arch->argRegs[i]], var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [rbp - %zu], %s\n", var->offset, arch->regs64[arch->argRegs[i]]);
             }
         }
 
@@ -91,7 +100,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         }
 
         if (node->nodes->size == 0 || ((Node *)list_get(node->nodes, node->nodes->size - 1))->kind != NODE_RETURN) {
-            if (node->locals->size > 0) {
+            if (node->vars->size > 0) {
                 if (arch->kind == ARCH_ARM64) {
                     fprintf(f, "    mov sp, fp\n");
                     fprintf(f, "    pop fp\n");
@@ -141,23 +150,71 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         }
         return reg;
     }
-    if (node->kind == NODE_LOCAL) {
+    if (node->kind == NODE_VAR) {
         int32_t reg = codegen_alloc(codegen, requestReg);
-        if (node->type->kind == TYPE_ARRAY) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->local->offset);
-        } else if (type_is_8(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrb %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, byte ptr [rbp - %zu]\n", arch->regs8[reg], node->local->offset);
-        } else if (type_is_16(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrh %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, word ptr [rbp - %zu]\n", arch->regs16[reg], node->local->offset);
-        } else if (type_is_32(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [rbp - %zu]\n", arch->regs32[reg], node->local->offset);
-        } else if (type_is_64(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs64[reg], node->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, qword ptr [rbp - %zu]\n", arch->regs64[reg], node->local->offset);
+        if (node->var->global) {
+            if (node->type->kind == TYPE_ARRAY) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
+                    fprintf(f, "    add %s, %s, _%s@PAGEOFF\n", arch->regs64[reg], arch->regs64[reg], node->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    lea %s, [rip + _%s]\n", arch->regs64[reg], node->var->name);
+                }
+            }
+            else if (type_is_8(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
+                    fprintf(f, "    ldrb %s, [%s, _%s@PAGEOFF]\n", arch->regs32[reg], arch->regs64[reg], node->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    movzx %s, byte ptr [rip + _%s]\n", arch->regs32[reg], node->var->name);
+                }
+            }
+            else if (type_is_16(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
+                    fprintf(f, "    ldrh %s, [%s, _%s@PAGEOFF]\n", arch->regs32[reg], arch->regs64[reg], node->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    movzx %s, word ptr [rip + _%s]\n", arch->regs32[reg], node->var->name);
+                }
+            }
+            else if (type_is_32(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
+                    fprintf(f, "    ldr %s, [%s, _%s@PAGEOFF]\n", arch->regs32[reg], arch->regs64[reg], node->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    mov %s, dword ptr [rip + _%s]\n", arch->regs32[reg], node->var->name);
+                }
+            }
+            else if (type_is_64(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
+                    fprintf(f, "    ldr %s, [%s, _%s@PAGEOFF]\n", arch->regs64[reg], arch->regs64[reg], node->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    mov %s, qword ptr [rip + _%s]\n", arch->regs64[reg], node->var->name);
+                }
+            }
+        } else {
+            if (node->type->kind == TYPE_ARRAY) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->var->offset);
+            } else if (type_is_8(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrb %s, [fp, -%zu]\n", arch->regs32[reg], node->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, byte ptr [rbp - %zu]\n", arch->regs32[reg], node->var->offset);
+            } else if (type_is_16(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrh %s, [fp, -%zu]\n", arch->regs32[reg], node->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, word ptr [rbp - %zu]\n", arch->regs32[reg], node->var->offset);
+            } else if (type_is_32(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs32[reg], node->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [rbp - %zu]\n", arch->regs32[reg], node->var->offset);
+            } else if (type_is_64(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs64[reg], node->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, qword ptr [rbp - %zu]\n", arch->regs64[reg], node->var->offset);
+            }
         }
         return reg;
     }
@@ -245,7 +302,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         if (arch->kind == ARCH_ARM64 && reg != 0) fprintf(f, "    mov x0, %s\n", arch->regs64[reg]);
         if (arch->kind == ARCH_X86_64 && reg != 0) fprintf(f, "    mov rax, %s\n", arch->regs64[reg]);
 
-        if (codegen->currentFuncdef->locals->size > 0) {
+        if (codegen->currentFuncdef->vars->size > 0) {
             if (arch->kind == ARCH_ARM64) {
                 fprintf(f, "    mov sp, fp\n");
                 fprintf(f, "    pop fp\n");
@@ -281,11 +338,11 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         if (node->kind == NODE_DEREF && node->type->kind != TYPE_ARRAY) {
             if (type_is_8(node->type)) {
                 if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrb %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
-                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, byte ptr [%s]\n", arch->regs8[reg], arch->regs64[reg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, byte ptr [%s]\n", arch->regs32[reg], arch->regs64[reg]);
             }
             if (type_is_16(node->type)) {
                 if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrh %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
-                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, word ptr [%s]\n", arch->regs16[reg], arch->regs64[reg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, word ptr [%s]\n", arch->regs32[reg], arch->regs64[reg]);
             }
             if (type_is_32(node->type)) {
                 if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
@@ -300,37 +357,83 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
     }
     if (node->kind == NODE_REF) {
         int32_t reg = codegen_alloc(codegen, requestReg);
-        if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->unary->local->offset);
-        if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->unary->local->offset);
+        if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->unary->var->offset);
+        if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->unary->var->offset);
         return reg;
     }
 
     if (node->kind == NODE_ASSIGN) {
         if (!codegen->nestedAssign && arch->kind == ARCH_X86_64 && node->rhs->kind == NODE_INTEGER) {
-            if (type_is_8(node->type)) fprintf(f, "    mov byte ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
-            if (type_is_16(node->type)) fprintf(f, "    mov word ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
-            if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
-            if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
+            if (node->lhs->var->global) {
+                if (type_is_8(node->type)) fprintf(f, "    mov byte ptr [rip + _%s], %lld\n", node->lhs->var->name, node->rhs->integer);
+                if (type_is_16(node->type)) fprintf(f, "    mov word ptr [rip + _%s], %lld\n", node->lhs->var->name, node->rhs->integer);
+                if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [rip + _%s], %lld\n", node->lhs->var->name, node->rhs->integer);
+                if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [rip + _%s], %lld\n", node->lhs->var->name, node->rhs->integer);
+            } else {
+                if (type_is_8(node->type)) fprintf(f, "    mov byte ptr [rbp - %zu], %lld\n", node->lhs->var->offset, node->rhs->integer);
+                if (type_is_16(node->type)) fprintf(f, "    mov word ptr [rbp - %zu], %lld\n", node->lhs->var->offset, node->rhs->integer);
+                if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [rbp - %zu], %lld\n", node->lhs->var->offset, node->rhs->integer);
+                if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [rbp - %zu], %lld\n", node->lhs->var->offset, node->rhs->integer);
+            }
             return -1;
         }
 
         if (node->rhs->kind == NODE_ASSIGN) codegen->nestedAssign = true;
         int32_t rhsReg = codegen_node(codegen, node->rhs, requestReg);
-        if (type_is_8(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs8[rhsReg]);
-        }
-        if (type_is_16(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs16[rhsReg]);
-        }
-        if (type_is_32(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs32[rhsReg]);
-        }
-        if (type_is_64(node->type)) {
-            if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs64[rhsReg], node->lhs->local->offset);
-            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs64[rhsReg]);
+        if (node->lhs->var->global) {
+            if (type_is_8(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp x8, _%s@PAGE\n", node->lhs->var->name);
+                    fprintf(f, "    strb %s, [x8, _%s@PAGEOFF]\n", arch->regs32[rhsReg], node->lhs->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    mov byte ptr [rip - _%s], %s\n", node->lhs->var->name, arch->regs8[rhsReg]);
+                }
+            }
+            if (type_is_16(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp x8, _%s@PAGE\n", node->lhs->var->name);
+                    fprintf(f, "    strh %s, [x8, _%s@PAGEOFF]\n", arch->regs32[rhsReg], node->lhs->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    mov word ptr [rip - _%s], %s\n", node->lhs->var->name, arch->regs16[rhsReg]);
+                }
+            }
+            if (type_is_32(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp x8, _%s@PAGE\n", node->lhs->var->name);
+                    fprintf(f, "    str %s, [x8, _%s@PAGEOFF]\n", arch->regs32[rhsReg], node->lhs->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    mov dword ptr [rip - _%s], %s\n", node->lhs->var->name, arch->regs32[rhsReg]);
+                }
+            }
+            if (type_is_64(node->type)) {
+                if (arch->kind == ARCH_ARM64) {
+                    fprintf(f, "    adrp x8, _%s@PAGE\n", node->lhs->var->name);
+                    fprintf(f, "    str %s, [x8, _%s@PAGEOFF]\n", arch->regs64[rhsReg], node->lhs->var->name);
+                }
+                if (arch->kind == ARCH_X86_64) {
+                    fprintf(f, "    mov qword ptr [rip - _%s], %s\n", node->lhs->var->name, arch->regs64[rhsReg]);
+                }
+            }
+        } else {
+            if (type_is_8(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [rbp - %zu], %s\n", node->lhs->var->offset, arch->regs8[rhsReg]);
+            }
+            if (type_is_16(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [rbp - %zu], %s\n", node->lhs->var->offset, arch->regs16[rhsReg]);
+            }
+            if (type_is_32(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", node->lhs->var->offset, arch->regs32[rhsReg]);
+            }
+            if (type_is_64(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs64[rhsReg], node->lhs->var->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov qword ptr [rbp - %zu], %s\n", node->lhs->var->offset, arch->regs64[rhsReg]);
+            }
         }
         if (codegen->nestedAssign) {
             codegen->nestedAssign = false;

@@ -3,13 +3,14 @@
 #include "type.h"
 #include "utils.h"
 
-typedef struct Local {
+typedef struct Var {
     char *name;
     Type *type;
     size_t offset;
-} Local;
+    bool global;
+} Var;
 
-Local *local_new(char *string, Type *type, size_t offset);
+Var *var_new(char *string, Type *type, size_t offset, bool global);
 
 typedef enum NodeKind {
     NODE_PROGRAM,
@@ -17,7 +18,7 @@ typedef enum NodeKind {
     NODE_BLOCK,
 
     NODE_INTEGER,
-    NODE_LOCAL,
+    NODE_VAR,
     NODE_FUNCCALL,
 
     NODE_IF,
@@ -54,8 +55,8 @@ struct Node {
         // Integer kind
         int64_t integer;
 
-        // Local kind
-        Local *local;
+        // Var kind
+        Var *var;
 
         // Unary kind
         Node *unary;
@@ -70,7 +71,7 @@ struct Node {
         struct {
             char *funcname;
             List *nodes;
-            List *locals;
+            List *vars;
             size_t argsSize;
             bool isLeaf;
         };
@@ -88,7 +89,7 @@ Node *node_new(NodeKind kind);
 
 Node *node_new_integer(int64_t integer, int32_t size, bool isUnsigned);
 
-Node *node_new_local(Local *local);
+Node *node_new_var(Var *var);
 
 Node *node_new_unary(NodeKind kind, Node *unary);
 

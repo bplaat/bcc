@@ -9,6 +9,7 @@ typedef struct Codegen {
     FILE *file;
     Arch *arch;
     bool *regsUsed;
+    Node *currentProgram;
     Node *currentFuncdef;
     int32_t uniqueLabel;
     bool nestedAssign;

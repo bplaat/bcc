@@ -80,65 +80,120 @@ Type *parser_type_suffix(Parser *parser, Type *type) {
     return type;
 }
 
-Local *parser_find_local(Parser *parser, char *name) {
-    Local *local = NULL;
-    for (size_t i = 0; i < parser->currentFuncdef->locals->size; i++) {
-        Local *otherLocal = list_get(parser->currentFuncdef->locals, i);
-        if (!strcmp(otherLocal->name, name)) {
-            local = otherLocal;
+Var *parser_find_var(Parser *parser, char *name) {
+    Var *var = NULL;
+    for (size_t i = 0; i < parser->currentFuncdef->vars->size; i++) {
+        Var *otherVar = list_get(parser->currentFuncdef->vars, i);
+        if (!strcmp(otherVar->name, name)) {
+            var = otherVar;
             break;
         }
     }
-    if (local == NULL) {
+    if (var == NULL) {
+        for (size_t i = 0; i < parser->currentProgram->vars->size; i++) {
+            Var *otherVar = list_get(parser->currentProgram->vars, i);
+            if (!strcmp(otherVar->name, name)) {
+                var = otherVar;
+                break;
+            }
+        }
+    }
+    if (var == NULL) {
         fprintf(stderr, "%s\n", parser->text);
         for (size_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
-        fprintf(stderr, "^\nCan't find local variable: '%s'\n", name);
+        fprintf(stderr, "^\nCan't find variable: '%s'\n", name);
         exit(EXIT_FAILURE);
     }
-    return local;
+    return var;
 }
 
 Node *parser_program(Parser *parser) {
     Node *programNode = node_new_multiple(NODE_PROGRAM);
+    programNode->vars = list_new(8);
+    parser->currentProgram = programNode;
+
     while (current()->kind != TOKEN_EOF) {
-        Node *funcdefNode = node_new_multiple(NODE_FUNCDEF);
-        funcdefNode->type = parser_type(parser);
-        funcdefNode->funcname = current()->string;
-        funcdefNode->locals = list_new(8);
-        funcdefNode->isLeaf = true;
-        parser_eat(parser, TOKEN_VARIABLE);
-        parser_eat(parser, TOKEN_LPAREN);
-        if (current()->kind != TOKEN_RPAREN) {
-            for (;;) {
-                Type *type = parser_type(parser);
-                char *name = current()->string;
-                parser_eat(parser, TOKEN_VARIABLE);
+        Type *returnType = parser_type(parser);
 
-                Local *local = local_new(name, type, align(type->size, parser->arch->wordSize));
-                for (size_t i = 0; i < funcdefNode->locals->size; i++) {
-                    Local *otherLocal = list_get(funcdefNode->locals, i);
-                    otherLocal->offset += local->offset;
+        // Function
+        if (next(0)->kind == TOKEN_LPAREN) {
+            Node *funcdefNode = node_new_multiple(NODE_FUNCDEF);
+            funcdefNode->type = returnType;
+            funcdefNode->funcname = current()->string;
+            funcdefNode->vars = list_new(8);
+            funcdefNode->isLeaf = true;
+
+            parser_eat(parser, TOKEN_VARIABLE);
+            parser_eat(parser, TOKEN_LPAREN);
+            if (current()->kind != TOKEN_RPAREN) {
+                for (;;) {
+                    Type *type = parser_type(parser);
+                    char *name = current()->string;
+                    parser_eat(parser, TOKEN_VARIABLE);
+
+                    Var *var = var_new(name, type, align(type->size, parser->arch->wordSize), false);
+                    for (size_t i = 0; i < funcdefNode->vars->size; i++) {
+                        Var *otherVar = list_get(funcdefNode->vars, i);
+                        otherVar->offset += var->offset;
+                    }
+                    list_add(funcdefNode->vars, var);
+                    funcdefNode->argsSize++;
+
+                    if (current()->kind == TOKEN_COMMA) {
+                        parser_eat(parser, TOKEN_COMMA);
+                    } else {
+                        break;
+                    }
                 }
-                list_add(funcdefNode->locals, local);
-                funcdefNode->argsSize++;
+            }
+            parser_eat(parser, TOKEN_RPAREN);
 
+            parser_eat(parser, TOKEN_LCURLY);
+            parser->currentFuncdef = funcdefNode;
+            while (current()->kind != TOKEN_RCURLY) {
+                Node *node = parser_statement(parser);
+                if (node != NULL) list_add(funcdefNode->nodes, node);
+            }
+            parser_eat(parser, TOKEN_RCURLY);
+            list_add(programNode->nodes, funcdefNode);
+        }
+
+        // Global variable decl
+        else {
+            for (;;) {
+                Type *type = returnType;
+                while (current()->kind == TOKEN_STAR) {
+                    parser_eat(parser, TOKEN_STAR);
+                    type = type_new_pointer(type);
+                }
+
+                char *name = current()->string;
+                Var *var = NULL;
+                for (size_t i = 0; i < parser->currentProgram->vars->size; i++) {
+                    Var *otherVar = list_get(parser->currentProgram->vars, i);
+                    if (!strcmp(otherVar->name, name)) {
+                        var = otherVar;
+                        break;
+                    }
+                }
+                if (var != NULL) {
+                    fprintf(stderr, "%s\n", parser->text);
+                    for (size_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
+                    fprintf(stderr, "^\nCan't redefine global variable: '%s'\n", name);
+                    exit(EXIT_FAILURE);
+                }
+                parser_eat(parser, TOKEN_VARIABLE);
+                type = parser_type_suffix(parser, type);
+
+                list_add(parser->currentProgram->vars, var_new(name, type, 0, true));
                 if (current()->kind == TOKEN_COMMA) {
                     parser_eat(parser, TOKEN_COMMA);
                 } else {
                     break;
                 }
             }
+            parser_eat(parser, TOKEN_SEMICOLON);
         }
-        parser_eat(parser, TOKEN_RPAREN);
-
-        parser_eat(parser, TOKEN_LCURLY);
-        parser->currentFuncdef = funcdefNode;
-        while (current()->kind != TOKEN_RCURLY) {
-            Node *node = parser_statement(parser);
-            if (node != NULL) list_add(funcdefNode->nodes, node);
-        }
-        parser_eat(parser, TOKEN_RCURLY);
-        list_add(programNode->nodes, funcdefNode);
     }
     return programNode;
 }
@@ -247,40 +302,39 @@ Node *parser_decls(Parser *parser) {
         Node *blockNode = node_new_multiple(NODE_BLOCK);
         for (;;) {
             Type *type = rootType;
-
             while (current()->kind == TOKEN_STAR) {
                 parser_eat(parser, TOKEN_STAR);
                 type = type_new_pointer(type);
             }
-            char *name = current()->string;
 
-            Local *local = NULL;
-            for (size_t i = 0; i < parser->currentFuncdef->locals->size; i++) {
-                Local *otherLocal = list_get(parser->currentFuncdef->locals, i);
-                if (!strcmp(otherLocal->name, name)) {
-                    local = otherLocal;
+            char *name = current()->string;
+            Var *var = NULL;
+            for (size_t i = 0; i < parser->currentFuncdef->vars->size; i++) {
+                Var *otherVar = list_get(parser->currentFuncdef->vars, i);
+                if (!strcmp(otherVar->name, name)) {
+                    var = otherVar;
                     break;
                 }
             }
-            if (local != NULL) {
+            if (var != NULL) {
                 fprintf(stderr, "%s\n", parser->text);
                 for (size_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
-                fprintf(stderr, "^\nCan't redefine local variable: '%s'\n", name);
+                fprintf(stderr, "^\nCan't redefine var variable: '%s'\n", name);
                 exit(EXIT_FAILURE);
             }
             parser_eat(parser, TOKEN_VARIABLE);
             type = parser_type_suffix(parser, type);
 
-            local = local_new(name, type, align(type->size, parser->arch->wordSize));
-            for (size_t i = 0; i < parser->currentFuncdef->locals->size; i++) {
-                Local *otherLocal = list_get(parser->currentFuncdef->locals, i);
-                otherLocal->offset += local->offset;
+            var = var_new(name, type, align(type->size, parser->arch->wordSize), false);
+            for (size_t i = 0; i < parser->currentFuncdef->vars->size; i++) {
+                Var *otherVar = list_get(parser->currentFuncdef->vars, i);
+                otherVar->offset += var->offset;
             }
-            list_add(parser->currentFuncdef->locals, local);
+            list_add(parser->currentFuncdef->vars, var);
 
             if (current()->kind == TOKEN_ASSIGN) {
                 parser_eat(parser, TOKEN_ASSIGN);
-                list_add(blockNode->nodes, node_new_operation(NODE_ASSIGN, node_new_local(local), parser_assign(parser)));
+                list_add(blockNode->nodes, node_new_operation(NODE_ASSIGN, node_new_var(var), parser_assign(parser)));
             }
             if (current()->kind == TOKEN_COMMA) {
                 parser_eat(parser, TOKEN_COMMA);
@@ -407,7 +461,7 @@ Node *parser_add(Parser *parser) {
             node = node_new_operation(NODE_SUB, node, rhs);
             if (node->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER && node->type->base->size > 1) {
                 node = node_new_operation(NODE_DIV, node, node_new_integer(node->type->base->size, parser->arch->pointerSize, true));
-                node->type = node->type->base; // ?
+                node->type = node->type->base;  // ?
             }
         }
     }
@@ -454,7 +508,7 @@ Node *parser_unary(Parser *parser) {
     if (current()->kind == TOKEN_AND) {
         parser_eat(parser, TOKEN_AND);
         Node *node = node_new_unary(NODE_REF, parser_unary(parser));
-        if (node->unary->kind != NODE_LOCAL) {
+        if (node->unary->kind != NODE_VAR) {
             fprintf(stderr, "%s\n", parser->text);
             for (size_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can only reference a variable\n");
@@ -471,9 +525,6 @@ Node *parser_unary(Parser *parser) {
         parser_eat(parser, TOKEN_STAR);
         Node *node = node_new_unary(NODE_DEREF, parser_unary(parser));
         if (node->unary->type->kind != TYPE_POINTER && node->unary->type->kind != TYPE_ARRAY) {
-
-            printf("%s\n", node_to_string(node->unary));
-
             fprintf(stderr, "%s\n", parser->text);
             for (size_t i = 0; i < current()->position; i++) fprintf(stderr, " ");
             fprintf(stderr, "^\nYou can't dereference a %s type\n", type_to_string(node->unary->type));
@@ -497,7 +548,7 @@ Node *parser_primary_suffix(Parser *parser) {
         if (node->kind == NODE_INTEGER && (index->type->kind == TYPE_POINTER || index->type->kind == TYPE_ARRAY) && index->type->base->size > 1) {
             node = node_new_operation(NODE_MUL, node, node_new_integer(index->type->base->size, parser->arch->pointerSize, true));
         }
-        if ((node->type->kind == TYPE_POINTER || node->type->kind == TYPE_ARRAY) && node->type->base->size > 1  && index->kind == NODE_INTEGER) {
+        if ((node->type->kind == TYPE_POINTER || node->type->kind == TYPE_ARRAY) && node->type->base->size > 1 && index->kind == NODE_INTEGER) {
             index = node_new_operation(NODE_MUL, index, node_new_integer(node->type->base->size, parser->arch->pointerSize, true));
         }
         node = node_new_unary(NODE_DEREF, node_new_operation(NODE_ADD, node, index));
@@ -544,9 +595,9 @@ Node *parser_primary(Parser *parser) {
             return node;
         }
 
-        Local *local = parser_find_local(parser, current()->string);
+        Var *var = parser_find_var(parser, current()->string);
         parser_eat(parser, TOKEN_VARIABLE);
-        return node_new_local(local);
+        return node_new_var(var);
     }
 
     fprintf(stderr, "%s\n", parser->text);

@@ -49,7 +49,12 @@ assert() {
     expected=$1
     input=$2
 
-    ./bcc -d "$input" || exit
+    # Dump parsed node
+    if [[ $debug = "debug" ]]; then
+        lldb -- ./bcc -d "$input"
+    else
+        ./bcc -d "$input" || exit
+    fi
 
     # Compile for x86_64
     if [[ $debug = "debug" ]]; then
@@ -224,6 +229,28 @@ if [[ $1 = "all" || $1 = "sizeof" ]]; then
     assert 4 'int main() { int x[3][4]; return sizeof(**x + 1); }'
     assert 4 'int main() { int x=1; return sizeof(x=2); }'
     assert 1 'int main() { int x=1; sizeof(x=2); return x; }'
+fi
+
+if [[ $1 = "all" || $1 = "global" ]]; then
+    assert 0 'int x; int main() { return x; }'
+    assert 3 'int x; int main() { x=3; return x; }'
+    assert 7 'int x; int y; int main() { x=3; y=4; return x+y; }'
+    assert 7 'int x, y; int main() { x=3; y=4; return x+y; }'
+    assert 0 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[0]; }'
+    assert 1 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[1]; }'
+    assert 2 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[2]; }'
+    assert 3 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[3]; }'
+    assert 4 'int x; int main() { return sizeof(x); }'
+    assert 16 'int x[4]; int main() { return sizeof(x); }'
+fi
+
+if [[ $1 = "all" || $1 = "char" ]]; then
+    assert 1 'int main() { char x=1; return x; }'
+    assert 1 'int main() { char x=1; char y=2; return x; }'
+    assert 2 'int main() { char x=1; char y=2; return y; }'
+    assert 1 'int main() { char x; return sizeof(x); }'
+    assert 10 'int main() { char x[10]; return sizeof(x); }'
+    assert 1 'int main() { return sub_char(7, 3, 3); } int sub_char(char a, char b, char c) { return a-b-c; }'
 fi
 
 # Add selected tests below

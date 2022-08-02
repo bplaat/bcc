@@ -88,6 +88,7 @@ int main(int argc, char **argv) {
         sprintf(assemblyPath, "%s.s", outputPath);
         f = fopen(assemblyPath, "w");
     }
+    fprintf(f, ".text\n");
     if (arch->kind == ARCH_ARM64) {
         fprintf(f, ".macro push reg\n");
         fprintf(f, "    str \\reg, [sp, -%d]!\n", arch->stackAlign);

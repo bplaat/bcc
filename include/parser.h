@@ -10,6 +10,7 @@ typedef struct Parser {
     char *text;
     List *tokens;
     int32_t position;
+    Node *currentProgram;
     Node *currentFuncdef;
 } Parser;
 
@@ -21,7 +22,7 @@ Type *parser_type(Parser *parser);
 
 Type *parser_type_suffix(Parser *parser, Type *type);
 
-Local *parser_find_local(Parser *parser, char *name);
+Var *parser_find_var(Parser *parser, char *name);
 
 Node *parser_program(Parser *parser);
 Node *parser_block(Parser *parser);

@@ -3,12 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-Local *local_new(char *string, Type *type, size_t offset) {
-    Local *local = malloc(sizeof(Local));
-    local->name = string;
-    local->type = type;
-    local->offset = offset;
-    return local;
+Var *var_new(char *string, Type *type, size_t offset, bool global) {
+    Var *var = malloc(sizeof(Var));
+    var->name = string;
+    var->type = type;
+    var->offset = offset;
+    var->global = global;
+    return var;
 }
 
 Node *node_new(NodeKind kind) {
@@ -24,10 +25,10 @@ Node *node_new_integer(int64_t integer, int32_t size, bool isUnsigned) {
     return node;
 }
 
-Node *node_new_local(Local *local) {
-    Node *node = node_new(NODE_LOCAL);
-    node->type = local->type;
-    node->local = local;
+Node *node_new_var(Var *var) {
+    Node *node = node_new(NODE_VAR);
+    node->type = var->type;
+    node->var = var;
     return node;
 }
 
@@ -61,6 +62,16 @@ Node *node_new_multiple(NodeKind kind) {
 char *node_to_string(Node *node) {
     if (node->kind == NODE_PROGRAM) {
         List *sb = list_new(8);
+        if (node->vars->size > 0) {
+            for (size_t i = 0; i < node->vars->size; i++) {
+                Var *var = list_get(node->vars, i);
+                list_add(sb, type_to_string(var->type));
+                list_add(sb, " ");
+                list_add(sb, var->name);
+                list_add(sb, "; ");
+            }
+            list_add(sb, "\n");
+        }
         for (size_t i = 0; i < node->nodes->size; i++) {
             list_add(sb, node_to_string(list_get(node->nodes, i)));
             list_add(sb, "\n");
@@ -75,19 +86,19 @@ char *node_to_string(Node *node) {
         list_add(sb, "(");
         if (node->argsSize > 0) {
             for (size_t i = 0; i < node->argsSize; i++) {
-                Local *local = list_get(node->locals, i);
-                list_add(sb, type_to_string(local->type));
+                Var *var = list_get(node->vars, i);
+                list_add(sb, type_to_string(var->type));
                 list_add(sb, " ");
-                list_add(sb, local->name);
+                list_add(sb, var->name);
                 if (i != node->argsSize - 1) list_add(sb, ", ");
             }
         }
         list_add(sb, ") { ");
-        for (size_t i = node->argsSize; i < node->locals->size; i++) {
-            Local *local = list_get(node->locals, i);
-            list_add(sb, type_to_string(local->type));
+        for (size_t i = node->argsSize; i < node->vars->size; i++) {
+            Var *var = list_get(node->vars, i);
+            list_add(sb, type_to_string(var->type));
             list_add(sb, " ");
-            list_add(sb, local->name);
+            list_add(sb, var->name);
             list_add(sb, "; ");
         }
         for (size_t i = 0; i < node->nodes->size; i++) {
@@ -111,8 +122,8 @@ char *node_to_string(Node *node) {
     if (node->kind == NODE_INTEGER) {
         return format("%lld", node->integer);
     }
-    if (node->kind == NODE_LOCAL) {
-        return strdup(node->local->name);
+    if (node->kind == NODE_VAR) {
+        return strdup(node->var->name);
     }
     if (node->kind == NODE_FUNCCALL) {
         List *sb = list_new(8);
