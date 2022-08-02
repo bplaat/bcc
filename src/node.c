@@ -17,9 +17,9 @@ Node *node_new(NodeKind kind) {
     return node;
 }
 
-Node *node_new_integer(int64_t integer) {
+Node *node_new_integer(int64_t integer, int32_t size, bool isUnsigned) {
     Node *node = node_new(NODE_INTEGER);
-    node->type = type_new(TYPE_INTEGER, 4, true);
+    node->type = type_new(TYPE_INTEGER, size, isUnsigned);
     node->integer = integer;
     return node;
 }
@@ -40,7 +40,13 @@ Node *node_new_unary(NodeKind kind, Node *unary) {
 
 Node *node_new_operation(NodeKind kind, Node *lhs, Node *rhs) {
     Node *node = node_new(kind);
-    node->type = kind == NODE_ASSIGN || kind == NODE_ASSIGN_PTR ? rhs->type : lhs->type;
+    if (lhs->type->kind == TYPE_ARRAY) {
+        node->type = type_new_pointer(lhs->type->base);
+    } else if (rhs->type->size > lhs->type->size) {
+        node->type = rhs->type;
+    } else {
+        node->type = lhs->type;
+    }
     node->lhs = lhs;
     node->rhs = rhs;
     return node;

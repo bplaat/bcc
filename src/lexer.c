@@ -11,8 +11,8 @@ Token *token_new(TokenKind kind, size_t position) {
     return token;
 }
 
-Token *token_new_integer(size_t position, int64_t integer) {
-    Token *token = token_new(TOKEN_INTEGER, position);
+Token *token_new_integer(TokenKind kind, size_t position, int64_t integer) {
+    Token *token = token_new(kind, position);
     token->integer = integer;
     return token;
 }
@@ -25,6 +25,7 @@ Token *token_new_string(TokenKind kind, size_t position, char *string) {
 
 char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_INTEGER) return strdup("integer");
+    if (kind == TOKEN_CHARACTER) return strdup("character");
     if (kind == TOKEN_VARIABLE) return strdup("variable");
 
     if (kind == TOKEN_LPAREN) return strdup("(");
@@ -37,6 +38,8 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_SEMICOLON) return strdup(";");
     if (kind == TOKEN_EOF) return strdup("EOF");
 
+    if (kind == TOKEN_CHAR) return strdup("char");
+    if (kind == TOKEN_SHORT) return strdup("short");
     if (kind == TOKEN_INT) return strdup("int");
     if (kind == TOKEN_LONG) return strdup("long");
     if (kind == TOKEN_SIGNED) return strdup("signed");
@@ -67,28 +70,38 @@ char *token_kind_to_string(TokenKind kind) {
     return NULL;
 }
 
-bool token_kind_is_type(TokenKind kind) { return kind == TOKEN_INT || kind == TOKEN_LONG || kind == TOKEN_SIGNED || kind == TOKEN_UNSIGNED; }
+bool token_kind_is_type(TokenKind kind) {
+    return kind == TOKEN_CHAR || kind == TOKEN_SHORT || kind == TOKEN_INT || kind == TOKEN_LONG || kind == TOKEN_SIGNED || kind == TOKEN_UNSIGNED;
+}
 
 List *lexer(char *text) {
     List *tokens = list_new(1024);
     char *c = text;
-    Keyword keywords[] = {{"int", TOKEN_INT}, {"long", TOKEN_LONG}, {"signed", TOKEN_SIGNED}, {"unsigned", TOKEN_UNSIGNED}, {"sizeof", TOKEN_SIZEOF},
-                          {"if", TOKEN_IF},   {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE},   {"for", TOKEN_FOR},           {"return", TOKEN_RETURN}};
+    Keyword keywords[] = {{"char", TOKEN_CHAR},     {"short", TOKEN_SHORT},       {"int", TOKEN_INT},       {"long", TOKEN_LONG},
+                          {"signed", TOKEN_SIGNED}, {"unsigned", TOKEN_UNSIGNED}, {"sizeof", TOKEN_SIZEOF}, {"if", TOKEN_IF},
+                          {"else", TOKEN_ELSE},     {"while", TOKEN_WHILE},       {"for", TOKEN_FOR},       {"return", TOKEN_RETURN}};
     while (*c != '\0') {
         size_t position = c - text;
 
         if (*c == '0' && *(c + 1) == 'b') {
             c += 2;
-            list_add(tokens, token_new_integer(position, strtol(c, &c, 2)));
+            list_add(tokens, token_new_integer(TOKEN_INTEGER, position, strtol(c, &c, 2)));
             continue;
         }
         if (*c == '0' && *(c + 1) == 'x') {
             c += 2;
-            list_add(tokens, token_new_integer(position, strtol(c, &c, 16)));
+            list_add(tokens, token_new_integer(TOKEN_INTEGER, position, strtol(c, &c, 16)));
             continue;
         }
         if (isdigit(*c)) {
-            list_add(tokens, token_new_integer(position, strtol(c, &c, 10)));
+            list_add(tokens, token_new_integer(TOKEN_INTEGER, position, strtol(c, &c, 10)));
+            continue;
+        }
+
+        if (*c == '\'' && *(c + 2) == '\'') {
+            c++;
+            list_add(tokens, token_new_integer(TOKEN_CHARACTER, position, *c));
+            c += 2;
             continue;
         }
 

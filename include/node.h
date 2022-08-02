@@ -86,7 +86,7 @@ struct Node {
 
 Node *node_new(NodeKind kind);
 
-Node *node_new_integer(int64_t integer);
+Node *node_new_integer(int64_t integer, int32_t size, bool isUnsigned);
 
 Node *node_new_local(Local *local);
 

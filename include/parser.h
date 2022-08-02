@@ -13,11 +13,13 @@ typedef struct Parser {
     Node *currentFuncdef;
 } Parser;
 
-Node *parser(char *text, List *tokens);
+Node *parser(Arch *arch, char *text, List *tokens);
 
 void parser_eat(Parser *parser, TokenKind kind);
 
 Type *parser_type(Parser *parser);
+
+Type *parser_type_suffix(Parser *parser, Type *type);
 
 Local *parser_find_local(Parser *parser, char *name);
 
@@ -25,14 +27,15 @@ Node *parser_program(Parser *parser);
 Node *parser_block(Parser *parser);
 Node *parser_statement(Parser *parser);
 Node *parser_decls(Parser *parser);
-Node *parser_assigns(Parser *parser, Type *declType);
-Node *parser_assign(Parser *parser, Type *declType);
+Node *parser_assigns(Parser *parser);
+Node *parser_assign(Parser *parser);
 Node *parser_logic(Parser *parser);
 Node *parser_equality(Parser *parser);
 Node *parser_relational(Parser *parser);
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);
+Node *parser_primary_suffix(Parser *parser);
 Node *parser_primary(Parser *parser);
 
 #endif

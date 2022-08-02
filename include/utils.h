@@ -7,8 +7,11 @@ typedef enum ArchKind { ARCH_ARM64, ARCH_X86_64 } ArchKind;
 
 typedef struct Arch {
     ArchKind kind;
+    int32_t wordSize;
+    int32_t pointerSize;
     int32_t stackAlign;
     char **regs8;
+    char **regs16;
     char **regs32;
     char **regs64;
     int32_t regsSize;

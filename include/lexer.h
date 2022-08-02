@@ -9,6 +9,7 @@
 
 typedef enum TokenKind {
     TOKEN_INTEGER,
+    TOKEN_CHARACTER,
     TOKEN_VARIABLE,
 
     TOKEN_LPAREN,
@@ -21,6 +22,8 @@ typedef enum TokenKind {
     TOKEN_SEMICOLON,
     TOKEN_EOF,
 
+    TOKEN_CHAR,
+    TOKEN_SHORT,
     TOKEN_INT,
     TOKEN_LONG,
     TOKEN_SIGNED,
@@ -61,7 +64,7 @@ typedef struct Token {
 
 Token *token_new(TokenKind kind, size_t position);
 
-Token *token_new_integer(size_t position, int64_t integer);
+Token *token_new_integer(TokenKind kind, size_t position, int64_t integer);
 
 Token *token_new_string(TokenKind kind, size_t position, char *string);
 

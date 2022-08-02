@@ -10,6 +10,8 @@
 int main(int argc, char **argv) {
     // Architectures
     Arch arm64Arch = {.kind = ARCH_ARM64,
+                      .wordSize = 4,
+                      .pointerSize = 8,
                       .stackAlign = 16,
                       .regs32 = (char *[]){"w0", "w1", "w2", "w3", "w4", "w5", "w6", "w7"},
                       .regs64 = (char *[]){"x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7"},
@@ -19,8 +21,11 @@ int main(int argc, char **argv) {
                       .returnReg = 0};
 
     Arch x86_64Arch = {.kind = ARCH_X86_64,
+                       .wordSize = 4,
+                       .pointerSize = 8,
                        .stackAlign = 8,
                        .regs8 = (char *[]){"al", "dil", "sil", "dl", "cl", "r8l", "r9l", "r10l", "r11l"},
+                       .regs16 = (char *[]){"ax", "di", "si", "dx", "cx", "r8w", "r9w", "r10w", "r11w"},
                        .regs32 = (char *[]){"eax", "edi", "esi", "edx", "ecx", "r8d", "r9d", "r10d", "r11d"},
                        .regs64 = (char *[]){"rax", "rdi", "rsi", "rdx", "rcx", "r8", "r9", "r10", "r11"},
                        .regsSize = 9,
@@ -70,7 +75,7 @@ int main(int argc, char **argv) {
 
     // Compile
     List *tokens = lexer(text);
-    Node *node = parser(text, tokens);
+    Node *node = parser(arch, text, tokens);
     if (dumpNode) {
         printf("%s", node_to_string(node));
         return EXIT_SUCCESS;

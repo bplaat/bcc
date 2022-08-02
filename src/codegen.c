@@ -63,6 +63,14 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
 
         for (int32_t i = (int32_t)node->argsSize - 1; i >= 0; i--) {
             Local *local = list_get(node->locals, i);
+            if (type_is_8(local->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [rbp - %zu], %s\n", local->offset, arch->regs8[arch->argRegs[i]]);
+            }
+            if (type_is_16(local->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [rbp - %zu], %s\n", local->offset, arch->regs16[arch->argRegs[i]]);
+            }
             if (type_is_32(local->type)) {
                 if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[arch->argRegs[i]], local->offset);
                 if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", local->offset, arch->regs32[arch->argRegs[i]]);
@@ -138,6 +146,12 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         if (node->type->kind == TYPE_ARRAY) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    sub %s, fp, %zu\n", arch->regs64[reg], node->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    lea %s, [rbp - %zu]\n", arch->regs64[reg], node->local->offset);
+        } else if (type_is_8(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrb %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, byte ptr [rbp - %zu]\n", arch->regs8[reg], node->local->offset);
+        } else if (type_is_16(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrh %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, word ptr [rbp - %zu]\n", arch->regs16[reg], node->local->offset);
         } else if (type_is_32(node->type)) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [fp, -%zu]\n", arch->regs32[reg], node->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [rbp - %zu]\n", arch->regs32[reg], node->local->offset);
@@ -265,6 +279,14 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
             }
         }
         if (node->kind == NODE_DEREF && node->type->kind != TYPE_ARRAY) {
+            if (type_is_8(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrb %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, byte ptr [%s]\n", arch->regs8[reg], arch->regs64[reg]);
+            }
+            if (type_is_16(node->type)) {
+                if (arch->kind == ARCH_ARM64) fprintf(f, "    ldrh %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
+                if (arch->kind == ARCH_X86_64) fprintf(f, "    movzx %s, word ptr [%s]\n", arch->regs16[reg], arch->regs64[reg]);
+            }
             if (type_is_32(node->type)) {
                 if (arch->kind == ARCH_ARM64) fprintf(f, "    ldr %s, [%s]\n", arch->regs32[reg], arch->regs64[reg]);
                 if (arch->kind == ARCH_X86_64) fprintf(f, "    mov %s, dword ptr [%s]\n", arch->regs32[reg], arch->regs64[reg]);
@@ -285,6 +307,8 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
 
     if (node->kind == NODE_ASSIGN) {
         if (!codegen->nestedAssign && arch->kind == ARCH_X86_64 && node->rhs->kind == NODE_INTEGER) {
+            if (type_is_8(node->type)) fprintf(f, "    mov byte ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
+            if (type_is_16(node->type)) fprintf(f, "    mov word ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
             if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
             if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [rbp - %zu], %lld\n", node->lhs->local->offset, node->rhs->integer);
             return -1;
@@ -292,6 +316,14 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
 
         if (node->rhs->kind == NODE_ASSIGN) codegen->nestedAssign = true;
         int32_t rhsReg = codegen_node(codegen, node->rhs, requestReg);
+        if (type_is_8(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs8[rhsReg]);
+        }
+        if (type_is_16(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs16[rhsReg]);
+        }
         if (type_is_32(node->type)) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [fp, -%zu]\n", arch->regs32[rhsReg], node->lhs->local->offset);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [rbp - %zu], %s\n", node->lhs->local->offset, arch->regs32[rhsReg]);
@@ -311,6 +343,8 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
     if (node->kind == NODE_ASSIGN_PTR) {
         if (!codegen->nestedAssign && arch->kind == ARCH_X86_64 && node->rhs->kind == NODE_INTEGER) {
             int32_t lhsReg = codegen_node(codegen, node->lhs, requestReg);
+            if (type_is_8(node->type)) fprintf(f, "    mov byte ptr [%s], %lld\n", arch->regs64[lhsReg], node->rhs->integer);
+            if (type_is_16(node->type)) fprintf(f, "    mov word ptr [%s], %lld\n", arch->regs64[lhsReg], node->rhs->integer);
             if (type_is_32(node->type)) fprintf(f, "    mov dword ptr [%s], %lld\n", arch->regs64[lhsReg], node->rhs->integer);
             if (type_is_64(node->type)) fprintf(f, "    mov qword ptr [%s], %lld\n", arch->regs64[lhsReg], node->rhs->integer);
             codegen_free(codegen, lhsReg);
@@ -320,6 +354,14 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
         if (node->rhs->kind == NODE_ASSIGN) codegen->nestedAssign = true;
         int32_t lhsReg = codegen_node(codegen, node->lhs, requestReg);
         int32_t rhsReg = codegen_node(codegen, node->rhs, -1);
+        if (type_is_8(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    strb %s, [%s]\n", arch->regs32[rhsReg], arch->regs64[lhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov byte ptr [%s], %s\n", arch->regs64[lhsReg], arch->regs8[rhsReg]);
+        }
+        if (type_is_16(node->type)) {
+            if (arch->kind == ARCH_ARM64) fprintf(f, "    strh %s, [%s]\n", arch->regs32[rhsReg], arch->regs64[lhsReg]);
+            if (arch->kind == ARCH_X86_64) fprintf(f, "    mov word ptr [%s], %s\n", arch->regs64[lhsReg], arch->regs16[rhsReg]);
+        }
         if (type_is_32(node->type)) {
             if (arch->kind == ARCH_ARM64) fprintf(f, "    str %s, [%s]\n", arch->regs32[rhsReg], arch->regs64[lhsReg]);
             if (arch->kind == ARCH_X86_64) fprintf(f, "    mov dword ptr [%s], %s\n", arch->regs64[lhsReg], arch->regs32[rhsReg]);
