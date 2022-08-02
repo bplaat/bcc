@@ -10,6 +10,7 @@
 typedef enum TokenKind {
     TOKEN_INTEGER,
     TOKEN_CHARACTER,
+    TOKEN_STRING,
     TOKEN_VARIABLE,
 
     TOKEN_LPAREN,

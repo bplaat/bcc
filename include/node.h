@@ -3,14 +3,26 @@
 #include "type.h"
 #include "utils.h"
 
+typedef enum VarKind {
+    VAR_LOCAL,
+    VAR_GLOBAL
+} VarKind;
+
 typedef struct Var {
+    VarKind kind;
     char *name;
     Type *type;
-    size_t offset;
-    bool global;
+    union {
+        size_t offset;
+        uint8_t *data;
+    };
 } Var;
 
-Var *var_new(char *string, Type *type, size_t offset, bool global);
+Var *var_new(VarKind kind, char *name, Type *type);
+
+Var *var_new_local(char *name, Type *type, size_t offset);
+
+Var *var_new_global(char *name, Type *type, uint8_t *data);
 
 typedef enum NodeKind {
     NODE_PROGRAM,

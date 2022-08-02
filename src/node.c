@@ -3,12 +3,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-Var *var_new(char *string, Type *type, size_t offset, bool global) {
+Var *var_new(VarKind kind, char *name, Type *type) {
     Var *var = malloc(sizeof(Var));
-    var->name = string;
+    var->kind = kind;
+    var->name = name;
     var->type = type;
+    return var;
+}
+
+Var *var_new_local(char *name, Type *type, size_t offset) {
+    Var *var = var_new(VAR_LOCAL, name, type);
     var->offset = offset;
-    var->global = global;
+    return var;
+}
+
+Var *var_new_global(char *name, Type *type, uint8_t *data) {
+    Var *var = var_new(VAR_GLOBAL, name, type);
+    var->data = data;
     return var;
 }
 
@@ -68,6 +79,16 @@ char *node_to_string(Node *node) {
                 list_add(sb, type_to_string(var->type));
                 list_add(sb, " ");
                 list_add(sb, var->name);
+                if (var->data != NULL) {
+                    list_add(sb, " = { ");
+                    for (int32_t i = 0; i < var->type->size; i++) {
+                        list_add(sb, format("0x%02x", var->data[i]));
+                        if (i != var->type->size - 1) {
+                            list_add(sb, ", ");
+                        }
+                    }
+                    list_add(sb, " }");
+                }
                 list_add(sb, "; ");
             }
             list_add(sb, "\n");

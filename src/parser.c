@@ -11,6 +11,7 @@ Node *parser(Arch *arch, char *text, List *tokens) {
     parser.text = text;
     parser.tokens = tokens;
     parser.position = 0;
+    parser.uniqueGlobal = 1;
     return parser_program(&parser);
 }
 
@@ -131,7 +132,7 @@ Node *parser_program(Parser *parser) {
                     char *name = current()->string;
                     parser_eat(parser, TOKEN_VARIABLE);
 
-                    Var *var = var_new(name, type, align(type->size, parser->arch->wordSize), false);
+                    Var *var = var_new_local(name, type, align(type->size, parser->arch->wordSize));
                     for (size_t i = 0; i < funcdefNode->vars->size; i++) {
                         Var *otherVar = list_get(funcdefNode->vars, i);
                         otherVar->offset += var->offset;
@@ -185,7 +186,7 @@ Node *parser_program(Parser *parser) {
                 parser_eat(parser, TOKEN_VARIABLE);
                 type = parser_type_suffix(parser, type);
 
-                list_add(parser->currentProgram->vars, var_new(name, type, 0, true));
+                list_add(parser->currentProgram->vars, var_new_global(name, type, NULL));
                 if (current()->kind == TOKEN_COMMA) {
                     parser_eat(parser, TOKEN_COMMA);
                 } else {
@@ -325,7 +326,7 @@ Node *parser_decls(Parser *parser) {
             parser_eat(parser, TOKEN_VARIABLE);
             type = parser_type_suffix(parser, type);
 
-            var = var_new(name, type, align(type->size, parser->arch->wordSize), false);
+            var = var_new_local(name, type, align(type->size, parser->arch->wordSize));
             for (size_t i = 0; i < parser->currentFuncdef->vars->size; i++) {
                 Var *otherVar = list_get(parser->currentFuncdef->vars, i);
                 otherVar->offset += var->offset;
@@ -574,6 +575,12 @@ Node *parser_primary(Parser *parser) {
         Node *node = node_new_integer(current()->integer, 1, false);
         parser_eat(parser, TOKEN_CHARACTER);
         return node;
+    }
+    if (current()->kind == TOKEN_STRING) {
+        Var *var = var_new_global(format("G%d", parser->uniqueGlobal++), type_new_array(type_new(TYPE_INTEGER, 1, false), strlen(current()->string) + 1), (uint8_t *)current()->string);
+        list_add(parser->currentProgram->vars, var);
+        parser_eat(parser, TOKEN_STRING);
+        return node_new_var(var);
     }
     if (current()->kind == TOKEN_VARIABLE) {
         if (next(0)->kind == TOKEN_LPAREN) {

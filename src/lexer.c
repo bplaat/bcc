@@ -26,6 +26,7 @@ Token *token_new_string(TokenKind kind, size_t position, char *string) {
 char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_INTEGER) return strdup("integer");
     if (kind == TOKEN_CHARACTER) return strdup("character");
+    if (kind == TOKEN_STRING) return strdup("string");
     if (kind == TOKEN_VARIABLE) return strdup("variable");
 
     if (kind == TOKEN_LPAREN) return strdup("(");
@@ -102,6 +103,19 @@ List *lexer(char *text) {
             c++;
             list_add(tokens, token_new_integer(TOKEN_CHARACTER, position, *c));
             c += 2;
+            continue;
+        }
+
+        if (*c == '"') {
+            c++;
+            char *ptr = c;
+            while (*c != '"') c++;
+            size_t size = c - ptr;
+            char *string = malloc(size + 1);
+            memcpy(string, ptr, size);
+            string[size] = '\0';
+            c++;
+            list_add(tokens, token_new_string(TOKEN_STRING, position, string));
             continue;
         }
 
