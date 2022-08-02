@@ -11,7 +11,7 @@ Node *parser(Arch *arch, char *text, List *tokens) {
     parser.text = text;
     parser.tokens = tokens;
     parser.position = 0;
-    parser.uniqueGlobal = 1;
+    parser.uniqueString = 0;
     return parser_program(&parser);
 }
 
@@ -577,7 +577,7 @@ Node *parser_primary(Parser *parser) {
         return node;
     }
     if (current()->kind == TOKEN_STRING) {
-        Var *var = var_new_global(format("G%d", parser->uniqueGlobal++), type_new_array(type_new(TYPE_INTEGER, 1, false), strlen(current()->string) + 1), (uint8_t *)current()->string);
+        Var *var = var_new_global(format("str%d", parser->uniqueString++), type_new_array(type_new(TYPE_INTEGER, 1, false), strlen(current()->string) + 1), (uint8_t *)current()->string);
         list_add(parser->currentProgram->vars, var);
         parser_eat(parser, TOKEN_STRING);
         return node_new_var(var);

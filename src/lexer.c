@@ -111,10 +111,31 @@ List *lexer(char *text) {
             char *ptr = c;
             while (*c != '"') c++;
             size_t size = c - ptr;
-            char *string = malloc(size + 1);
-            memcpy(string, ptr, size);
-            string[size] = '\0';
             c++;
+
+            char *string = malloc(size + 1);
+            int32_t strpos = 0;
+            for (size_t i = 0; i < size; i++) {
+                if (ptr[i] == '\\') {
+                    i++;
+                    if (ptr[i] == 'a') string[strpos++] = '\a';
+                    else if (ptr[i] == 'b') string[strpos++] = '\b';
+                    else if (ptr[i] == 'e') string[strpos++] = 27;
+                    else if (ptr[i] == 'f') string[strpos++] = '\f';
+                    else if (ptr[i] == 'n') string[strpos++] = '\n';
+                    else if (ptr[i] == 'r') string[strpos++] = '\r';
+                    else if (ptr[i] == 't') string[strpos++] = '\t';
+                    else if (ptr[i] == 'v') string[strpos++] = '\v';
+                    else if (ptr[i] == '\\') string[strpos++] = '\\';
+                    else if (ptr[i] == '\'') string[strpos++] = '\'';
+                    else if (ptr[i] == '"') string[strpos++] = '"';
+                    else if (ptr[i] == '?') string[strpos++] = '?';
+                    else string[strpos++] = ptr[i];
+                } else {
+                    string[strpos++] = ptr[i];
+                }
+            }
+            string[strpos] = '\0';
             list_add(tokens, token_new_string(TOKEN_STRING, position, string));
             continue;
         }

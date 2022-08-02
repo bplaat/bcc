@@ -12,7 +12,7 @@ typedef struct Parser {
     int32_t position;
     Node *currentProgram;
     Node *currentFuncdef;
-    int32_t uniqueGlobal;
+    int32_t uniqueString;
 } Parser;
 
 Node *parser(Arch *arch, char *text, List *tokens);
