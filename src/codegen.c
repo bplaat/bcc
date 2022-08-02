@@ -172,8 +172,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
                 if (arch->kind == ARCH_X86_64) {
                     fprintf(f, "    lea %s, [rip + _%s]\n", arch->regs64[reg], node->var->name);
                 }
-            }
-            else if (type_is_8(node->type)) {
+            } else if (type_is_8(node->type)) {
                 if (arch->kind == ARCH_ARM64) {
                     fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
                     fprintf(f, "    ldrb %s, [%s, _%s@PAGEOFF]\n", arch->regs32[reg], arch->regs64[reg], node->var->name);
@@ -181,8 +180,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
                 if (arch->kind == ARCH_X86_64) {
                     fprintf(f, "    movzx %s, byte ptr [rip + _%s]\n", arch->regs32[reg], node->var->name);
                 }
-            }
-            else if (type_is_16(node->type)) {
+            } else if (type_is_16(node->type)) {
                 if (arch->kind == ARCH_ARM64) {
                     fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
                     fprintf(f, "    ldrh %s, [%s, _%s@PAGEOFF]\n", arch->regs32[reg], arch->regs64[reg], node->var->name);
@@ -190,8 +188,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
                 if (arch->kind == ARCH_X86_64) {
                     fprintf(f, "    movzx %s, word ptr [rip + _%s]\n", arch->regs32[reg], node->var->name);
                 }
-            }
-            else if (type_is_32(node->type)) {
+            } else if (type_is_32(node->type)) {
                 if (arch->kind == ARCH_ARM64) {
                     fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
                     fprintf(f, "    ldr %s, [%s, _%s@PAGEOFF]\n", arch->regs32[reg], arch->regs64[reg], node->var->name);
@@ -199,8 +196,7 @@ int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg) {
                 if (arch->kind == ARCH_X86_64) {
                     fprintf(f, "    mov %s, dword ptr [rip + _%s]\n", arch->regs32[reg], node->var->name);
                 }
-            }
-            else if (type_is_64(node->type)) {
+            } else if (type_is_64(node->type)) {
                 if (arch->kind == ARCH_ARM64) {
                     fprintf(f, "    adrp %s, _%s@PAGE\n", arch->regs64[reg], node->var->name);
                     fprintf(f, "    ldr %s, [%s, _%s@PAGEOFF]\n", arch->regs64[reg], arch->regs64[reg], node->var->name);

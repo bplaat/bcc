@@ -132,8 +132,7 @@ List *lexer(char *text) {
                             }
                         }
                         string[strpos++] = num;
-                    }
-                    else if (ptr[i] == 'x') {
+                    } else if (ptr[i] == 'x') {
                         i++;
                         int32_t num = 0;
                         while (isxdigit(ptr[i])) {
@@ -145,20 +144,32 @@ List *lexer(char *text) {
                             i++;
                         }
                         string[strpos++] = num;
-                    }
-                    else if (ptr[i] == 'a') string[strpos++] = '\a';
-                    else if (ptr[i] == 'b') string[strpos++] = '\b';
-                    else if (ptr[i] == 'e') string[strpos++] = 27;
-                    else if (ptr[i] == 'f') string[strpos++] = '\f';
-                    else if (ptr[i] == 'n') string[strpos++] = '\n';
-                    else if (ptr[i] == 'r') string[strpos++] = '\r';
-                    else if (ptr[i] == 't') string[strpos++] = '\t';
-                    else if (ptr[i] == 'v') string[strpos++] = '\v';
-                    else if (ptr[i] == '\\') string[strpos++] = '\\';
-                    else if (ptr[i] == '\'') string[strpos++] = '\'';
-                    else if (ptr[i] == '"') string[strpos++] = '"';
-                    else if (ptr[i] == '?') string[strpos++] = '?';
-                    else string[strpos++] = ptr[i];
+                    } else if (ptr[i] == 'a')
+                        string[strpos++] = '\a';
+                    else if (ptr[i] == 'b')
+                        string[strpos++] = '\b';
+                    else if (ptr[i] == 'e')
+                        string[strpos++] = 27;
+                    else if (ptr[i] == 'f')
+                        string[strpos++] = '\f';
+                    else if (ptr[i] == 'n')
+                        string[strpos++] = '\n';
+                    else if (ptr[i] == 'r')
+                        string[strpos++] = '\r';
+                    else if (ptr[i] == 't')
+                        string[strpos++] = '\t';
+                    else if (ptr[i] == 'v')
+                        string[strpos++] = '\v';
+                    else if (ptr[i] == '\\')
+                        string[strpos++] = '\\';
+                    else if (ptr[i] == '\'')
+                        string[strpos++] = '\'';
+                    else if (ptr[i] == '"')
+                        string[strpos++] = '"';
+                    else if (ptr[i] == '?')
+                        string[strpos++] = '?';
+                    else
+                        string[strpos++] = ptr[i];
                 } else {
                     string[strpos++] = ptr[i];
                 }

@@ -3,10 +3,7 @@
 #include "type.h"
 #include "utils.h"
 
-typedef enum VarKind {
-    VAR_LOCAL,
-    VAR_GLOBAL
-} VarKind;
+typedef enum VarKind { VAR_LOCAL, VAR_GLOBAL } VarKind;
 
 typedef struct Var {
     VarKind kind;
