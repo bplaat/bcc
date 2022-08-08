@@ -1,5 +1,7 @@
 .DS_Store
 bcc
+test
 *.s
 *.o
-test
+*.exe
+*.bin

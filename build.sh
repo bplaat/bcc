@@ -24,7 +24,6 @@ fi
 
 # Compile shared libs
 cat <<EOF | gcc -Os -xc -c -o lib-arm64.o -
-#include <stdint.h>
 int ret3(void) { return 3; }
 int ret5(void) { return 5; }
 int add(int x, int y) { return x+y; }
@@ -35,7 +34,6 @@ int add6(int a, int b, int c, int d, int e, int f) {
 EOF
 
 cat <<EOF | arch -x86_64 gcc -Os -xc -c -o lib-x86_64.o -
-#include <stdint.h>
 int ret3(void) { return 3; }
 int ret5(void) { return 5; }
 int add(int x, int y) { return x+y; }
