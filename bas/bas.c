@@ -124,7 +124,6 @@ void print_error(char *path, List *lines, int32_t line, int32_t position, char *
 // ##############################################
 
 typedef enum ArchKind {
-    ARCH_X86,
     ARCH_X86_64
 } ArchKind;
 
@@ -150,13 +149,62 @@ typedef enum TokenKind {
     TOKEN_NEWLINE,
     TOKEN_EOF,
 
-    TOKEN_TIMES,
-
     TOKEN_ADD,
     TOKEN_SUB,
     TOKEN_MUL,
     TOKEN_DIV,
-    TOKEN_MOD
+    TOKEN_MOD,
+
+    // Shared
+    TOKEN_TIMES,
+    TOKEN_DB,
+    TOKEN_DW,
+    TOKEN_DD,
+    TOKEN_DQ,
+
+    // x86_64
+    TOKEN_BYTE,
+    TOKEN_WORD,
+    TOKEN_DWORD,
+    TOKEN_QWORD,
+    TOKEN_PTR,
+
+    TOKEN_EAX,
+    TOKEN_ECX,
+    TOKEN_EDX,
+    TOKEN_EBX,
+    TOKEN_ESP,
+    TOKEN_EBP,
+    TOKEN_ESI,
+    TOKEN_EDI,
+    TOKEN_RAX,
+    TOKEN_RCX,
+    TOKEN_RDX,
+    TOKEN_RBX,
+    TOKEN_RSP,
+    TOKEN_RBP,
+    TOKEN_RSI,
+    TOKEN_RDI,
+
+    TOKEN_X86_64_NOP,
+    TOKEN_X86_64_MOV,
+    TOKEN_X86_64_LEA,
+    TOKEN_X86_64_ADD,
+    TOKEN_X86_64_ADC,
+    TOKEN_X86_64_SUB,
+    TOKEN_X86_64_SBB,
+    TOKEN_X86_64_CMP,
+    TOKEN_X86_64_AND,
+    TOKEN_X86_64_OR,
+    TOKEN_X86_64_XOR,
+    TOKEN_X86_64_NEG,
+    TOKEN_X86_64_PUSH,
+    TOKEN_X86_64_POP,
+    TOKEN_X86_64_SYSCALL,
+    TOKEN_X86_64_CDQ,
+    TOKEN_X86_64_CQO,
+    TOKEN_X86_64_LEAVE,
+    TOKEN_X86_64_RET
 } TokenKind;
 
 typedef struct Token {
@@ -203,13 +251,47 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_NEWLINE) return strdup("\\n");
     if (kind == TOKEN_EOF) return strdup("EOF");
 
-    if (kind == TOKEN_TIMES) return strdup("times");
-
     if (kind == TOKEN_ADD) return strdup("+");
     if (kind == TOKEN_SUB) return strdup("-");
     if (kind == TOKEN_MUL) return strdup("*");
     if (kind == TOKEN_DIV) return strdup("/");
     if (kind == TOKEN_MOD) return strdup("%");
+
+    // Shared
+    if (kind == TOKEN_TIMES) return strdup("times");
+    if (kind == TOKEN_DB) return strdup("db");
+    if (kind == TOKEN_DW) return strdup("dw");
+    if (kind == TOKEN_DD) return strdup("dd");
+    if (kind == TOKEN_DQ) return strdup("dq");
+
+    // x86_64
+    if (kind == TOKEN_BYTE) return strdup("byte");
+    if (kind == TOKEN_WORD) return strdup("word");
+    if (kind == TOKEN_DWORD) return strdup("dword");
+    if (kind == TOKEN_QWORD) return strdup("qword");
+    if (kind == TOKEN_PTR) return strdup("ptr");
+
+    if (kind >= TOKEN_EAX && kind <= TOKEN_RDI) return strdup("register");
+
+    if (kind == TOKEN_X86_64_NOP) return strdup("nop");
+    if (kind == TOKEN_X86_64_MOV) return strdup("mov");
+    if (kind == TOKEN_X86_64_LEA) return strdup("lea");
+    if (kind == TOKEN_X86_64_ADD) return strdup("add");
+    if (kind == TOKEN_X86_64_ADC) return strdup("add");
+    if (kind == TOKEN_X86_64_SUB) return strdup("sub");
+    if (kind == TOKEN_X86_64_SBB) return strdup("sbb");
+    if (kind == TOKEN_X86_64_CMP) return strdup("cmp");
+    if (kind == TOKEN_X86_64_AND) return strdup("and");
+    if (kind == TOKEN_X86_64_OR) return strdup("or");
+    if (kind == TOKEN_X86_64_XOR) return strdup("xor");
+    if (kind == TOKEN_X86_64_NEG) return strdup("neg");
+    if (kind == TOKEN_X86_64_PUSH) return strdup("push");
+    if (kind == TOKEN_X86_64_POP) return strdup("pop");
+    if (kind == TOKEN_X86_64_SYSCALL) return strdup("syscall");
+    if (kind == TOKEN_X86_64_CDQ) return strdup("cdq");
+    if (kind == TOKEN_X86_64_CQO) return strdup("cqo");
+    if (kind == TOKEN_X86_64_LEAVE) return strdup("leave");
+    if (kind == TOKEN_X86_64_RET) return strdup("ret");
     return NULL;
 }
 
@@ -218,10 +300,31 @@ typedef struct Keyword {
     TokenKind kind;
 } Keyword;
 
-List *lexer(char *path, List *lines) {
+List *lexer(Arch *arch, char *path, List *lines) {
     List *tokens = list_new(1024);
 
-    Keyword keywords[] = {{"times", TOKEN_TIMES}};
+    Keyword *keywords;
+    size_t keywordsSize;
+    if (arch->kind == ARCH_X86_64) {
+        Keyword _keywords[] = {
+            {"times", TOKEN_TIMES}, {"db", TOKEN_DB}, {"dw", TOKEN_DW}, {"dd", TOKEN_DD}, {"dq", TOKEN_DQ},
+
+            {"byte", TOKEN_BYTE}, {"word", TOKEN_WORD}, {"dword", TOKEN_DWORD}, {"qword", TOKEN_QWORD}, {"ptr", TOKEN_PTR},
+
+            {"eax", TOKEN_EAX}, {"ecx", TOKEN_ECX}, {"edx", TOKEN_EDX}, {"ebx", TOKEN_EBX},
+            {"esp", TOKEN_ESP}, {"ebp", TOKEN_EBP}, {"esi", TOKEN_ESI}, {"edi", TOKEN_EDI},
+            {"rax", TOKEN_RAX}, {"rcx", TOKEN_RCX}, {"rdx", TOKEN_RDX}, {"rbx", TOKEN_RBX},
+            {"rsp", TOKEN_RSP}, {"rbp", TOKEN_RBP}, {"rsi", TOKEN_RSI}, {"rdi", TOKEN_RDI},
+
+            {"nop", TOKEN_X86_64_NOP}, {"mov", TOKEN_X86_64_MOV}, {"lea", TOKEN_X86_64_LEA}, {"add", TOKEN_X86_64_ADD}, {"adc", TOKEN_X86_64_ADC},
+            {"sub", TOKEN_X86_64_SUB}, {"sbb", TOKEN_X86_64_SBB}, {"cmp", TOKEN_X86_64_CMP},
+            {"and", TOKEN_X86_64_AND}, {"or", TOKEN_X86_64_OR}, {"xor", TOKEN_X86_64_XOR}, {"neg", TOKEN_X86_64_NEG},
+            {"push", TOKEN_X86_64_PUSH}, {"pop", TOKEN_X86_64_POP}, {"syscall", TOKEN_X86_64_SYSCALL},
+            {"cdq", TOKEN_X86_64_CDQ}, {"cqo", TOKEN_X86_64_CQO}, {"leave", TOKEN_X86_64_LEAVE}, {"ret", TOKEN_X86_64_RET}
+        };
+        keywords = _keywords;
+        keywordsSize = sizeof(_keywords) / sizeof(Keyword);
+    }
 
     for (size_t line = 0; line < lines->size; line++) {
         char *text = list_get(lines, line);
@@ -264,7 +367,7 @@ List *lexer(char *path, List *lines) {
                 string[size] = '\0';
 
                 bool found = false;
-                for (size_t i = 0; i < sizeof(keywords) / sizeof(Keyword); i++) {
+                for (size_t i = 0; i < keywordsSize; i++) {
                     Keyword *keyword = &keywords[i];
                     if (!strcmp(string, keyword->keyword)) {
                         list_add(tokens, token_new(keyword->kind, line, position));
@@ -455,18 +558,18 @@ struct Node {
     union {
         int64_t integer;
         char *string;
-        Node *unary;
+        struct {
+            int32_t reg;
+            int32_t size;
+            Node *unary;
+        };
         struct {
             Node *lhs;
             Node *rhs;
         };
         struct {
-            char *name;
+            TokenKind opcode;
             List *nodes;
-        };
-        struct {
-            int32_t reg;
-            int32_t size;
         };
     };
 };
@@ -529,7 +632,7 @@ char *node_to_string(Node *node) {
     }
     if (node->kind == NODE_INSTRUCTION) {
         List *sb = list_new(8);
-        list_add(sb, node->name);
+        list_add(sb, token_kind_to_string(node->opcode));
         list_add(sb, " ");
         for (size_t i = 0; i < node->nodes->size; i++) {
             list_add(sb, node_to_string(list_get(node->nodes, i)));
@@ -561,7 +664,11 @@ char *node_to_string(Node *node) {
     }
     if (node->kind == NODE_ADDR) {
         List *sb = list_new(8);
-        list_add(sb, "[");
+        if (node->size == 8) list_add(sb, "byte");
+        if (node->size == 16) list_add(sb, "word");
+        if (node->size == 32) list_add(sb, "dword");
+        if (node->size == 64) list_add(sb, "qword");
+        list_add(sb, " ptr [");
         list_add(sb, node_to_string(node->unary));
         list_add(sb, "]");
         return list_to_string(sb);
@@ -590,15 +697,32 @@ char *node_to_string(Node *node) {
     }
 
     if (node->kind == NODE_REGISTER) {
-        if (node->reg == 0 && node->size == 32) return strdup("eax");
-        if (node->reg == 1 && node->size == 32) return strdup("ecx");
-        if (node->reg == 2 && node->size == 32) return strdup("edx");
-        if (node->reg == 3 && node->size == 32) return strdup("ebx");
+        if (node->size == 32) {
+            if (node->reg == 0) return strdup("eax");
+            if (node->reg == 1) return strdup("ecx");
+            if (node->reg == 2) return strdup("edx");
+            if (node->reg == 3) return strdup("ebx");
+            if (node->reg == 4) return strdup("esp");
+            if (node->reg == 5) return strdup("ebp");
+            if (node->reg == 6) return strdup("esi");
+            if (node->reg == 7) return strdup("edi");
+        }
+        if (node->size == 64) {
+            if (node->reg == 0) return strdup("rax");
+            if (node->reg == 1) return strdup("rcx");
+            if (node->reg == 2) return strdup("rdx");
+            if (node->reg == 3) return strdup("rbx");
+            if (node->reg == 4) return strdup("rsp");
+            if (node->reg == 5) return strdup("rbp");
+            if (node->reg == 6) return strdup("rsi");
+            if (node->reg == 7) return strdup("rdi");
+        }
     }
     return NULL;
 }
 
 typedef struct Parser {
+    Arch *arch;
     char *path;
     List *lines;
     List *tokens;
@@ -612,8 +736,9 @@ Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);
 Node *parser_primary(Parser *parser);
 
-Node *parser(char *path, List *lines, List *tokens) {
+Node *parser(Arch *arch, char *path, List *lines, List *tokens) {
     Parser parser;
+    parser.arch = arch;
     parser.path = path;
     parser.lines = lines;
     parser.tokens = tokens;
@@ -656,21 +781,24 @@ Node *parser_statement(Parser *parser) {
         return NULL;
     }
 
-    if (current()->kind == TOKEN_KEYWORD) {
+    if (current()->kind == TOKEN_KEYWORD && next(0)->kind == TOKEN_COLON) {
         char *name = current()->string;
         parser_eat(parser, TOKEN_KEYWORD);
-
-        if (current()->kind == TOKEN_COLON) {
-            parser_eat(parser, TOKEN_COLON);
-            Node *node = node_new_string(NODE_LABEL, name);
-            if (current()->kind == TOKEN_NEWLINE) {
-                parser_eat(parser, TOKEN_NEWLINE);
-            }
-            return node;
+        parser_eat(parser, TOKEN_COLON);
+        Node *node = node_new_string(NODE_LABEL, name);
+        if (current()->kind == TOKEN_NEWLINE) {
+            parser_eat(parser, TOKEN_NEWLINE);
         }
+        return node;
+    }
 
+    if (
+        (current()->kind >= TOKEN_TIMES && current()->kind <= TOKEN_DQ) ||
+        (current()->kind >= TOKEN_X86_64_NOP && current()->kind <= TOKEN_X86_64_RET)
+    ) {
         Node *instructionNode = node_new_multiple(NODE_INSTRUCTION);
-        instructionNode->name = name;
+        instructionNode->opcode = current()->kind;
+        parser_eat(parser, current()->kind);
         while (current()->kind != TOKEN_NEWLINE) {
             Node *node = parser_add(parser);
             if (node != NULL) list_add(instructionNode->nodes, node);
@@ -761,32 +889,54 @@ Node *parser_primary(Parser *parser) {
         parser_eat(parser, TOKEN_STRING);
         return node;
     }
-    if (current()->kind == TOKEN_KEYWORD) {
-        if (!strcmp(current()->string, "eax")) {
-            parser_eat(parser, TOKEN_KEYWORD);
-            return node_new_register(0, 32);
+
+    if (
+        (current()->kind >= TOKEN_BYTE && current()->kind <= TOKEN_QWORD) ||
+        current()->kind == TOKEN_LBRACKET
+    ) {
+        size_t size = 0;
+        if (current()->kind == TOKEN_BYTE) {
+            size = 8;
+            parser_eat(parser, TOKEN_BYTE);
         }
-        if (!strcmp(current()->string, "ecx")) {
-            parser_eat(parser, TOKEN_KEYWORD);
-            return node_new_register(1, 32);
+        else if (current()->kind == TOKEN_WORD) {
+            size = 16;
+            parser_eat(parser, TOKEN_WORD);
         }
-        if (!strcmp(current()->string, "edx")) {
-            parser_eat(parser, TOKEN_KEYWORD);
-            return node_new_register(2, 32);
+        else if (current()->kind == TOKEN_DWORD) {
+            size = 32;
+            parser_eat(parser, TOKEN_DWORD);
         }
-        if (!strcmp(current()->string, "ebx")) {
-            parser_eat(parser, TOKEN_KEYWORD);
-            return node_new_register(3, 32);
+        else if (current()->kind == TOKEN_QWORD) {
+            size = 64;
+            parser_eat(parser, TOKEN_QWORD);
+        }
+        if (current()->kind == TOKEN_PTR) {
+            parser_eat(parser, TOKEN_PTR);
         }
 
-        Node *node = node_new_string(NODE_KEYWORD, current()->string);
-        parser_eat(parser, TOKEN_KEYWORD);
-        return node;
-    }
-    if (current()->kind == TOKEN_LBRACKET) {
         parser_eat(parser, TOKEN_LBRACKET);
         Node *node = node_new_unary(NODE_ADDR, parser_add(parser));
+        node->size = size;
         parser_eat(parser, TOKEN_RBRACKET);
+        return node;
+    }
+
+    if (current()->kind >= TOKEN_EAX && current()->kind <= TOKEN_RDI) {
+        Node *node;
+        if (current()->kind >= TOKEN_EAX && current()->kind <= TOKEN_EDI) {
+            node = node_new_register(current()->kind - TOKEN_EAX, 32);
+        }
+        if (current()->kind >= TOKEN_RAX && current()->kind <= TOKEN_RDI) {
+            node = node_new_register(current()->kind - TOKEN_RAX, 64);
+        }
+        parser_eat(parser, current()->kind);
+        return node;
+    }
+
+    if (current()->kind == TOKEN_KEYWORD) {
+        Node *node = node_new_string(NODE_KEYWORD, current()->string);
+        parser_eat(parser, TOKEN_KEYWORD);
         return node;
     }
 
@@ -797,6 +947,12 @@ Node *parser_primary(Parser *parser) {
 // ##############################################
 // ################### CODEGEN ##################
 // ##############################################
+
+void IMM16(uint8_t **end, int16_t imm) {
+    int16_t *c = (int16_t *)*end;
+    *c++ = imm;
+    *end = (uint8_t *)c;
+}
 
 void IMM32(uint8_t **end, int32_t imm) {
     int32_t *c = (int32_t *)*end;
@@ -849,12 +1005,11 @@ void node_write(Arch *arch, uint8_t **end, Node *node) {
 
     if (node->kind == NODE_INSTRUCTION) {
         uint64_t zero = 0;
-
-        if (!strcmp(node->name, "db") || !strcmp(node->name, "dw") || !strcmp(node->name, "dd") || !strcmp(node->name, "dq")) {
+        if (node->opcode >= TOKEN_DB && node->opcode <= TOKEN_DQ) {
             size_t size = 1;
-            if (!strcmp(node->name, "dw")) size = 2;
-            if (!strcmp(node->name, "dd")) size = 4;
-            if (!strcmp(node->name, "dq")) size = 8;
+            if (node->opcode == TOKEN_DW) size = 2;
+            if (node->opcode == TOKEN_DD) size = 4;
+            if (node->opcode == TOKEN_DQ) size = 8;
             for (size_t i = 0; i < node->nodes->size; i++) {
                 Node *child = list_get(node->nodes, i);
                 if (child->kind == NODE_STRING) {
@@ -871,37 +1026,210 @@ void node_write(Arch *arch, uint8_t **end, Node *node) {
             }
         }
 
-        if (!strcmp(node->name, "nop")) {
+        if (node->opcode == TOKEN_X86_64_NOP) {
             *c++ = 0x90;
         }
 
-        if (!strcmp(node->name, "mov")) {
+        if (node->opcode >= TOKEN_X86_64_MOV && node->opcode <= TOKEN_X86_64_XOR) {
             Node *dest = (Node *)list_get(node->nodes, 0);
             Node *src = (Node *)list_get(node->nodes, 1);
 
+            int32_t opcode, opcode2;
+            if (node->opcode == TOKEN_X86_64_MOV) opcode = 0x89, opcode2 = 0b000;
+            if (node->opcode == TOKEN_X86_64_LEA) opcode = 0x8d, opcode2 = 0b000;
+            if (node->opcode == TOKEN_X86_64_ADD) opcode = 0x01, opcode2 = 0b000;
+            if (node->opcode == TOKEN_X86_64_ADC) opcode = 0x11, opcode2 = 0b010;
+            if (node->opcode == TOKEN_X86_64_SUB) opcode = 0x29, opcode2 = 0b101;
+            if (node->opcode == TOKEN_X86_64_SBB) opcode = 0x19, opcode2 = 0b011;
+            if (node->opcode == TOKEN_X86_64_CMP) opcode = 0x39, opcode2 = 0b111;
+            if (node->opcode == TOKEN_X86_64_AND) opcode = 0x21, opcode2 = 0b100;
+            if (node->opcode == TOKEN_X86_64_OR) opcode = 0x09, opcode2 = 0b001;
+            if (node->opcode == TOKEN_X86_64_XOR) opcode = 0x31, opcode2 = 0b110;
+            if (dest->size == 64) *c++ = 0x48;
             if (dest->kind == NODE_REGISTER) {
                 if (src->kind == NODE_REGISTER) {
-                    *c++ = 0x89;
+                    *c++ = opcode;
                     *c++ = (0b11 << 6) | (src->reg << 3) | dest->reg;
-                } else {
-                    *c++ = 0xb8 + dest->reg;
-                    if (dest->size == 64) {
-                        IMM64(&c, node_calc(src));
+                }
+
+                if (src->kind == NODE_ADDR) {
+                    if (dest->size != src->size) {
+                        fprintf(stderr, "ERROR addr size and dest reg are not the same\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    if (src->unary->kind != NODE_ADD && src->unary->kind != NODE_SUB) {
+                        fprintf(stderr, "ERROR addr must contain add or sub\n");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    Node *srcreg = src->unary->lhs;
+                    int64_t disp = src->unary->rhs->integer;
+                    if (src->unary->kind == NODE_SUB) disp = -disp;
+                    if (srcreg->size == 32) {
+                        fprintf(stderr, "ERROR addr reg not 64\n");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    *c++ = node->opcode == TOKEN_X86_64_LEA ? opcode : (opcode | 0b10);
+                    if (disp >= -128 && disp <= 127) {
+                        *c++ = (0b01 << 6) | (dest->reg << 3) | srcreg->reg;
+                        *c++ = disp;
                     } else {
-                        IMM32(&c, node_calc(src));
+                        *c++ = (0b10 << 6) | (dest->reg << 3) | srcreg->reg;
+                        IMM32(&c, disp);
+                    }
+                }
+
+                if (src->kind == NODE_INTEGER) {
+                    if (node->opcode == TOKEN_X86_64_MOV) {
+                        *c++ = 0xb8 + dest->reg;
+                        if (dest->size == 64) {
+                            IMM64(&c, src->integer);
+                        } else {
+                            IMM32(&c, src->integer);
+                        }
+                    } else {
+                        *c++ = src->integer >= -128 && src->integer <= 127 ? 0x83 : 0x81;
+                        *c++ = (0b11 << 6) | (opcode2 << 3) | dest->reg;
+                        if (src->integer >= -128 && src->integer <= 127) {
+                            *c++ = src->integer;
+                        } else {
+                            IMM32(&c, src->integer);
+                        }
+                    }
+                }
+            }
+            if (dest->kind == NODE_ADDR) {
+                if (dest->unary->kind != NODE_ADD && dest->unary->kind != NODE_SUB) {
+                    fprintf(stderr, "ERROR addr must contain add or sub\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                Node *destreg = dest->unary->lhs;
+                int64_t disp = dest->unary->rhs->integer;
+                if (dest->unary->kind == NODE_SUB) disp = -disp;
+                if (destreg->size == 32) {
+                    fprintf(stderr, "ERROR addr reg not 64\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                if (src->kind == NODE_REGISTER) {
+                    if (dest->size != src->size) {
+                        fprintf(stderr, "ERROR addr size and dest reg are not the same\n");
+                        exit(EXIT_FAILURE);
+                    }
+
+                    *c++ = opcode;
+                    if (disp >= -128 && disp <= 127) {
+                        *c++ = (0b01 << 6) | (src->reg << 3) | destreg->reg;
+                        *c++ = disp;
+                    } else {
+                        *c++ = (0b10 << 6) | (src->reg << 3) | destreg->reg;
+                        IMM32(&c, disp);
+                    }
+                }
+                if (src->kind == NODE_INTEGER) {
+                    *c++ = (src->integer >= -128 && src->integer <= 127) ? (node->opcode == TOKEN_X86_64_MOV ? 0xc6 : 0x83) : (node->opcode == TOKEN_X86_64_MOV ? 0xc7 : 0x81);
+                    if (disp >= -128 && disp <= 127) {
+                        *c++ = (0b01 << 6) | (opcode2 << 3) | destreg->reg;
+                        *c++ = disp;
+                    } else {
+                        *c++ = (0b10 << 6) | (opcode2 << 3) | destreg->reg;
+                        IMM32(&c, disp);
+                    }
+                    if (src->integer >= -128 && src->integer <= 127) {
+                        *c++ = src->integer;
+                    } else {
+                        IMM32(&c, src->integer);
                     }
                 }
             }
         }
 
+        if (node->opcode == TOKEN_X86_64_NEG) {
+            Node *dest = (Node *)list_get(node->nodes, 0);
+            if (dest->size == 64) *c++ = 0x48;
 
-        if (!strcmp(node->name, "ret")) {
-            *c++ = 0xc3;
+            if (dest->kind == NODE_REGISTER) {
+                *c++ = 0xf7;
+                *c++ = (0b11 << 6) | (0b011 << 3) | dest->reg;
+            }
+
+            if (dest->kind == NODE_ADDR) {
+                if (dest->unary->kind != NODE_ADD && dest->unary->kind != NODE_SUB) {
+                    fprintf(stderr, "ERROR addr must contain add or sub\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                Node *destreg = dest->unary->lhs;
+                int64_t disp = dest->unary->rhs->integer;
+                if (dest->unary->kind == NODE_SUB) disp = -disp;
+                if (destreg->size == 32) {
+                    fprintf(stderr, "ERROR addr reg not 64\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                *c++ = 0xf7;
+                if (disp >= -128 && disp <= 127) {
+                    *c++ = (0b01 << 6) | (0b011 << 3) | destreg->reg;
+                    *c++ = disp;
+                } else {
+                    *c++ = (0b10 << 6) | (0b011 << 3) | destreg->reg;
+                    IMM32(&c, disp);
+                }
+            }
         }
 
-        if (!strcmp(node->name, "syscall")) {
+        if (node->opcode == TOKEN_X86_64_PUSH) {
+            Node *src = (Node *)list_get(node->nodes, 0);
+            if (src->kind == NODE_REGISTER) {
+                if (src->size == 32) {
+                    fprintf(stderr, "ERROR push not 64\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                *c++ = 0x50 + src->reg;
+            }
+        }
+
+        if (node->opcode == TOKEN_X86_64_POP) {
+            Node *dest = (Node *)list_get(node->nodes, 0);
+            if (dest->kind == NODE_REGISTER) {
+                if (dest->size == 32) {
+                    fprintf(stderr, "ERROR push not 64\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                *c++ = 0x58 + dest->reg;
+            }
+        }
+
+        if (node->opcode == TOKEN_X86_64_SYSCALL) {
             *c++ = 0x0f;
             *c++ = 0x05;
+        }
+
+        if (node->opcode == TOKEN_X86_64_CDQ) {
+            *c++ = 0x99;
+        }
+
+        if (node->opcode == TOKEN_X86_64_CQO) {
+            *c++ = 0x48;
+            *c++ = 0x99;
+        }
+
+        if (node->opcode == TOKEN_X86_64_LEAVE) {
+            *c++ = 0xc9;
+        }
+
+        if (node->opcode == TOKEN_X86_64_RET) {
+            if (node->nodes->size > 0) {
+                Node *imm = (Node *)list_get(node->nodes, 0);
+                *c++ = 0xc2;
+                IMM16(&c, imm->integer);
+            } else {
+                *c++ = 0xc3;
+            }
         }
     }
 
@@ -913,7 +1241,6 @@ void node_write(Arch *arch, uint8_t **end, Node *node) {
 // ##############################################
 
 int main(int argc, char **argv) {
-    Arch x86 = { ARCH_X86 };
     Arch x86_64 = { ARCH_X86_64 };
 
     char *path = argv[1];
@@ -921,8 +1248,8 @@ int main(int argc, char **argv) {
     if (text == NULL) return EXIT_FAILURE;
 
     List *lines = split_lines(text);
-    List *tokens = lexer(path, lines);
-    Node *node = parser(path, lines, tokens);
+    List *tokens = lexer(&x86_64, path, lines);
+    Node *node = parser(&x86_64, path, lines, tokens);
     printf("%s\n", node_to_string(node));
 
     uint8_t *buffer = calloc(1024, 1);
@@ -935,6 +1262,6 @@ int main(int argc, char **argv) {
 
     system("hexdump -H test.bin");
     printf("\n");
-    system("ndisasm -b 32 test.bin");
+    system("ndisasm -b 64 test.bin");
     return EXIT_SUCCESS;
 }
