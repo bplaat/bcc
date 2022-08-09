@@ -11,4 +11,4 @@ void IMM64(uint8_t **end, int64_t imm);
 
 int64_t node_calc(Node *node);
 
-void node_write(Arch *arch, uint8_t **end, Node *node);
+void node_write(Object *object, Section *section, uint8_t **end, Node *node);

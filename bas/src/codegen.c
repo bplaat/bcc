@@ -43,19 +43,23 @@ int64_t node_calc(Node *node) {
     return 0;
 }
 
-void node_write(Arch *arch, uint8_t **end, Node *node) {
+void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
     uint8_t *c = *end;
 
     if (node->kind == NODE_PROGRAM) {
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_write(arch, &c, list_get(node->nodes, i));
+            node_write(object, section, &c, list_get(node->nodes, i));
         }
     }
 
     if (node->kind == NODE_TIMES) {
         for (int64_t i = 0; i < node->lhs->integer; i++) {
-            node_write(arch, &c, node->rhs);
+            node_write(object, section, &c, node->rhs);
         }
+    }
+
+    if (node->kind == NODE_LABEL) {
+        list_add(object->symbols, symbol_new(node->string, section, c - section->data));
     }
 
     if (node->kind == NODE_INSTRUCTION) {

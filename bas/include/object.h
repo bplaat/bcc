@@ -35,6 +35,15 @@ typedef struct Section {
 
 Section *section_new(SectionKind kind, uint8_t *data, size_t size);
 
+// Symbol
+typedef struct Symbol {
+    char *name;
+    Section *section;
+    uint32_t value;
+} Symbol;
+
+Symbol *symbol_new(char *name, Section *section, uint32_t value);
+
 // Object
 typedef enum ObjectKind {
     OBJECT_EXECUTABLE
@@ -45,9 +54,10 @@ typedef struct Object {
     Arch *arch;
     ObjectKind kind;
     List *sections;
+    List *symbols;
 } Object;
 
-typedef struct pe_header {
+typedef struct __attribute__((packed)) pe_header {
     uint32_t signature;
     uint16_t machine;
     uint16_t numberOfSections;
@@ -58,7 +68,7 @@ typedef struct pe_header {
     uint16_t characteristics;
 } pe_header;
 
-typedef struct pe_optional_header64 {
+typedef struct __attribute__((packed)) pe_optional_header64 {
     uint16_t magic;
     uint8_t majorLinkerVersion;
     uint8_t minorLinkerVersion;
@@ -90,7 +100,7 @@ typedef struct pe_optional_header64 {
     uint32_t numberOfRvaAndSizes;
 } pe_optional_header64;
 
-typedef struct pe_section {
+typedef struct __attribute__((packed)) pe_section {
     char name[8];
     uint32_t virtualSize;
     uint32_t virtualAddress;
@@ -102,6 +112,15 @@ typedef struct pe_section {
     uint16_t numberOfLinenumbers;
     uint32_t characteristics;
 } pe_section;
+
+typedef struct __attribute__((packed)) pe_symbol {
+    char name[8];
+    uint32_t value;
+    uint16_t sectionNumber;
+    uint16_t type;
+    uint8_t storageClass;
+    uint8_t numberOfAuxSymbols;
+} pe_symbol;
 
 Object *object_new(Platform *platform, Arch *arch, ObjectKind kind);
 

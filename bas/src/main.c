@@ -71,10 +71,13 @@ int main(int argc, char **argv) {
     // Write object
     Object *object = object_new(platform, arch, OBJECT_EXECUTABLE);
 
-    uint8_t textSection[0x200];
-    uint8_t *end = textSection;
-    node_write(arch, &end, node);
-    list_add(object->sections, section_new(SECTION_TEXT, textSection, end - textSection));
+    uint8_t textBuffer[0x200];
+    Section *textSection = section_new(SECTION_TEXT, textBuffer, 0);
+    list_add(object->sections, textSection);
+
+    uint8_t *end = textBuffer;
+    node_write(object, textSection, &end, node);
+    textSection->size = end - textBuffer;
 
     object_write(object, outputPath);
     return EXIT_SUCCESS;

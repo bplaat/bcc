@@ -3,7 +3,7 @@ A simple assembler that converts assembly source files to plain static / dynamic
 
 ## Platforms
 - Windows PE32+: VERY BASIC
-- macOS MACHO: TODO
+- macOS Macho-O: TODO
 - Linux ELF: TODO
 
 ## Architectures

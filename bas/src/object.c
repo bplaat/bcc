@@ -14,6 +14,15 @@ Section *section_new(SectionKind kind, uint8_t *data, size_t size) {
     return section;
 }
 
+// Symbol
+Symbol *symbol_new(char *name, Section *section, uint32_t value) {
+    Symbol *symbol = malloc(sizeof(Symbol));
+    symbol->name = name;
+    symbol->section = section;
+    symbol->value = value;
+    return symbol;
+}
+
 // Object
 Object *object_new(Platform *platform, Arch *arch, ObjectKind kind) {
     Object *object = malloc(sizeof(Object));
@@ -21,6 +30,7 @@ Object *object_new(Platform *platform, Arch *arch, ObjectKind kind) {
     object->arch = arch;
     object->kind = kind;
     object->sections = list_new(4);
+    object->symbols = list_new(8);
     return object;
 }
 
@@ -43,7 +53,7 @@ void object_write(Object *object, char *path) {
 
     if (object->platform->kind == PLATFORM_WINDOWS) {
         uint64_t origin = 0x400000;
-        uint32_t sectionAlign = 0x200; // 0x1000; // TODO
+        uint32_t sectionAlign = 0x1000;
         uint32_t fileAlign = 0x200;
 
         // MSDOS Header
@@ -55,15 +65,40 @@ void object_write(Object *object, char *path) {
             machine = 0x8664;
             sizeofOptionalHeader = sizeof(pe_optional_header64) + 8 * 16;
         }
+
+        uint32_t pointerToSytemTable = 0, numberOfSymbols = 0;
+        if (object->symbols->size > 0) {
+            uint8_t *dataSection = malloc(0x200);
+            uint8_t *end = dataSection;
+            for (size_t i = 0; i < object->symbols->size; i++) {
+                Symbol *symbol = list_get(object->symbols, i);
+                pe_symbol _symbol = {
+                    .value = symbol->value,
+                    .sectionNumber = 1,
+                    .type = 0x2000,
+                    .storageClass = 6,
+                    .numberOfAuxSymbols = 0
+                };
+                strcpy(_symbol.name, symbol->name);
+                memcpy(end, &_symbol, sizeof(pe_symbol));
+                end += sizeof(pe_symbol);
+            }
+
+            list_add(object->sections, section_new(SECTION_DATA, dataSection, end - dataSection));
+
+            pointerToSytemTable = 0x200 + 0x200;
+            numberOfSymbols = object->symbols->size;
+        }
+
         pe_header header = {
             .signature = 0x4550,
             .machine = machine,
             .numberOfSections = object->sections->size,
             .timeDateStamp = time(NULL),
-            .pointerToSytemTable = 0,
-            .numberOfSymbols = 0,
+            .pointerToSytemTable = pointerToSytemTable,
+            .numberOfSymbols = numberOfSymbols,
             .sizeofOptionalHeader = sizeofOptionalHeader,
-            .characteristics = 0x30f
+            .characteristics = 0x0200 | 0x0020 | 0x0003
         };
         fwrite(&header, sizeof(header), 1, f);
 
@@ -86,12 +121,12 @@ void object_write(Object *object, char *path) {
             virtualOffset += align(section->size, sectionAlign);
             fileOffset += align(section->size, fileAlign);
         }
-        size_t sizeOfImage = fileOffset;
+        size_t sizeOfImage = virtualOffset;
 
         if (object->arch->kind == ARCH_X86_64) {
             pe_optional_header64 optional_header = {
                 .magic = 0x020B,
-                .majorLinkerVersion = 0,
+                .majorLinkerVersion = 6,
                 .minorLinkerVersion = 0,
                 .sizeOfCode = sizeOfCode,
                 .sizeOfInitializedData = sizeOfInitializedData,
