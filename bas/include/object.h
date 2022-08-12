@@ -24,16 +24,18 @@ typedef struct Arch {
 // Section
 typedef enum SectionKind {
     SECTION_TEXT,
-    SECTION_DATA
+    SECTION_DATA,
+    SECTION_READ_ONLY_DATA
 } SectionKind;
 
 typedef struct Section {
     SectionKind kind;
+    char *name;
     uint8_t *data;
     size_t size;
 } Section;
 
-Section *section_new(SectionKind kind, uint8_t *data, size_t size);
+Section *section_new(SectionKind kind, char *name, uint8_t *data, size_t size);
 
 // Symbol
 typedef struct Symbol {

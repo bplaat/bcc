@@ -43,6 +43,7 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_MOD) return strdup("%");
 
     // Shared
+    if (kind == TOKEN_SECTION) return strdup("section");
     if (kind == TOKEN_TIMES) return strdup("times");
     if (kind == TOKEN_DB) return strdup("db");
     if (kind == TOKEN_DW) return strdup("dw");

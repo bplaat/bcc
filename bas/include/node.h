@@ -7,6 +7,7 @@
 typedef enum NodeKind {
     NODE_PROGRAM,
 
+    NODE_SECTION,
     NODE_LABEL,
     NODE_INSTRUCTION,
     NODE_TIMES,

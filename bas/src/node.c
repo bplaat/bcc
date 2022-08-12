@@ -55,6 +55,9 @@ char *node_to_string(Node *node) {
         }
         return list_to_string(sb);
     }
+    if (node->kind == NODE_SECTION) {
+        return format("section %s", node->string);
+    }
     if (node->kind == NODE_LABEL) {
         return format("%s:", node->string);
     }

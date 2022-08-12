@@ -33,6 +33,10 @@ Node *parser_program(Parser *parser) {
 }
 
 Node *parser_statement(Parser *parser) {
+    if (current()->kind == TOKEN_NEWLINE) {
+        parser_eat(parser, TOKEN_NEWLINE);
+        return NULL;
+    }
 
     if (current()->kind == TOKEN_TIMES) {
         parser_eat(parser, TOKEN_TIMES);
@@ -40,10 +44,11 @@ Node *parser_statement(Parser *parser) {
         return node_new_operation(NODE_TIMES, lhs, parser_statement(parser));
     }
 
-
-    if (current()->kind == TOKEN_NEWLINE) {
-        parser_eat(parser, TOKEN_NEWLINE);
-        return NULL;
+    if (current()->kind == TOKEN_SECTION) {
+        parser_eat(parser, TOKEN_SECTION);
+        Node *node = node_new_string(NODE_SECTION, current()->string);
+        parser_eat(parser, TOKEN_KEYWORD);
+        return node;
     }
 
     if (current()->kind == TOKEN_KEYWORD && next(0)->kind == TOKEN_COLON) {

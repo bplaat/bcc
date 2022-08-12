@@ -23,6 +23,7 @@ typedef enum TokenKind {
     TOKEN_MOD,
 
     // Shared
+    TOKEN_SECTION,
     TOKEN_TIMES,
     TOKEN_DB,
     TOKEN_DW,

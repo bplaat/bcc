@@ -6,9 +6,10 @@
 #include "utils.h"
 
 // Section
-Section *section_new(SectionKind kind, uint8_t *data, size_t size) {
+Section *section_new(SectionKind kind, char *name, uint8_t *data, size_t size) {
     Section *section = malloc(sizeof(Section));
     section->kind = kind;
+    section->name = name;
     section->data = data;
     section->size = size;
     return section;
@@ -56,6 +57,27 @@ void object_write(Object *object, char *path) {
         uint32_t sectionAlign = 0x1000;
         uint32_t fileAlign = 0x200;
 
+        // Calculate sizes
+        size_t sizeOfCode = 0;
+        size_t baseOfCode = 0;
+        size_t sizeOfInitializedData = 0;
+        size_t virtualOffset = sectionAlign;
+        size_t fileOffset = fileAlign;
+        for (size_t i = 0; i < object->sections->size; i++) {
+            Section *section = list_get(object->sections, i);
+            if (section->kind == SECTION_TEXT) {
+                sizeOfCode = align(section->size, fileAlign);
+                baseOfCode = virtualOffset;
+            }
+            if (section->kind == SECTION_DATA || section->kind == SECTION_READ_ONLY_DATA) {
+                sizeOfInitializedData = align(section->size, fileAlign);
+            }
+            virtualOffset += align(section->size, sectionAlign);
+            fileOffset += align(section->size, fileAlign);
+        }
+        size_t symbolsSize = align(object->symbols->size * sizeof(pe_symbol), fileAlign);
+        fileOffset += symbolsSize;
+
         // MSDOS Header
         fwrite(msdos_header, sizeof(msdos_header), 1, f);
 
@@ -65,64 +87,19 @@ void object_write(Object *object, char *path) {
             machine = 0x8664;
             sizeofOptionalHeader = sizeof(pe_optional_header64) + 8 * 16;
         }
-
-        uint32_t pointerToSytemTable = 0, numberOfSymbols = 0;
-        if (object->symbols->size > 0) {
-            uint8_t *dataSection = malloc(0x200);
-            uint8_t *end = dataSection;
-            for (size_t i = 0; i < object->symbols->size; i++) {
-                Symbol *symbol = list_get(object->symbols, i);
-                pe_symbol _symbol = {
-                    .value = symbol->value,
-                    .sectionNumber = 1,
-                    .type = 0x2000,
-                    .storageClass = 6,
-                    .numberOfAuxSymbols = 0
-                };
-                strcpy(_symbol.name, symbol->name);
-                memcpy(end, &_symbol, sizeof(pe_symbol));
-                end += sizeof(pe_symbol);
-            }
-
-            list_add(object->sections, section_new(SECTION_DATA, dataSection, end - dataSection));
-
-            pointerToSytemTable = 0x200 + 0x200;
-            numberOfSymbols = object->symbols->size;
-        }
-
         pe_header header = {
             .signature = 0x4550,
             .machine = machine,
             .numberOfSections = object->sections->size,
             .timeDateStamp = time(NULL),
-            .pointerToSytemTable = pointerToSytemTable,
-            .numberOfSymbols = numberOfSymbols,
+            .pointerToSytemTable = object->symbols->size > 0 ? fileOffset - symbolsSize : 0,
+            .numberOfSymbols = object->symbols->size,
             .sizeofOptionalHeader = sizeofOptionalHeader,
             .characteristics = 0x0200 | 0x0020 | 0x0003
         };
         fwrite(&header, sizeof(header), 1, f);
 
         // Optional Header
-        size_t sizeOfCode = 0;
-        size_t sizeOfInitializedData = 0;
-        size_t baseOfCode = 0;
-
-        size_t virtualOffset = sectionAlign;
-        size_t fileOffset = fileAlign;
-        for (size_t i = 0; i < object->sections->size; i++) {
-            Section *section = list_get(object->sections, i);
-            if (section->kind == SECTION_TEXT) {
-                sizeOfCode = align(section->size, fileAlign);
-                baseOfCode = virtualOffset;
-            }
-            if (section->kind == SECTION_DATA) {
-                sizeOfInitializedData = align(section->size, fileAlign);
-            }
-            virtualOffset += align(section->size, sectionAlign);
-            fileOffset += align(section->size, fileAlign);
-        }
-        size_t sizeOfImage = virtualOffset;
-
         if (object->arch->kind == ARCH_X86_64) {
             pe_optional_header64 optional_header = {
                 .magic = 0x020B,
@@ -143,7 +120,7 @@ void object_write(Object *object, char *path) {
                 .majorSubsystemVersion = 4,
                 .minorSubsystemVersion = 0,
                 .win32VersionValue = 0,
-                .sizeOfImage = sizeOfImage,
+                .sizeOfImage = virtualOffset,
                 .sizeOfHeaders = fileAlign,
                 .checkSum = 0, // TODO
                 .subsystem = 3,
@@ -177,20 +154,22 @@ void object_write(Object *object, char *path) {
                 .numberOfRelocations = 0,
                 .numberOfLinenumbers = 0
             };
+            strcpy(section_header.name, section->name);
             if (section->kind == SECTION_TEXT) {
-                strcpy(section_header.name, ".text");
                 section_header.characteristics = 0x60000020;
             }
             if (section->kind == SECTION_DATA) {
-                strcpy(section_header.name, ".data");
                 section_header.characteristics = 0xC0000040;
+            }
+            if (section->kind == SECTION_READ_ONLY_DATA) {
+                section_header.characteristics = 0x40000040;
             }
             fwrite(&section_header, sizeof(section_header), 1, f);
             virtualOffset += align(section->size, sectionAlign);
             fileOffset += align(section->size, fileAlign);
         }
 
-        size_t alignment = 0x200 - ftell(f);
+        size_t alignment = fileAlign - ftell(f);
         for (size_t i = 0; i < alignment; i++) {
             uint8_t zero = 0;
             fwrite(&zero, sizeof(zero), 1, f);
@@ -206,6 +185,29 @@ void object_write(Object *object, char *path) {
                 uint8_t zero = 0;
                 fwrite(&zero, sizeof(zero), 1, f);
             }
+        }
+
+        // Symbols table
+        if (object->symbols->size > 0) {
+            for (size_t i = 0; i < object->symbols->size; i++) {
+                Symbol *symbol = list_get(object->symbols, i);
+                pe_symbol _symbol = {
+                    .value = symbol->value,
+                    .sectionNumber = 1,
+                    .type = 0x2000,
+                    .storageClass = 6,
+                    .numberOfAuxSymbols = 0
+                };
+                strcpy(_symbol.name, symbol->name);
+                fwrite(&_symbol, sizeof(_symbol), 1, f);
+            }
+
+            size_t alignment = symbolsSize - object->symbols->size * sizeof(pe_symbol);
+            for (size_t i = 0; i < alignment; i++) {
+                uint8_t zero = 0;
+                fwrite(&zero, sizeof(zero), 1, f);
+            }
+
         }
     }
 

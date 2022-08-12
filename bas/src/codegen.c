@@ -2,24 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-void IMM16(uint8_t **end, int16_t imm) {
-    int16_t *c = (int16_t *)*end;
-    *c++ = imm;
-    *end = (uint8_t *)c;
-}
-
-void IMM32(uint8_t **end, int32_t imm) {
-    int32_t *c = (int32_t *)*end;
-    *c++ = imm;
-    *end = (uint8_t *)c;
-}
-
-void IMM64(uint8_t **end, int64_t imm) {
-    int64_t *c = (int64_t *)*end;
-    *c++ = imm;
-    *end = (uint8_t *)c;
-}
+#include <stdbool.h>
 
 int64_t node_calc(Node *node) {
     if (node->kind == NODE_INTEGER) {
@@ -43,23 +26,57 @@ int64_t node_calc(Node *node) {
     return 0;
 }
 
-void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
-    uint8_t *c = *end;
+void codegen(Object *object, Node *node) {
+    Codegen codegen;
+    codegen.object = object;
 
+    uint8_t *sectionBuffer = malloc(0x200);
+    Section *section = section_new(SECTION_TEXT, ".text", sectionBuffer, 0);
+    list_add(object->sections, section);
+    codegen.currentSection = section;
+
+    node_write(&codegen, node);
+}
+
+#define i8(imm) codegen->currentSection->data[codegen->currentSection->size++] = imm
+#define i16(imm) *((int16_t *)&codegen->currentSection->data[codegen->currentSection->size]) = imm; codegen->currentSection->size += 2
+#define i32(imm) *((int32_t *)&codegen->currentSection->data[codegen->currentSection->size]) = imm; codegen->currentSection->size += 4
+#define i64(imm) *((int64_t *)&codegen->currentSection->data[codegen->currentSection->size]) = imm; codegen->currentSection->size += 8
+
+void node_write(Codegen *codegen, Node *node) {
     if (node->kind == NODE_PROGRAM) {
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_write(object, section, &c, list_get(node->nodes, i));
+            node_write(codegen, list_get(node->nodes, i));
         }
     }
 
     if (node->kind == NODE_TIMES) {
         for (int64_t i = 0; i < node->lhs->integer; i++) {
-            node_write(object, section, &c, node->rhs);
+            node_write(codegen, node->rhs);
+        }
+    }
+
+    if (node->kind == NODE_SECTION) {
+        bool found = false;
+        for (size_t i = 0; i < codegen->object->sections->size; i++) {
+            Section *section = list_get(codegen->object->sections, i);
+            if (!strcmp(section->name, node->string)) {
+                found = true;
+                codegen->currentSection = section;
+                break;
+            }
+        }
+
+        if (!found) {
+            uint8_t *sectionBuffer = malloc(0x200);
+            Section *section = section_new(SECTION_DATA, node->string, sectionBuffer, 0);
+            list_add(codegen->object->sections, section);
+            codegen->currentSection = section;
         }
     }
 
     if (node->kind == NODE_LABEL) {
-        list_add(object->symbols, symbol_new(node->string, section, c - section->data));
+        list_add(codegen->object->symbols, symbol_new(node->string, codegen->currentSection, codegen->currentSection->size));
     }
 
     if (node->kind == NODE_INSTRUCTION) {
@@ -72,20 +89,20 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
                 Node *child = list_get(node->nodes, i);
                 if (child->kind == NODE_STRING) {
                     for (size_t j = 0; j < strlen(child->string); j++) {
-                        *c++ = child->string[j];
-                        if (size != 1) c += size - 1;
+                        i8(child->string[j]);
+                        if (size > 1) codegen->currentSection->size += size - 1;
                     }
                 } else {
                     int64_t answer = node_calc(child);
                     for (size_t j = 0; j < size; j++) {
-                        *c++ = ((uint8_t *)&answer)[j];
+                        i8(((uint8_t *)&answer)[j]);
                     }
                 }
             }
         }
 
         if (node->opcode == TOKEN_X86_64_NOP) {
-            *c++ = 0x90;
+            i8(0x90);
         }
 
         if (node->opcode >= TOKEN_X86_64_MOV && node->opcode <= TOKEN_X86_64_XOR) {
@@ -103,11 +120,11 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
             if (node->opcode == TOKEN_X86_64_AND) opcode = 0x21, opcode2 = 0b100;
             if (node->opcode == TOKEN_X86_64_OR) opcode = 0x09, opcode2 = 0b001;
             if (node->opcode == TOKEN_X86_64_XOR) opcode = 0x31, opcode2 = 0b110;
-            if (dest->size == 64) *c++ = 0x48;
+            if (dest->size == 64) i8(0x48);
             if (dest->kind == NODE_REGISTER) {
                 if (src->kind == NODE_REGISTER) {
-                    *c++ = opcode;
-                    *c++ = (0b11 << 6) | (src->reg << 3) | dest->reg;
+                    i8(opcode);
+                    i8((0b11 << 6) | (src->reg << 3) | dest->reg);
                 }
 
                 if (src->kind == NODE_ADDR) {
@@ -128,31 +145,31 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
                         exit(EXIT_FAILURE);
                     }
 
-                    *c++ = node->opcode == TOKEN_X86_64_LEA ? opcode : (opcode | 0b10);
+                    i8(node->opcode == TOKEN_X86_64_LEA ? opcode : (opcode | 0b10));
                     if (disp >= -128 && disp <= 127) {
-                        *c++ = (0b01 << 6) | (dest->reg << 3) | srcreg->reg;
-                        *c++ = disp;
+                        i8((0b01 << 6) | (dest->reg << 3) | srcreg->reg);
+                        i8(disp);
                     } else {
-                        *c++ = (0b10 << 6) | (dest->reg << 3) | srcreg->reg;
-                        IMM32(&c, disp);
+                        i8((0b10 << 6) | (dest->reg << 3) | srcreg->reg);
+                        i32(disp);
                     }
                 }
 
                 if (src->kind == NODE_INTEGER) {
                     if (node->opcode == TOKEN_X86_64_MOV) {
-                        *c++ = 0xb8 + dest->reg;
+                        i8(0xb8 + dest->reg);
                         if (dest->size == 64) {
-                            IMM64(&c, src->integer);
+                            i64(src->integer);
                         } else {
-                            IMM32(&c, src->integer);
+                            i32(src->integer);
                         }
                     } else {
-                        *c++ = src->integer >= -128 && src->integer <= 127 ? 0x83 : 0x81;
-                        *c++ = (0b11 << 6) | (opcode2 << 3) | dest->reg;
+                        i8(src->integer >= -128 && src->integer <= 127 ? 0x83 : 0x81);
+                        i8((0b11 << 6) | (opcode2 << 3) | dest->reg);
                         if (src->integer >= -128 && src->integer <= 127) {
-                            *c++ = src->integer;
+                            i8(src->integer);
                         } else {
-                            IMM32(&c, src->integer);
+                            i32(src->integer);
                         }
                     }
                 }
@@ -177,28 +194,28 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
                         exit(EXIT_FAILURE);
                     }
 
-                    *c++ = opcode;
+                    i8(opcode);
                     if (disp >= -128 && disp <= 127) {
-                        *c++ = (0b01 << 6) | (src->reg << 3) | destreg->reg;
-                        *c++ = disp;
+                        i8((0b01 << 6) | (src->reg << 3) | destreg->reg);
+                        i8(disp);
                     } else {
-                        *c++ = (0b10 << 6) | (src->reg << 3) | destreg->reg;
-                        IMM32(&c, disp);
+                        i8((0b10 << 6) | (src->reg << 3) | destreg->reg);
+                        i32(disp);
                     }
                 }
                 if (src->kind == NODE_INTEGER) {
-                    *c++ = (src->integer >= -128 && src->integer <= 127) ? (node->opcode == TOKEN_X86_64_MOV ? 0xc6 : 0x83) : (node->opcode == TOKEN_X86_64_MOV ? 0xc7 : 0x81);
+                    i8((src->integer >= -128 && src->integer <= 127) ? (node->opcode == TOKEN_X86_64_MOV ? 0xc6 : 0x83) : (node->opcode == TOKEN_X86_64_MOV ? 0xc7 : 0x81));
                     if (disp >= -128 && disp <= 127) {
-                        *c++ = (0b01 << 6) | (opcode2 << 3) | destreg->reg;
-                        *c++ = disp;
+                        i8((0b01 << 6) | (opcode2 << 3) | destreg->reg);
+                        i8(disp);
                     } else {
-                        *c++ = (0b10 << 6) | (opcode2 << 3) | destreg->reg;
-                        IMM32(&c, disp);
+                        i8((0b10 << 6) | (opcode2 << 3) | destreg->reg);
+                        i32(disp);
                     }
                     if (src->integer >= -128 && src->integer <= 127) {
-                        *c++ = src->integer;
+                        i8(src->integer);
                     } else {
-                        IMM32(&c, src->integer);
+                        i32(src->integer);
                     }
                 }
             }
@@ -206,11 +223,11 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
 
         if (node->opcode == TOKEN_X86_64_NEG) {
             Node *dest = (Node *)list_get(node->nodes, 0);
-            if (dest->size == 64) *c++ = 0x48;
+            if (dest->size == 64) i8(0x48);
 
             if (dest->kind == NODE_REGISTER) {
-                *c++ = 0xf7;
-                *c++ = (0b11 << 6) | (0b011 << 3) | dest->reg;
+                i8(0xf7);
+                i8((0b11 << 6) | (0b011 << 3) | dest->reg);
             }
 
             if (dest->kind == NODE_ADDR) {
@@ -227,13 +244,13 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
                     exit(EXIT_FAILURE);
                 }
 
-                *c++ = 0xf7;
+                i8(0xf7);
                 if (disp >= -128 && disp <= 127) {
-                    *c++ = (0b01 << 6) | (0b011 << 3) | destreg->reg;
-                    *c++ = disp;
+                    i8((0b01 << 6) | (0b011 << 3) | destreg->reg);
+                    i8(disp);
                 } else {
-                    *c++ = (0b10 << 6) | (0b011 << 3) | destreg->reg;
-                    IMM32(&c, disp);
+                    i8((0b10 << 6) | (0b011 << 3) | destreg->reg);
+                    i32(disp);
                 }
             }
         }
@@ -246,7 +263,7 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
                     exit(EXIT_FAILURE);
                 }
 
-                *c++ = 0x50 + src->reg;
+                i8(0x50 + src->reg);
             }
         }
 
@@ -258,38 +275,36 @@ void node_write(Object *object, Section *section, uint8_t **end, Node *node) {
                     exit(EXIT_FAILURE);
                 }
 
-                *c++ = 0x58 + dest->reg;
+                i8(0x58 + dest->reg);
             }
         }
 
         if (node->opcode == TOKEN_X86_64_SYSCALL) {
-            *c++ = 0x0f;
-            *c++ = 0x05;
+            i8(0x0f);
+            i8(0x05);
         }
 
         if (node->opcode == TOKEN_X86_64_CDQ) {
-            *c++ = 0x99;
+            i8(0x99);
         }
 
         if (node->opcode == TOKEN_X86_64_CQO) {
-            *c++ = 0x48;
-            *c++ = 0x99;
+            i8(0x48);
+            i8(0x99);
         }
 
         if (node->opcode == TOKEN_X86_64_LEAVE) {
-            *c++ = 0xc9;
+            i8(0xc9);
         }
 
         if (node->opcode == TOKEN_X86_64_RET) {
             if (node->nodes->size > 0) {
                 Node *imm = (Node *)list_get(node->nodes, 0);
-                *c++ = 0xc2;
-                IMM16(&c, imm->integer);
+                i8(0xc2);
+                i16(imm->integer);
             } else {
-                *c++ = 0xc3;
+                i8(0xc3);
             }
         }
     }
-
-    *end = c;
 }

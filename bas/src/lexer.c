@@ -12,7 +12,7 @@ List *lexer(Arch *arch, char *path, List *lines) {
     size_t keywordsSize;
     if (arch->kind == ARCH_X86_64) {
         Keyword _keywords[] = {
-            {"times", TOKEN_TIMES}, {"db", TOKEN_DB}, {"dw", TOKEN_DW}, {"dd", TOKEN_DD}, {"dq", TOKEN_DQ},
+            {"section", TOKEN_SECTION}, {"times", TOKEN_TIMES}, {"db", TOKEN_DB}, {"dw", TOKEN_DW}, {"dd", TOKEN_DD}, {"dq", TOKEN_DQ},
 
             {"byte", TOKEN_BYTE}, {"word", TOKEN_WORD}, {"dword", TOKEN_DWORD}, {"qword", TOKEN_QWORD}, {"ptr", TOKEN_PTR},
 
@@ -63,9 +63,9 @@ List *lexer(Arch *arch, char *path, List *lines) {
                 continue;
             }
 
-            if (isalpha(*c) || *c == '_') {
+            if (isalpha(*c) || *c == '_' || *c == '$' || *c == '.') {
                 char *ptr = c;
-                while (isalnum(*c) || *c == '_') c++;
+                while (isalnum(*c) || *c == '_' || *c == '$' || *c == '.') c++;
                 size_t size = c - ptr;
                 char *string = malloc(size + 1);
                 memcpy(string, ptr, size);
