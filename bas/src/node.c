@@ -46,6 +46,11 @@ Node *node_new_register(int32_t reg, int32_t size) {
     return node;
 }
 
+bool node_is_calcable(Node *node) {
+    return node->kind == NODE_INTEGER || node->kind == NODE_ADD || node->kind == NODE_SUB ||
+        node->kind == NODE_MUL || node->kind == NODE_DIV || node->kind == NODE_MOD;
+}
+
 char *node_to_string(Node *node) {
     if (node->kind == NODE_PROGRAM) {
         List *sb = list_new(8);

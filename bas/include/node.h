@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "token.h"
 #include "list.h"
 
@@ -62,5 +63,7 @@ Node *node_new_operation(NodeKind kind, Node *lhs, Node *rhs);
 Node *node_new_multiple(NodeKind kind);
 
 Node *node_new_register(int32_t reg, int32_t size);
+
+bool node_is_calcable(Node *node);
 
 char *node_to_string(Node *node);

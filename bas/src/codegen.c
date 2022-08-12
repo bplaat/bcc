@@ -51,7 +51,8 @@ void node_write(Codegen *codegen, Node *node) {
     }
 
     if (node->kind == NODE_TIMES) {
-        for (int64_t i = 0; i < node->lhs->integer; i++) {
+        int64_t times = node_calc(node->lhs);
+        for (int64_t i = 0; i < times; i++) {
             node_write(codegen, node->rhs);
         }
     }
@@ -137,8 +138,8 @@ void node_write(Codegen *codegen, Node *node) {
                         exit(EXIT_FAILURE);
                     }
 
-                    Node *srcreg = src->unary->lhs;
-                    int64_t disp = src->unary->rhs->integer;
+                    Node *srcreg = src->unary->lhs->kind == NODE_REGISTER ? src->unary->lhs : src->unary->rhs;
+                    int64_t disp = node_is_calcable(src->unary->rhs) ? node_calc(src->unary->rhs) : node_calc(src->unary->lhs);
                     if (src->unary->kind == NODE_SUB) disp = -disp;
                     if (srcreg->size == 32) {
                         fprintf(stderr, "ERROR addr reg not 64\n");
@@ -155,21 +156,24 @@ void node_write(Codegen *codegen, Node *node) {
                     }
                 }
 
-                if (src->kind == NODE_INTEGER) {
+                if (node_is_calcable(src)) {
+                    int64_t imm = node_calc(src);
                     if (node->opcode == TOKEN_X86_64_MOV) {
                         i8(0xb8 + dest->reg);
                         if (dest->size == 64) {
-                            i64(src->integer);
+                            i64(imm);
                         } else {
-                            i32(src->integer);
+                            i32(imm);
                         }
                     } else {
-                        i8(src->integer >= -128 && src->integer <= 127 ? 0x83 : 0x81);
-                        i8((0b11 << 6) | (opcode2 << 3) | dest->reg);
-                        if (src->integer >= -128 && src->integer <= 127) {
-                            i8(src->integer);
+                        if (imm >= -128 && imm <= 127) {
+                            i8(0x83);
+                            i8((0b11 << 6) | (opcode2 << 3) | dest->reg);
+                            i8(imm);
                         } else {
-                            i32(src->integer);
+                            i8(0x81);
+                            i8((0b11 << 6) | (opcode2 << 3) | dest->reg);
+                            i32(imm);
                         }
                     }
                 }
@@ -180,8 +184,8 @@ void node_write(Codegen *codegen, Node *node) {
                     exit(EXIT_FAILURE);
                 }
 
-                Node *destreg = dest->unary->lhs;
-                int64_t disp = dest->unary->rhs->integer;
+                Node *destreg = dest->unary->lhs->kind == NODE_REGISTER ? dest->unary->lhs : dest->unary->rhs;
+                int64_t disp = node_is_calcable(dest->unary->rhs) ? node_calc(dest->unary->rhs) : node_calc(dest->unary->lhs);
                 if (dest->unary->kind == NODE_SUB) disp = -disp;
                 if (destreg->size == 32) {
                     fprintf(stderr, "ERROR addr reg not 64\n");
@@ -203,8 +207,9 @@ void node_write(Codegen *codegen, Node *node) {
                         i32(disp);
                     }
                 }
-                if (src->kind == NODE_INTEGER) {
-                    i8((src->integer >= -128 && src->integer <= 127) ? (node->opcode == TOKEN_X86_64_MOV ? 0xc6 : 0x83) : (node->opcode == TOKEN_X86_64_MOV ? 0xc7 : 0x81));
+                if (node_is_calcable(src)) {
+                    int64_t imm = node_calc(src);
+                    i8((imm >= -128 && imm <= 127) ? (node->opcode == TOKEN_X86_64_MOV ? 0xc6 : 0x83) : (node->opcode == TOKEN_X86_64_MOV ? 0xc7 : 0x81));
                     if (disp >= -128 && disp <= 127) {
                         i8((0b01 << 6) | (opcode2 << 3) | destreg->reg);
                         i8(disp);
@@ -212,10 +217,10 @@ void node_write(Codegen *codegen, Node *node) {
                         i8((0b10 << 6) | (opcode2 << 3) | destreg->reg);
                         i32(disp);
                     }
-                    if (src->integer >= -128 && src->integer <= 127) {
-                        i8(src->integer);
+                    if (imm >= -128 && imm <= 127) {
+                        i8(imm);
                     } else {
-                        i32(src->integer);
+                        i32(imm);
                     }
                 }
             }
@@ -236,8 +241,8 @@ void node_write(Codegen *codegen, Node *node) {
                     exit(EXIT_FAILURE);
                 }
 
-                Node *destreg = dest->unary->lhs;
-                int64_t disp = dest->unary->rhs->integer;
+                Node *destreg = dest->unary->lhs->kind == NODE_REGISTER ? dest->unary->lhs : dest->unary->rhs;
+                int64_t disp = node_is_calcable(dest->unary->rhs) ? node_calc(dest->unary->rhs) : node_calc(dest->unary->lhs);
                 if (dest->unary->kind == NODE_SUB) disp = -disp;
                 if (destreg->size == 32) {
                     fprintf(stderr, "ERROR addr reg not 64\n");
@@ -299,9 +304,9 @@ void node_write(Codegen *codegen, Node *node) {
 
         if (node->opcode == TOKEN_X86_64_RET) {
             if (node->nodes->size > 0) {
-                Node *imm = (Node *)list_get(node->nodes, 0);
+                Node *unary = (Node *)list_get(node->nodes, 0);
                 i8(0xc2);
-                i16(imm->integer);
+                i16(node_calc(unary));
             } else {
                 i8(0xc3);
             }
