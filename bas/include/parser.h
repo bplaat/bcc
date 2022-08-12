@@ -17,6 +17,7 @@ void parser_eat(Parser *parser, TokenKind kind);
 
 Node *parser_program(Parser *parser);
 Node *parser_statement(Parser *parser);
+Node *parser_assign(Parser *parser);
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);

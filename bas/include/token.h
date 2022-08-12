@@ -16,6 +16,7 @@ typedef enum TokenKind {
     TOKEN_NEWLINE,
     TOKEN_EOF,
 
+    TOKEN_ASSIGN,
     TOKEN_ADD,
     TOKEN_SUB,
     TOKEN_MUL,

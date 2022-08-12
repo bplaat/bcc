@@ -46,9 +46,8 @@ Node *node_new_register(int32_t reg, int32_t size) {
     return node;
 }
 
-bool node_is_calcable(Node *node) {
-    return node->kind == NODE_INTEGER || node->kind == NODE_ADD || node->kind == NODE_SUB ||
-        node->kind == NODE_MUL || node->kind == NODE_DIV || node->kind == NODE_MOD;
+bool node_is_executable(Node *node) {
+    return node->kind == NODE_INTEGER || node->kind == NODE_KEYWORD || (node->kind >= NODE_ASSIGN && node->kind <= NODE_MOD);
 }
 
 char *node_to_string(Node *node) {
@@ -118,10 +117,11 @@ char *node_to_string(Node *node) {
         return list_to_string(sb);
     }
 
-    if (node->kind >= NODE_ADD && node->kind <= NODE_MOD) {
+    if (node->kind >= NODE_ASSIGN && node->kind <= NODE_MOD) {
         List *sb = list_new(8);
         list_add(sb, "(");
         list_add(sb, node_to_string(node->lhs));
+        if (node->kind == NODE_ASSIGN) list_add(sb, " = ");
         if (node->kind == NODE_ADD) list_add(sb, " + ");
         if (node->kind == NODE_SUB) list_add(sb, " - ");
         if (node->kind == NODE_MUL) list_add(sb, " * ");

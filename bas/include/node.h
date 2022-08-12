@@ -19,6 +19,7 @@ typedef enum NodeKind {
     NODE_ADDR,
 
     NODE_NEG,
+    NODE_ASSIGN,
     NODE_ADD,
     NODE_SUB,
     NODE_MUL,
@@ -64,6 +65,6 @@ Node *node_new_multiple(NodeKind kind);
 
 Node *node_new_register(int32_t reg, int32_t size);
 
-bool node_is_calcable(Node *node);
+bool node_is_executable(Node *node);
 
 char *node_to_string(Node *node);

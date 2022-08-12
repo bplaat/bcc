@@ -192,6 +192,11 @@ List *lexer(Arch *arch, char *path, List *lines) {
                 continue;
             }
 
+            if (*c == '=') {
+                list_add(tokens, token_new(TOKEN_ASSIGN, line, position));
+                c++;
+                continue;
+            }
             if (*c == '+') {
                 list_add(tokens, token_new(TOKEN_ADD, line, position));
                 c++;

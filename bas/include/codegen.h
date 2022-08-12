@@ -3,19 +3,21 @@
 #include "object.h"
 #include "node.h"
 
-void IMM16(uint8_t **end, int16_t imm);
+typedef struct Var {
+    char *name;
+    int64_t value;
+} Var;
 
-void IMM32(uint8_t **end, int32_t imm);
-
-void IMM64(uint8_t **end, int64_t imm);
-
-int64_t node_calc(Node *node);
+Var *var_new(char *name, int64_t value);
 
 typedef struct Codegen {
     Object *object;
     Section *currentSection;
+    List *vars;
 } Codegen;
 
 void codegen(Object *object, Node *node);
 
-void node_write(Codegen *codegen, Node *node);
+int64_t node_execute(Codegen *codegen, Node *node);
+
+void codegen_node(Codegen *codegen, Node *node);

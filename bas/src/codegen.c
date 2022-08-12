@@ -4,38 +4,22 @@
 #include <string.h>
 #include <stdbool.h>
 
-int64_t node_calc(Node *node) {
-    if (node->kind == NODE_INTEGER) {
-        return node->integer;
-    }
-    if (node->kind == NODE_ADD) {
-        return node_calc(node->lhs) + node_calc(node->rhs);
-    }
-    if (node->kind == NODE_SUB) {
-        return node_calc(node->lhs) - node_calc(node->rhs);
-    }
-    if (node->kind == NODE_MUL) {
-        return node_calc(node->lhs) * node_calc(node->rhs);
-    }
-    if (node->kind == NODE_DIV) {
-        return node_calc(node->lhs) / node_calc(node->rhs);
-    }
-    if (node->kind == NODE_MOD) {
-        return node_calc(node->lhs) % node_calc(node->rhs);
-    }
-    return 0;
+Var *var_new(char *name, int64_t value) {
+    Var *var = malloc(sizeof(Var));
+    var->name = name;
+    var->value = value;
+    return var;
 }
 
 void codegen(Object *object, Node *node) {
     Codegen codegen;
     codegen.object = object;
-
     uint8_t *sectionBuffer = malloc(0x200);
     Section *section = section_new(SECTION_TEXT, ".text", sectionBuffer, 0);
     list_add(object->sections, section);
     codegen.currentSection = section;
-
-    node_write(&codegen, node);
+    codegen.vars = list_new(128);
+    codegen_node(&codegen, node);
 }
 
 #define i8(imm) codegen->currentSection->data[codegen->currentSection->size++] = imm
@@ -43,17 +27,69 @@ void codegen(Object *object, Node *node) {
 #define i32(imm) *((int32_t *)&codegen->currentSection->data[codegen->currentSection->size]) = imm; codegen->currentSection->size += 4
 #define i64(imm) *((int64_t *)&codegen->currentSection->data[codegen->currentSection->size]) = imm; codegen->currentSection->size += 8
 
-void node_write(Codegen *codegen, Node *node) {
+int64_t node_execute(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_INTEGER) {
+        return node->integer;
+    }
+
+    if (node->kind == NODE_KEYWORD) {
+        if (!strcmp(node->string, "$")) {
+            return codegen->currentSection->size; // TODO
+        }
+
+        for (size_t i = 0; i < codegen->vars->size; i++) {
+            Var *var = list_get(codegen->vars, i);
+            if (!strcmp(var->name, node->string)) {
+                return var->value;
+            }
+        }
+
+        fprintf(stderr, "Can't find variable %s\n", node->string);
+        exit(EXIT_FAILURE);
+    }
+
+    if (node->kind == NODE_ASSIGN) {
+        int64_t value = node_execute(codegen, node->rhs);
+        for (size_t i = 0; i < codegen->vars->size; i++) {
+            Var *var = list_get(codegen->vars, i);
+            if (!strcmp(var->name, node->lhs->string)) {
+                var->value = value;
+                return value;
+            }
+        }
+        list_add(codegen->vars, var_new(node->lhs->string, value));
+        return value;
+    }
+
+    if (node->kind == NODE_ADD) {
+        return node_execute(codegen, node->lhs) + node_execute(codegen, node->rhs);
+    }
+    if (node->kind == NODE_SUB) {
+        return node_execute(codegen, node->lhs) - node_execute(codegen, node->rhs);
+    }
+    if (node->kind == NODE_MUL) {
+        return node_execute(codegen, node->lhs) * node_execute(codegen, node->rhs);
+    }
+    if (node->kind == NODE_DIV) {
+        return node_execute(codegen, node->lhs) / node_execute(codegen, node->rhs);
+    }
+    if (node->kind == NODE_MOD) {
+        return node_execute(codegen, node->lhs) % node_execute(codegen, node->rhs);
+    }
+    return 0;
+}
+
+void codegen_node(Codegen *codegen, Node *node) {
     if (node->kind == NODE_PROGRAM) {
         for (size_t i = 0; i < node->nodes->size; i++) {
-            node_write(codegen, list_get(node->nodes, i));
+            codegen_node(codegen, list_get(node->nodes, i));
         }
     }
 
     if (node->kind == NODE_TIMES) {
-        int64_t times = node_calc(node->lhs);
+        int64_t times = node_execute(codegen, node->lhs);
         for (int64_t i = 0; i < times; i++) {
-            node_write(codegen, node->rhs);
+            codegen_node(codegen, node->rhs);
         }
     }
 
@@ -78,6 +114,11 @@ void node_write(Codegen *codegen, Node *node) {
 
     if (node->kind == NODE_LABEL) {
         list_add(codegen->object->symbols, symbol_new(node->string, codegen->currentSection, codegen->currentSection->size));
+        list_add(codegen->vars, var_new(node->string, codegen->currentSection->size)); // TODO
+    }
+
+    if (node_is_executable(node)) {
+        node_execute(codegen, node);
     }
 
     if (node->kind == NODE_INSTRUCTION) {
@@ -94,7 +135,7 @@ void node_write(Codegen *codegen, Node *node) {
                         if (size > 1) codegen->currentSection->size += size - 1;
                     }
                 } else {
-                    int64_t answer = node_calc(child);
+                    int64_t answer = node_execute(codegen, child);
                     for (size_t j = 0; j < size; j++) {
                         i8(((uint8_t *)&answer)[j]);
                     }
@@ -139,7 +180,7 @@ void node_write(Codegen *codegen, Node *node) {
                     }
 
                     Node *srcreg = src->unary->lhs->kind == NODE_REGISTER ? src->unary->lhs : src->unary->rhs;
-                    int64_t disp = node_is_calcable(src->unary->rhs) ? node_calc(src->unary->rhs) : node_calc(src->unary->lhs);
+                    int64_t disp = node_is_executable(src->unary->rhs) ? node_execute(codegen, src->unary->rhs) : node_execute(codegen, src->unary->lhs);
                     if (src->unary->kind == NODE_SUB) disp = -disp;
                     if (srcreg->size == 32) {
                         fprintf(stderr, "ERROR addr reg not 64\n");
@@ -156,8 +197,8 @@ void node_write(Codegen *codegen, Node *node) {
                     }
                 }
 
-                if (node_is_calcable(src)) {
-                    int64_t imm = node_calc(src);
+                if (node_is_executable(src)) {
+                    int64_t imm = node_execute(codegen, src);
                     if (node->opcode == TOKEN_X86_64_MOV) {
                         i8(0xb8 + dest->reg);
                         if (dest->size == 64) {
@@ -185,7 +226,7 @@ void node_write(Codegen *codegen, Node *node) {
                 }
 
                 Node *destreg = dest->unary->lhs->kind == NODE_REGISTER ? dest->unary->lhs : dest->unary->rhs;
-                int64_t disp = node_is_calcable(dest->unary->rhs) ? node_calc(dest->unary->rhs) : node_calc(dest->unary->lhs);
+                int64_t disp = node_is_executable(dest->unary->rhs) ? node_execute(codegen, dest->unary->rhs) : node_execute(codegen, dest->unary->lhs);
                 if (dest->unary->kind == NODE_SUB) disp = -disp;
                 if (destreg->size == 32) {
                     fprintf(stderr, "ERROR addr reg not 64\n");
@@ -207,8 +248,8 @@ void node_write(Codegen *codegen, Node *node) {
                         i32(disp);
                     }
                 }
-                if (node_is_calcable(src)) {
-                    int64_t imm = node_calc(src);
+                if (node_is_executable(src)) {
+                    int64_t imm = node_execute(codegen, src);
                     i8((imm >= -128 && imm <= 127) ? (node->opcode == TOKEN_X86_64_MOV ? 0xc6 : 0x83) : (node->opcode == TOKEN_X86_64_MOV ? 0xc7 : 0x81));
                     if (disp >= -128 && disp <= 127) {
                         i8((0b01 << 6) | (opcode2 << 3) | destreg->reg);
@@ -242,7 +283,7 @@ void node_write(Codegen *codegen, Node *node) {
                 }
 
                 Node *destreg = dest->unary->lhs->kind == NODE_REGISTER ? dest->unary->lhs : dest->unary->rhs;
-                int64_t disp = node_is_calcable(dest->unary->rhs) ? node_calc(dest->unary->rhs) : node_calc(dest->unary->lhs);
+                int64_t disp = node_is_executable(dest->unary->rhs) ? node_execute(codegen, dest->unary->rhs) : node_execute(codegen, dest->unary->lhs);
                 if (dest->unary->kind == NODE_SUB) disp = -disp;
                 if (destreg->size == 32) {
                     fprintf(stderr, "ERROR addr reg not 64\n");
@@ -306,7 +347,7 @@ void node_write(Codegen *codegen, Node *node) {
             if (node->nodes->size > 0) {
                 Node *unary = (Node *)list_get(node->nodes, 0);
                 i8(0xc2);
-                i16(node_calc(unary));
+                i16(node_execute(codegen, unary));
             } else {
                 i8(0xc3);
             }

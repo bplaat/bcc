@@ -36,6 +36,7 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_NEWLINE) return strdup("\\n");
     if (kind == TOKEN_EOF) return strdup("EOF");
 
+    if (kind == TOKEN_ASSIGN) return strdup("=");
     if (kind == TOKEN_ADD) return strdup("+");
     if (kind == TOKEN_SUB) return strdup("-");
     if (kind == TOKEN_MUL) return strdup("*");

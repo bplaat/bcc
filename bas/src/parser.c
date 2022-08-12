@@ -40,7 +40,7 @@ Node *parser_statement(Parser *parser) {
 
     if (current()->kind == TOKEN_TIMES) {
         parser_eat(parser, TOKEN_TIMES);
-        Node *lhs = parser_add(parser);
+        Node *lhs = parser_assign(parser);
         return node_new_operation(NODE_TIMES, lhs, parser_statement(parser));
     }
 
@@ -70,7 +70,7 @@ Node *parser_statement(Parser *parser) {
         instructionNode->opcode = current()->kind;
         parser_eat(parser, current()->kind);
         while (current()->kind != TOKEN_NEWLINE) {
-            Node *node = parser_add(parser);
+            Node *node = parser_assign(parser);
             if (node != NULL) list_add(instructionNode->nodes, node);
             if (current()->kind == TOKEN_COMMA) {
                 parser_eat(parser, TOKEN_COMMA);
@@ -85,10 +85,21 @@ Node *parser_statement(Parser *parser) {
         return instructionNode;
     }
 
-    Node *node = parser_add(parser);
+    Node *node = parser_assign(parser);
     parser_eat(parser, TOKEN_NEWLINE);
     return node;
 }
+
+Node *parser_assign(Parser *parser) {
+    if (current()->kind == TOKEN_KEYWORD && next(0)->kind == TOKEN_ASSIGN) {
+        char *name = current()->string;
+        parser_eat(parser, TOKEN_KEYWORD);
+        parser_eat(parser, TOKEN_ASSIGN);
+        return node_new_operation(NODE_ASSIGN, node_new_string(NODE_KEYWORD, name), parser_assign(parser));
+    }
+    return parser_add(parser);
+}
+
 
 Node *parser_add(Parser *parser) {
     Node *node = parser_mul(parser);
@@ -145,7 +156,7 @@ Node *parser_unary(Parser *parser) {
 Node *parser_primary(Parser *parser) {
     if (current()->kind == TOKEN_LPAREN) {
         parser_eat(parser, TOKEN_LPAREN);
-        Node *node = parser_add(parser);
+        Node *node = parser_assign(parser);
         parser_eat(parser, TOKEN_RPAREN);
         return node;
     }
@@ -186,7 +197,7 @@ Node *parser_primary(Parser *parser) {
         }
 
         parser_eat(parser, TOKEN_LBRACKET);
-        Node *node = node_new_unary(NODE_ADDR, parser_add(parser));
+        Node *node = node_new_unary(NODE_ADDR, parser_assign(parser));
         node->size = size;
         parser_eat(parser, TOKEN_RBRACKET);
         return node;
