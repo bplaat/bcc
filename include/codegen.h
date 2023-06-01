@@ -13,8 +13,8 @@ typedef enum Arch {
 // Codegen
 typedef struct Codegen {
     void *code;
-    uint8_t *byte;
-    uint32_t *word;
+    uint8_t *code_byte_ptr;
+    uint32_t *code_word_ptr;
 } Codegen;
 
 void codegen(Arch arch, void *code, Node *node);

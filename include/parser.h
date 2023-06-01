@@ -4,14 +4,19 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "list.h"
 #include "lexer.h"
 
 // Node
 typedef enum NodeType {
+    NODE_BLOCK,
+
     NODE_INTEGER,
 
     NODE_UNARY_BEGIN,
     NODE_NEG,
+    NODE_NOT,
+    NODE_LOGICAL_NOT,
     NODE_UNARY_END,
 
     NODE_OPERATION_BEGIN,
@@ -20,6 +25,11 @@ typedef enum NodeType {
     NODE_MUL,
     NODE_DIV,
     NODE_MOD,
+    NODE_AND,
+    NODE_OR,
+    NODE_XOR,
+    NODE_SHL,
+    NODE_SHR,
 
     NODE_COMPARE_BEGIN,
     NODE_EQ,
@@ -30,6 +40,9 @@ typedef enum NodeType {
     NODE_GTEQ,
     NODE_COMPARE_END,
 
+    NODE_LOGICAL_AND,
+    NODE_LOGICAL_OR,
+
     NODE_OPERATION_END,
 } NodeType;
 
@@ -38,6 +51,7 @@ struct Node {
     NodeType type;
     Token *token;
     union {
+        List nodes;
         int64_t integer;
         Node *unary;
         struct {
@@ -53,6 +67,8 @@ Node *node_new_unary(NodeType type, Token *token, Node *unary);
 
 Node *node_new_operation(NodeType type, Token *token, Node *lhs, Node *rhs);
 
+Node *node_new_nodes(NodeType type, Token *token);
+
 void node_dump(FILE *f, Node *node);
 
 // Parser
@@ -66,8 +82,13 @@ Node *parser(Token *tokens, size_t tokens_size);
 
 void parser_eat(Parser *parser, TokenType type);
 
+Node *parser_block(Parser *parser);
+Node *parser_statement(Parser *parser);
+Node *parser_logical(Parser *parser);
 Node *parser_equality(Parser *parser);
 Node *parser_relational(Parser *parser);
+Node *parser_bitwise(Parser *parser);
+Node *parser_shift(Parser *parser);
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);
