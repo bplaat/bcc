@@ -15,6 +15,7 @@ typedef struct Codegen {
     void *code;
     uint8_t *code_byte_ptr;
     uint32_t *code_word_ptr;
+    Node *currentBlockNode;
 } Codegen;
 
 void codegen(Arch arch, void *code, Node *node);
