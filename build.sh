@@ -60,5 +60,8 @@ assert 0 "5 > 6"
 assert 0 "6 < 5"
 assert 0 "5 != (3 + 2)"
 assert 1 "10 < 5 \* 3"
+assert 1 "0x0f == 15"
+assert 1 "0x0f - 011 == 6"
+assert 1 "0b1001 == 8 + 1"
 
 echo "[OK] All tests pass"

@@ -59,6 +59,25 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
 
         // Literals
+        if (*c == '0' && *(c + 1) == 'b') {
+            c += 2;
+            tokens[size].type = TOKEN_INTEGER;
+            tokens[size++].integer = strtol(c, &c, 2);
+            continue;
+        }
+        if (*c == '0' && (isdigit(*(c + 1)) || *(c + 1) == 'o')) {
+            if (*(c + 1) == 'o') c++;
+            c++;
+            tokens[size].type = TOKEN_INTEGER;
+            tokens[size++].integer = strtol(c, &c, 8);
+            continue;
+        }
+        if (*c == '0' && *(c + 1) == 'x') {
+            c += 2;
+            tokens[size].type = TOKEN_INTEGER;
+            tokens[size++].integer = strtol(c, &c, 16);
+            continue;
+        }
         if (isdigit(*c)) {
             tokens[size].type = TOKEN_INTEGER;
             tokens[size++].integer = strtol(c, &c, 10);
