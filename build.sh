@@ -16,7 +16,7 @@ assert() {
     if [[ $actual != $expected ]]; then
         echo "[FAIL] Program:"
         echo $input
-        echo "Node:"
+        echo "Dump:"
         echo $input | ./bcc-x86_64 -d -
         echo "Arch: x86_64 | Return: $actual | Correct: $expected"
         exit 1
@@ -28,7 +28,7 @@ assert() {
     if [[ $actual != $expected ]]; then
         echo "[FAIL] Program:"
         echo $input
-        echo "Node:"
+        echo "Dump:"
         echo $input | ./bcc-arm64 -d -
         echo "Arch: arm64 | Return: $actual | Correct: $expected"
         exit 1
@@ -77,8 +77,10 @@ assert 0 "0 && 1;"
 assert 1 "(20 > 5) && 1;"
 assert 1 "0 || 1;"
 assert 0 "0 || 0;"
-assert 15 "{a = 10; a + 5; }";
-assert 14 "{a = 10, b = 4; a + b; }";
-assert 2 "{a = 10, b = 4; a - (b \* 2); }";
+assert 15 "{a = 10; a + 5; }"
+assert 14 "{a = 10, b = 4; a + b; }"
+assert 2 "{a = 10, b = 4; a - (b \* 2); }"
+assert 6 "{ 5; return 6; 7; 8; }"
+assert 30 "{ a = 5; return a \* 6; b = 6; }"
 
 echo "[OK] All tests pass"

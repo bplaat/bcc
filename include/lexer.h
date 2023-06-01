@@ -8,16 +8,22 @@
 typedef enum TokenType {
     TOKEN_EOF,
     TOKEN_UNKNOWN,
+
     TOKEN_VARIABLE,
     TOKEN_INTEGER,
+
+    TOKEN_RETURN,
+
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LCURLY,
     TOKEN_RCURLY,
     TOKEN_COMMA,
     TOKEN_SEMICOLON,
+
     TOKEN_NOT,
     TOKEN_LOGICAL_NOT,
+
     TOKEN_ASSIGN,
     TOKEN_ADD,
     TOKEN_SUB,
@@ -50,7 +56,14 @@ typedef struct Token {
     };
 } Token;
 
+char *token_type_to_string(TokenType type);
+
 // Lexer
+typedef struct Keyword {
+    char *keyword;
+    TokenType type;
+} Keyword;
+
 Token *lexer(char *text, size_t *tokens_size);
 
 #endif

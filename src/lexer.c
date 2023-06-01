@@ -1,8 +1,57 @@
 #include "lexer.h"
 
 #include <ctype.h>
+#include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
+
 #include "utils.h"
+
+// Token
+char *token_type_to_string(TokenType type) {
+    if (type == TOKEN_EOF) return "EOF";
+    if (type == TOKEN_UNKNOWN) return "unknown?";
+
+    if (type == TOKEN_VARIABLE) return "variable";
+    if (type == TOKEN_INTEGER) return "integer";
+
+    if (type == TOKEN_RETURN) return "return";
+
+    if (type == TOKEN_LPAREN) return "(";
+    if (type == TOKEN_RPAREN) return ")";
+    if (type == TOKEN_LCURLY) return "{";
+    if (type == TOKEN_RCURLY) return "}";
+    if (type == TOKEN_COMMA) return ",";
+    if (type == TOKEN_SEMICOLON) return ";";
+
+    if (type == TOKEN_NOT) return "~";
+    if (type == TOKEN_LOGICAL_NOT) return "~";
+
+    if (type == TOKEN_ASSIGN) return "=";
+    if (type == TOKEN_ADD) return "+";
+    if (type == TOKEN_SUB) return "-";
+    if (type == TOKEN_MUL) return "*";
+    if (type == TOKEN_DIV) return "/";
+    if (type == TOKEN_MOD) return "%";
+    if (type == TOKEN_AND) return "&";
+    if (type == TOKEN_OR) return "|";
+    if (type == TOKEN_XOR) return "^";
+    if (type == TOKEN_SHL) return "<<";
+    if (type == TOKEN_SHR) return ">>";
+    if (type == TOKEN_EQ) return "=";
+    if (type == TOKEN_NEQ) return "!=";
+    if (type == TOKEN_LT) return "<";
+    if (type == TOKEN_LTEQ) return "<=";
+    if (type == TOKEN_GT) return ">";
+    if (type == TOKEN_GTEQ) return ">=";
+    if (type == TOKEN_LOGICAL_AND) return "&&";
+    if (type == TOKEN_LOGICAL_OR) return "||";
+
+    return NULL;
+}
+
+// Lexer
+Keyword keywords[] = {{"return", TOKEN_RETURN}};
 
 Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;
@@ -87,12 +136,24 @@ Token *lexer(char *text, size_t *tokens_size) {
 
         // Variables
         if (isalpha(*c) || *c == '_') {
-            char *keyword = c;
+            char *string = c;
             while (isalnum(*c) || *c == '_') c++;
-            size_t keyword_size = c - keyword;
+            size_t string_size = c - string;
 
-            tokens[size].type = TOKEN_VARIABLE;
-            tokens[size++].variable = strndup(keyword, keyword_size);
+            bool found = false;
+            for (size_t i = 0; i < sizeof(keywords) / sizeof(Keyword); i++) {
+                Keyword *keyword = &keywords[i];
+                size_t keywordSize = strlen(keyword->keyword);
+                if (!memcmp(string, keyword->keyword, keywordSize) && string_size == keywordSize) {
+                    tokens[size++].type = keyword->type;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                tokens[size].type = TOKEN_VARIABLE;
+                tokens[size++].variable = strndup(string, string_size);
+            }
             continue;
         }
 

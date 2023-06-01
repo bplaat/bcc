@@ -1,5 +1,6 @@
 #include "parser.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -73,6 +74,11 @@ void node_dump(FILE *f, Node *node) {
         fprintf(f, "%lld", node->integer);
     }
 
+    if (node->type == NODE_RETURN) {
+        fprintf(f, "return ");
+        node_dump(f, node->unary);
+    }
+
     if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
         fprintf(f, "( ");
 
@@ -113,9 +119,36 @@ void node_dump(FILE *f, Node *node) {
     }
 }
 
+// Print error
+void print_error(char *text, Token *token, char *fmt, ...) {
+    fprintf(stderr, "stdin:%d:%d ERROR: ", token->line, token->column);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+
+    // Seek to the right line in text
+    char *c = text;
+    for (int32_t i = 0; i < token->line - 1; i++) {
+        while (*c != '\n' && *c != '\r') c++;
+        if (*c == '\r') c++;
+        c++;
+    }
+    char *line_start = c;
+    while (*c != '\n' && *c != '\r' && *c != '\0') c++;
+    int32_t line_length = c - line_start;
+
+    fprintf(stderr, "\n%4d | ", token->line);
+    fwrite(line_start, 1, line_length, stderr);
+    fprintf(stderr, "\n     | ");
+    for (int32_t i = 0; i < token->column - 1; i++) fprintf(stderr, " ");
+    fprintf(stderr, "^\n");
+}
+
 // Parser
-Node *parser(Token *tokens, size_t tokens_size) {
+Node *parser(char *text, Token *tokens, size_t tokens_size) {
     Parser parser = {
+        .text = text,
         .tokens = tokens,
         .tokens_size = tokens_size,
         .position = 0,
@@ -130,7 +163,7 @@ void parser_eat(Parser *parser, TokenType type) {
     if (token->type == type) {
         parser->position++;
     } else {
-        fprintf(stderr, "parser_eat: Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
+        print_error(parser->text, token, "Unexpected token: '%s' wanted '%s'", token_type_to_string(token->type), token_type_to_string(type));
         exit(EXIT_FAILURE);
     }
 }
@@ -167,6 +200,12 @@ Node *parser_statement(Parser *parser) {
     if (token->type == TOKEN_LCURLY) {
         return parser_block(parser);
     }
+    if (token->type == TOKEN_RETURN) {
+        parser_eat(parser, TOKEN_RETURN);
+        Node *node = node_new_unary(NODE_RETURN, token, parser_assign(parser));
+        parser_eat(parser, TOKEN_SEMICOLON);
+        return node;
+    }
 
     Node *node = parser_assigns(parser);
     parser_eat(parser, TOKEN_SEMICOLON);
@@ -201,7 +240,8 @@ Node *parser_assign(Parser *parser) {
         Token *token = current();
         parser_eat(parser, TOKEN_ASSIGN);
         if (lhs->type != NODE_LOCAL) {
-            fprintf(stderr, "parser_assign: Unexpected token: %d at %d:%d\n", lhs->token->type, lhs->token->line, lhs->token->column);
+            print_error(parser->text, lhs->token, "Unexpected token: '%s' wanted '%s'", token_type_to_string(lhs->token->type),
+                        token_type_to_string(TOKEN_VARIABLE));
             exit(EXIT_FAILURE);
         }
         return node_new_operation(NODE_ASSIGN, token, lhs, parser_assign(parser));
@@ -397,6 +437,6 @@ Node *parser_primary(Parser *parser) {
         return node;
     }
 
-    fprintf(stderr, "parser_primary: Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
+    print_error(parser->text, token, "Unexpected token: '%s'", token_type_to_string(token->type));
     exit(EXIT_FAILURE);
 }
