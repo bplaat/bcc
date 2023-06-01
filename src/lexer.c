@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <stdlib.h>
+#include "utils.h"
 
 Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;
@@ -58,7 +59,7 @@ Token *lexer(char *text, size_t *tokens_size) {
             continue;
         }
 
-        // Literals
+        // Integers
         if (*c == '0' && *(c + 1) == 'b') {
             c += 2;
             tokens[size].type = TOKEN_INTEGER;
@@ -84,6 +85,17 @@ Token *lexer(char *text, size_t *tokens_size) {
             continue;
         }
 
+        // Variables
+        if (isalpha(*c) || *c == '_') {
+            char *keyword = c;
+            while (isalnum(*c) || *c == '_') c++;
+            size_t keyword_size = c - keyword;
+
+            tokens[size].type = TOKEN_VARIABLE;
+            tokens[size++].variable = strndup(keyword, keyword_size);
+            continue;
+        }
+
         // Syntax
         if (*c == '(') {
             tokens[size++].type = TOKEN_LPAREN;
@@ -102,6 +114,11 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
         if (*c == '}') {
             tokens[size++].type = TOKEN_RCURLY;
+            c++;
+            continue;
+        }
+        if (*c == ',') {
+            tokens[size++].type = TOKEN_COMMA;
             c++;
             continue;
         }
@@ -148,6 +165,10 @@ Token *lexer(char *text, size_t *tokens_size) {
                 c += 2;
                 continue;
             }
+
+            tokens[size++].type = TOKEN_ASSIGN;
+            c++;
+            continue;
         }
         if (*c == '!') {
             if (*(c + 1) == '=') {

@@ -43,7 +43,7 @@ void list_add(List *list, void *item) {
     list->items[list->size++] = item;
 }
 
-void list_release(List *list, ListFreeFunc free_func) {
+void list_free(List *list, ListFreeFunc free_func) {
     if (free_func) {
         for (size_t i = 0; i < list->size; i++) {
             if (list->items[i]) free_func(list->items[i]);

@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
     fclose(file);
 
     // Allocate code page
-    Page *code = page_new(16 * 1024);
+    Page *code = page_new(4 * 1024);
 
     // Lexer
     size_t tokens_size;
@@ -79,6 +79,15 @@ int main(int argc, char **argv) {
 
     // Codegen
     codegen(arch, code->data, node);
+    if (debug) {
+        size_t i = 0;
+        for (size_t y = 0; y < 512; y += 16) {
+            for (int32_t x = 0; x < 16; x++) {
+                printf("%02x ", ((uint8_t *)code->data)[i++]);
+            }
+            printf("\n");
+        }
+    }
 
     // Execute
     page_make_executable(code);

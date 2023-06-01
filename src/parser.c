@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "utils.h"
+
 // Node
 Node *node_new(NodeType type, Token *token) {
     Node *node = malloc(sizeof(Node));
@@ -31,13 +33,40 @@ Node *node_new_nodes(NodeType type, Token *token) {
     return node;
 }
 
+Node *node_new_block(NodeType type, Token *token) {
+    Node *node = node_new_nodes(type, token);
+    node->locals.capacity = 8;
+    map_init(&node->locals);
+    return node;
+}
+
 void node_dump(FILE *f, Node *node) {
     if (node->type == NODE_BLOCK) {
+        fprintf(f, "{\n");
+        for (size_t i = 0; i < node->locals.capacity; i++) {
+            Local *local = node->locals.values[i];
+            if (local) fprintf(f, "long %s;\n", node->locals.keys[i]);
+        }
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
             node_dump(f, child);
             fprintf(f, ";\n");
         }
+        fprintf(f, "}\n");
+    }
+
+    if (node->type == NODE_NODES) {
+        fprintf(f, "{\n");
+        for (size_t i = 0; i < node->nodes.size; i++) {
+            Node *child = node->nodes.items[i];
+            node_dump(f, child);
+            fprintf(f, ";\n");
+        }
+        fprintf(f, "}\n");
+    }
+
+    if (node->type == NODE_LOCAL) {
+        fprintf(f, "%s", node->local->name);
     }
 
     if (node->type == NODE_INTEGER) {
@@ -59,6 +88,7 @@ void node_dump(FILE *f, Node *node) {
         fprintf(f, "( ");
         node_dump(f, node->lhs);
 
+        if (node->type == NODE_ASSIGN) fprintf(f, " = ");
         if (node->type == NODE_ADD) fprintf(f, " + ");
         if (node->type == NODE_SUB) fprintf(f, " - ");
         if (node->type == NODE_MUL) fprintf(f, " * ");
@@ -100,14 +130,17 @@ void parser_eat(Parser *parser, TokenType type) {
     if (token->type == type) {
         parser->position++;
     } else {
-        fprintf(stderr, "Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
+        fprintf(stderr, "parser_eat: Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
         exit(EXIT_FAILURE);
     }
 }
 
 Node *parser_block(Parser *parser) {
     Token *token = current();
-    Node *node = node_new_nodes(NODE_BLOCK, token);
+    Node *node = node_new_block(NODE_BLOCK, token);
+    Node *oldBlockNode = parser->currentBlockNode;
+    parser->currentBlockNode = node;
+
     if (token->type == TOKEN_LCURLY) {
         parser_eat(parser, TOKEN_LCURLY);
         while (current()->type != TOKEN_RCURLY) {
@@ -119,6 +152,8 @@ Node *parser_block(Parser *parser) {
         Node *child = parser_statement(parser);
         if (child != NULL) list_add(&node->nodes, child);
     }
+
+    parser->currentBlockNode = oldBlockNode;
     return node;
 }
 
@@ -133,9 +168,45 @@ Node *parser_statement(Parser *parser) {
         return parser_block(parser);
     }
 
-    Node *node = parser_logical(parser);
+    Node *node = parser_assigns(parser);
     parser_eat(parser, TOKEN_SEMICOLON);
     return node;
+}
+
+Node *parser_assigns(Parser *parser) {
+    Token *token = current();
+    List *nodes = list_new();
+    for (;;) {
+        list_add(nodes, parser_assign(parser));
+        if (current()->type == TOKEN_COMMA) {
+            parser_eat(parser, TOKEN_COMMA);
+        } else {
+            break;
+        }
+    }
+    if (nodes->size == 1) {
+        Node *first = list_get(nodes, 0);
+        list_free(nodes, NULL);
+        return first;
+    }
+    Node *node = node_new_block(NODE_NODES, token);
+    list_free(&node->nodes, NULL);
+    node->nodes = *nodes;
+    return node;
+}
+
+Node *parser_assign(Parser *parser) {
+    Node *lhs = parser_logical(parser);
+    if (current()->type == TOKEN_ASSIGN) {
+        Token *token = current();
+        parser_eat(parser, TOKEN_ASSIGN);
+        if (lhs->type != NODE_LOCAL) {
+            fprintf(stderr, "parser_assign: Unexpected token: %d at %d:%d\n", lhs->token->type, lhs->token->line, lhs->token->column);
+            exit(EXIT_FAILURE);
+        }
+        return node_new_operation(NODE_ASSIGN, token, lhs, parser_assign(parser));
+    }
+    return lhs;
 }
 
 Node *parser_logical(Parser *parser) {
@@ -173,8 +244,7 @@ Node *parser_equality(Parser *parser) {
 
 Node *parser_relational(Parser *parser) {
     Node *node = parser_bitwise(parser);
-    while (current()->type == TOKEN_LT || current()->type == TOKEN_LTEQ || current()->type == TOKEN_GT ||
-           current()->type == TOKEN_GTEQ) {
+    while (current()->type == TOKEN_LT || current()->type == TOKEN_LTEQ || current()->type == TOKEN_GT || current()->type == TOKEN_GTEQ) {
         Token *token = current();
         if (token->type == TOKEN_LT) {
             parser_eat(parser, TOKEN_LT);
@@ -294,7 +364,7 @@ Node *parser_primary(Parser *parser) {
 
     if (token->type == TOKEN_LPAREN) {
         parser_eat(parser, TOKEN_LPAREN);
-        Node *node = parser_logical(parser);
+        Node *node = parser_assign(parser);
         parser_eat(parser, TOKEN_RPAREN);
         return node;
     }
@@ -304,7 +374,29 @@ Node *parser_primary(Parser *parser) {
         parser_eat(parser, TOKEN_INTEGER);
         return node;
     }
+    if (token->type == TOKEN_VARIABLE) {
+        Node *node = node_new(NODE_LOCAL, token);
 
-    fprintf(stderr, "Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
+        // Create local when it doesn't exists
+        Map *locals = &parser->currentBlockNode->locals;
+        Local *local = map_get(locals, token->variable);
+        if (local == NULL) {
+            local = malloc(sizeof(Local));
+            local->name = token->variable;
+            local->size = 8;
+            local->address = local->size;
+            for (size_t i = 0; i < locals->capacity; i++) {
+                Local *other_local = locals->values[i];
+                if (other_local) local->address += other_local->size;
+            }
+            map_set(locals, token->variable, local);
+        }
+        node->local = local;
+
+        parser_eat(parser, TOKEN_VARIABLE);
+        return node;
+    }
+
+    fprintf(stderr, "parser_primary: Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
     exit(EXIT_FAILURE);
 }
