@@ -47,6 +47,12 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
         c->byte += sizeof(int64_t);
     }
 
+    if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
+        codegen_node_x86_64(c, node->unary);
+
+        if (node->type == NODE_NEG) x86_64_inst3(c, 0x48, 0xf7, 0xd8);  // neg rax
+    }
+
     if (node->type > NODE_OPERATION_BEGIN && node->type < NODE_OPERATION_END) {
         codegen_node_x86_64(c, node->rhs);
         x86_64_inst1(c, 0x50 | (x86_64_rax & 7));  // push rax
@@ -83,6 +89,12 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
 void codegen_node_arm64(Codegen *c, Node *node) {
     if (node->type == NODE_INTEGER) {
         arm64_inst(c, 0xD2800000 | ((node->integer & 0xffff) << 5) | (arm64_x0 & 31));  // mov x0, imm
+    }
+
+    if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
+        codegen_node_arm64(c, node->unary);
+
+        if (node->type == NODE_NEG) arm64_inst(c, 0xCB0003E0);  // sub x0, xzr, x0
     }
 
     if (node->type > NODE_OPERATION_BEGIN && node->type < NODE_OPERATION_END) {

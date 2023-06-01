@@ -51,5 +51,8 @@ assert 10 "12 - 12 % 5"
 assert 30 "(10 + 5) \* 2"
 assert 4 "20 / (10 - 5)"
 assert 5 "(5 + 5) / (4 - 2)"
+assert 10 "+5 + +5"
+assert 20 "--20"
+assert 10 "---20 + +30"
 
 echo "[OK] All tests pass"
