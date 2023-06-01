@@ -1,43 +1,41 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stdio.h>
+#include <stdint.h>
+
 #include "lexer.h"
-#include "node.h"
-#include "utils.h"
 
-typedef struct Parser {
-    Arch *arch;
-    char *text;
-    List *tokens;
-    int32_t position;
-    Node *currentProgram;
-    Node *currentFuncdef;
-    int32_t uniqueString;
-} Parser;
+// Node
+typedef enum NodeType {
+    NODE_INTEGER,
 
-Node *parser(Arch *arch, char *text, List *tokens);
+    NODE_OPERATION_BEGIN,
+    NODE_ADD,
+    NODE_SUB,
+    NODE_OPERATION_END,
+} NodeType;
 
-void parser_eat(Parser *parser, TokenKind kind);
+typedef struct Node Node;
+struct Node {
+    NodeType type;
+    union {
+        int64_t integer;
+        struct {
+            Node *lhs;
+            Node *rhs;
+        };
+    };
+};
 
-Type *parser_type(Parser *parser);
+Node *node_new(NodeType type);
 
-Type *parser_type_suffix(Parser *parser, Type *type);
+Node *node_new_operation(NodeType type, Node *lhs, Node *rhs);
 
-Var *parser_find_var(Parser *parser, char *name);
+void node_dump(FILE *f, Node *node);
 
-Node *parser_program(Parser *parser);
-Node *parser_block(Parser *parser);
-Node *parser_statement(Parser *parser);
-Node *parser_decls(Parser *parser);
-Node *parser_assigns(Parser *parser);
-Node *parser_assign(Parser *parser);
-Node *parser_logic(Parser *parser);
-Node *parser_equality(Parser *parser);
-Node *parser_relational(Parser *parser);
-Node *parser_add(Parser *parser);
-Node *parser_mul(Parser *parser);
-Node *parser_unary(Parser *parser);
-Node *parser_primary_suffix(Parser *parser);
-Node *parser_primary(Parser *parser);
+// Parser
+Node *parser_add(Lexer *lexer);
+Node *parser_primary(Lexer *lexer);
 
 #endif

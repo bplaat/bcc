@@ -1,7 +1,4 @@
 .DS_Store
 bcc
-test
-*.s
-*.o
-*.exe
-*.bin
+bcc-arm64
+bcc-x86_64
