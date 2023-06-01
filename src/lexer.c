@@ -3,27 +3,67 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-Token lexer_next_token(Lexer *lexer) {
-    if (*lexer->c == '\0') return (Token){.type = TOKEN_EOF};
+Token *lexer(char *text, size_t *tokens_size) {
+    size_t capacity = 1024;
+    Token *tokens = malloc(capacity * sizeof(Token));
+    size_t size = 0;
+    char *c = text;
+    for (;;) {
+        if (size == capacity) {
+            capacity *= 2;
+            tokens = realloc(tokens, capacity * sizeof(Token));
+        }
 
-    // Whitespace
-    while (isspace(*lexer->c)) lexer->c++;
+        // EOF
+        if (*c == '\0') {
+            tokens[size++].type = TOKEN_EOF;
+            break;
+        }
 
-    // Literals
-    if (isdigit(*lexer->c)) {
-        return (Token){.type = TOKEN_INTEGER, .integer = strtol(lexer->c, &lexer->c, 10)};
+        // Whitespace
+        if (isspace(*c)) {
+            while (isspace(*c)) c++;
+            continue;
+        }
+
+        // Literals
+        if (isdigit(*c)) {
+            tokens[size].type = TOKEN_INTEGER;
+            tokens[size++].integer = strtol(c, &c, 10);
+            continue;
+        }
+
+        // Operators
+        if (*c == '+') {
+            tokens[size++].type = TOKEN_ADD;
+            c++;
+            continue;
+        }
+        if (*c == '-') {
+            tokens[size++].type = TOKEN_SUB;
+            c++;
+            continue;
+        }
+        if (*c == '*') {
+            tokens[size++].type = TOKEN_MUL;
+            c++;
+            continue;
+        }
+        if (*c == '/') {
+            tokens[size++].type = TOKEN_DIV;
+            c++;
+            continue;
+        }
+        if (*c == '%') {
+            tokens[size++].type = TOKEN_MOD;
+            c++;
+            continue;
+        }
+
+        // Unknown character
+        tokens[size].type = TOKEN_UNKNOWN;
+        tokens[size].character = *c++;
     }
-
-    // Operators
-    if (*lexer->c == '+') {
-        lexer->c++;
-        return (Token){.type = TOKEN_ADD};
-    }
-    if (*lexer->c == '-') {
-        lexer->c++;
-        return (Token){.type = TOKEN_SUB};
-    }
-
-    // Unknown character
-    return (Token){.type = TOKEN_UNKNOWN, .character = *lexer->c};
+    *tokens_size = size;
+    return tokens;
 }
