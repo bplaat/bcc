@@ -55,7 +55,7 @@ void parser_eat(Parser *parser, TokenType type) {
     if (token->type == type) {
         parser->position++;
     } else {
-        fprintf(stderr, "Unexpected token: '%d\n", token->type);
+        fprintf(stderr, "Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
         exit(EXIT_FAILURE);
     }
 }
@@ -99,6 +99,13 @@ Node *parser_mul(Parser *parser) {
 Node *parser_primary(Parser *parser) {
     Token *token = current();
 
+    if (token->type == TOKEN_LPAREN) {
+        parser_eat(parser, TOKEN_LPAREN);
+        Node *node = parser_add(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        return node;
+    }
+
     if (token->type == TOKEN_INTEGER) {
         Node *node = node_new(NODE_INTEGER, token);
         node->integer = token->integer;
@@ -106,6 +113,6 @@ Node *parser_primary(Parser *parser) {
         return node;
     }
 
-    fprintf(stderr, "Unexpected token: %d\n", current()->type);
+    fprintf(stderr, "Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
     exit(EXIT_FAILURE);
 }

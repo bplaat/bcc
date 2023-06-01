@@ -8,7 +8,12 @@ Token *lexer(char *text, size_t *tokens_size) {
     Token *tokens = malloc(capacity * sizeof(Token));
     size_t size = 0;
     char *c = text;
+    int32_t line = 1;
+    char *line_start = c;
     for (;;) {
+        tokens[size].line = line;
+        tokens[size].column = c - line_start + 1;
+
         if (size == capacity) {
             capacity *= 2;
             tokens = realloc(tokens, capacity * sizeof(Token));
@@ -21,8 +26,14 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
 
         // Whitespace
-        if (isspace(*c)) {
-            while (isspace(*c)) c++;
+        if (*c == ' ' || *c == '\t') {
+            while (*c == ' ' || *c == '\t') c++;
+            continue;
+        }
+        if (*c == '\r' || *c == '\n') {
+            if (*c == '\r') c++;
+            c++;
+            line_start = c;
             continue;
         }
 
@@ -30,6 +41,18 @@ Token *lexer(char *text, size_t *tokens_size) {
         if (isdigit(*c)) {
             tokens[size].type = TOKEN_INTEGER;
             tokens[size++].integer = strtol(c, &c, 10);
+            continue;
+        }
+
+        // Syntax
+        if (*c == '(') {
+            tokens[size++].type = TOKEN_LPAREN;
+            c++;
+            continue;
+        }
+        if (*c == ')') {
+            tokens[size++].type = TOKEN_RPAREN;
+            c++;
             continue;
         }
 
