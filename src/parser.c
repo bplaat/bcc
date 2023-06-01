@@ -47,6 +47,12 @@ void node_dump(FILE *f, Node *node) {
         if (node->type == NODE_MUL) fprintf(f, " * ");
         if (node->type == NODE_DIV) fprintf(f, " / ");
         if (node->type == NODE_MOD) fprintf(f, " %% ");
+        if (node->type == NODE_EQ) fprintf(f, " == ");
+        if (node->type == NODE_NEQ) fprintf(f, " != ");
+        if (node->type == NODE_LT) fprintf(f, " < ");
+        if (node->type == NODE_LTEQ) fprintf(f, " <= ");
+        if (node->type == NODE_GT) fprintf(f, " > ");
+        if (node->type == NODE_GTEQ) fprintf(f, " >= ");
 
         node_dump(f, node->rhs);
         fprintf(f, " )");
@@ -60,7 +66,7 @@ Node *parser(Token *tokens, size_t tokens_size) {
         .tokens_size = tokens_size,
         .position = 0,
     };
-    return parser_add(&parser);
+    return parser_equality(&parser);
 }
 
 #define current() (&parser->tokens[parser->position])
@@ -73,6 +79,50 @@ void parser_eat(Parser *parser, TokenType type) {
         fprintf(stderr, "Unexpected token: %d at %d:%d\n", token->type, token->line, token->column);
         exit(EXIT_FAILURE);
     }
+}
+
+Node *parser_equality(Parser *parser) {
+    Node *node = parser_relational(parser);
+    while (current()->type == TOKEN_EQ || current()->type == TOKEN_NEQ) {
+        if (current()->type == TOKEN_EQ) {
+            Token *token = current();
+            parser_eat(parser, TOKEN_EQ);
+            node = node_new_operation(NODE_EQ, token, node, parser_relational(parser));
+        }
+        if (current()->type == TOKEN_NEQ) {
+            Token *token = current();
+            parser_eat(parser, TOKEN_NEQ);
+            node = node_new_operation(NODE_NEQ, token, node, parser_relational(parser));
+        }
+    }
+    return node;
+}
+
+Node *parser_relational(Parser *parser) {
+    Node *node = parser_add(parser);
+    while (current()->type == TOKEN_LT || current()->type == TOKEN_LTEQ || current()->type == TOKEN_GT || current()->type == TOKEN_GTEQ) {
+        if (current()->type == TOKEN_LT) {
+            Token *token = current();
+            parser_eat(parser, TOKEN_LT);
+            node = node_new_operation(NODE_LT, token, node, parser_add(parser));
+        }
+        if (current()->type == TOKEN_LTEQ) {
+            Token *token = current();
+            parser_eat(parser, TOKEN_LTEQ);
+            node = node_new_operation(NODE_LTEQ, token, node, parser_add(parser));
+        }
+        if (current()->type == TOKEN_GT) {
+            Token *token = current();
+            parser_eat(parser, TOKEN_GT);
+            node = node_new_operation(NODE_GT, token, node, parser_add(parser));
+        }
+        if (current()->type == TOKEN_GTEQ) {
+            Token *token = current();
+            parser_eat(parser, TOKEN_GTEQ);
+            node = node_new_operation(NODE_GTEQ, token, node, parser_add(parser));
+        }
+    }
+    return node;
 }
 
 Node *parser_add(Parser *parser) {
@@ -130,7 +180,7 @@ Node *parser_primary(Parser *parser) {
 
     if (token->type == TOKEN_LPAREN) {
         parser_eat(parser, TOKEN_LPAREN);
-        Node *node = parser_add(parser);
+        Node *node = parser_equality(parser);
         parser_eat(parser, TOKEN_RPAREN);
         return node;
     }

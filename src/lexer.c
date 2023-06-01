@@ -82,6 +82,42 @@ Token *lexer(char *text, size_t *tokens_size) {
             c++;
             continue;
         }
+        if (*c == '=') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_EQ;
+                c += 2;
+                continue;
+            }
+        }
+        if (*c == '!') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_NEQ;
+                c += 2;
+                continue;
+            }
+        }
+        if (*c == '<') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_LTEQ;
+                c += 2;
+                continue;
+            }
+
+            tokens[size++].type = TOKEN_LT;
+            c++;
+            continue;
+        }
+        if (*c == '>') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_GTEQ;
+                c += 2;
+                continue;
+            }
+
+            tokens[size++].type = TOKEN_GT;
+            c++;
+            continue;
+        }
 
         // Unknown character
         tokens[size].type = TOKEN_UNKNOWN;
