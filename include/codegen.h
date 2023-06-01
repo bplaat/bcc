@@ -1,26 +1,26 @@
 #ifndef CODEGEN_H
-
-#include <stdio.h>
+#define CODEGEN_H
 
 #include "parser.h"
 #include "utils.h"
 
+// Arch
+typedef enum Arch {
+    ARCH_X86_64,
+    ARCH_ARM64,
+} Arch;
+
+// Codegen
 typedef struct Codegen {
-    FILE *file;
-    Arch *arch;
-    bool *regsUsed;
-    Node *currentProgram;
-    Node *currentFuncdef;
-    int32_t uniqueLabel;
-    bool nestedAssign;
+    void *code;
+    uint8_t *byte;
+    uint32_t *word;
 } Codegen;
 
-void codegen(FILE *file, Arch *arch, Node *node);
+void codegen(Arch arch, void *code, Node *node);
 
-int32_t codegen_alloc(Codegen *codegen, int32_t requestReg);
+void codegen_node_x86_64(Codegen *codegen, Node *node);
 
-void codegen_free(Codegen *codegen, int32_t reg);
-
-int32_t codegen_node(Codegen *codegen, Node *node, int32_t requestReg);
+void codegen_node_arm64(Codegen *codegen, Node *node);
 
 #endif
