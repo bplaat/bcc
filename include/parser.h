@@ -23,6 +23,8 @@ typedef enum NodeType {
     NODE_LOCAL,
     NODE_INTEGER,
 
+    NODE_RETURN,
+
     NODE_UNARY_BEGIN,
     NODE_NEG,
     NODE_NOT,
@@ -89,14 +91,17 @@ Node *node_new_block(NodeType type, Token *token);
 void node_dump(FILE *f, Node *node);
 
 // Parser
+void print_error(char *text, Token *token, char *fmt, ...);
+
 typedef struct Parser {
+    char *text;
     Token *tokens;
     size_t tokens_size;
     size_t position;
     Node *currentBlockNode;
 } Parser;
 
-Node *parser(Token *tokens, size_t tokens_size);
+Node *parser(char *text, Token *tokens, size_t tokens_size);
 
 void parser_eat(Parser *parser, TokenType type);
 

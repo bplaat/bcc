@@ -65,13 +65,13 @@ int main(int argc, char **argv) {
     if (debug) {
         for (size_t i = 0; i < tokens_size; i++) {
             Token *token = &tokens[i];
-            printf("%d ", token->type);
+            printf("%s ", token_type_to_string(token->type));
         }
-        printf("\n");
+        printf("\n\n");
     }
 
     // Parser
-    Node *node = parser(tokens, tokens_size);
+    Node *node = parser(text, tokens, tokens_size);
     if (debug) {
         node_dump(stdout, node);
         printf("\n");
@@ -79,15 +79,15 @@ int main(int argc, char **argv) {
 
     // Codegen
     codegen(arch, code->data, node);
-    if (debug) {
-        size_t i = 0;
-        for (size_t y = 0; y < 512; y += 16) {
-            for (int32_t x = 0; x < 16; x++) {
-                printf("%02x ", ((uint8_t *)code->data)[i++]);
-            }
-            printf("\n");
-        }
-    }
+    // if (debug) {
+    //     size_t i = 0;
+    //     for (size_t y = 0; y < 512; y += 16) {
+    //         for (int32_t x = 0; x < 16; x++) {
+    //             printf("%02x ", ((uint8_t *)code->data)[i++]);
+    //         }
+    //         printf("\n");
+    //     }
+    // }
 
     // Execute
     page_make_executable(code);

@@ -45,6 +45,9 @@ void codegen(Arch arch, void *code, Node *node) {
 
 void codegen_node_x86_64(Codegen *c, Node *node) {
     if (node->type == NODE_BLOCK) {
+        Node *oldBlockNode = c->currentBlockNode;
+        c->currentBlockNode = node;
+
         // Calculate locals size
         size_t locals_size = 0;
         for (size_t i = 0; i < node->locals.capacity; i++) {
@@ -72,6 +75,9 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
             x86_64_inst3(c, 0x48, 0x89, 0xec);         // mov rsp, rbp
             x86_64_inst1(c, 0x58 | (x86_64_rbp & 7));  // pop rbp
         }
+
+        c->currentBlockNode = oldBlockNode;
+        return;
     }
 
     if (node->type == NODE_NODES) {
@@ -79,18 +85,32 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
             Node *child = node->nodes.items[i];
             codegen_node_x86_64(c, child);
         }
+        return;
     }
 
     if (node->type == NODE_LOCAL) {
         x86_64_inst3(c, 0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
         *((int32_t *)c->code_byte_ptr) = -node->local->address;
         c->code_byte_ptr += sizeof(int32_t);
+        return;
     }
 
     if (node->type == NODE_INTEGER) {
         x86_64_inst2(c, 0x48, 0xb8 | (x86_64_rax & 7));  // movabs rax, imm
         *((int64_t *)c->code_byte_ptr) = node->integer;
         c->code_byte_ptr += sizeof(int64_t);
+        return;
+    }
+
+    if (node->type == NODE_RETURN) {
+        codegen_node_x86_64(c, node->unary);
+
+        if (c->currentBlockNode->locals.filled > 0) {
+            x86_64_inst3(c, 0x48, 0x89, 0xec);         // mov rsp, rbp
+            x86_64_inst1(c, 0x58 | (x86_64_rbp & 7));  // pop rbp
+        }
+        x86_64_inst1(c, 0xc3);  // ret
+        return;
     }
 
     if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
@@ -103,6 +123,7 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
             x86_64_inst3(c, 0x0f, 0x94, 0xc0);        // sete al
             x86_64_inst4(c, 0x48, 0x0f, 0xb6, 0xc0);  // movzx rax, al
         }
+        return;
     }
 
     if (node->type == NODE_ASSIGN) {
@@ -157,6 +178,7 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
             x86_64_inst3(c, 0x0f, 0x94, 0xc0);                                      // sete al
             x86_64_inst4(c, 0x48, 0x0f, 0xb6, 0xc0);                                // movzx rax, al
         }
+        return;
     }
 }
 
@@ -171,6 +193,9 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
 
 void codegen_node_arm64(Codegen *c, Node *node) {
     if (node->type == NODE_BLOCK) {
+        Node *oldBlockNode = c->currentBlockNode;
+        c->currentBlockNode = node;
+
         // Calculate locals size
         size_t locals_size = 0;
         for (size_t i = 0; i < node->locals.capacity; i++) {
@@ -196,6 +221,9 @@ void codegen_node_arm64(Codegen *c, Node *node) {
             arm64_inst(c, 0x910003BF);                    // mov sp, fp
             arm64_inst(c, 0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
         }
+
+        c->currentBlockNode = oldBlockNode;
+        return;
     }
 
     if (node->type == NODE_NODES) {
@@ -203,15 +231,29 @@ void codegen_node_arm64(Codegen *c, Node *node) {
             Node *child = node->nodes.items[i];
             codegen_node_arm64(c, child);
         }
+        return;
     }
 
     if (node->type == NODE_LOCAL) {
         arm64_inst(c, 0xD1000000 | ((node->local->address & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-        arm64_inst(c, 0xF9400020);                                                                                        // ldr x0, [x1]
+        arm64_inst(c, 0xF9400020);                                                                                       // ldr x0, [x1]
+        return;
     }
 
     if (node->type == NODE_INTEGER) {
         arm64_inst(c, 0xD2800000 | ((node->integer & 0xffff) << 5) | (arm64_x0 & 31));  // mov x0, imm
+        return;
+    }
+
+    if (node->type == NODE_RETURN) {
+        codegen_node_arm64(c, node->unary);
+
+        if (c->currentBlockNode->locals.filled > 0) {
+            arm64_inst(c, 0x910003BF);                    // mov sp, fp
+            arm64_inst(c, 0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
+        }
+        arm64_inst(c, 0xD65F03C0);  // ret
+        return;
     }
 
     if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
@@ -223,13 +265,14 @@ void codegen_node_arm64(Codegen *c, Node *node) {
             arm64_inst(c, 0xF100001F);  // cmp x0, 0
             arm64_inst(c, 0x9A9F17E0);  // cset x0, eq
         }
+        return;
     }
 
     if (node->type == NODE_ASSIGN) {
         codegen_node_arm64(c, node->rhs);
 
         arm64_inst(c, 0xD1000000 | ((node->lhs->local->address & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-        arm64_inst(c, 0xF9000020);                                                                                             // str x0, [x1]
+        arm64_inst(c, 0xF9000020);                                                                                            // str x0, [x1]
         return;
     }
 
@@ -270,5 +313,6 @@ void codegen_node_arm64(Codegen *c, Node *node) {
             arm64_inst(c, 0xF100041F);                                      // cmp x0, 1
             arm64_inst(c, 0x9A9F17E0);                                      // cset x0, eq
         }
+        return;
     }
 }
