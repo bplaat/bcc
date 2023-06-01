@@ -4,11 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lexer.h"
-#include "parser.h"
-#include "page.h"
-#include "util.h"
 #include "codegen.h"
+#include "lexer.h"
+#include "page.h"
+#include "parser.h"
+#include "util.h"
 
 typedef int64_t (*JitFunc)(void);
 
@@ -62,6 +62,13 @@ int main(int argc, char **argv) {
     // Lexer
     size_t tokens_size;
     Token *tokens = lexer(text, &tokens_size);
+    if (debug) {
+        for (size_t i = 0; i < tokens_size; i++) {
+            Token *token = &tokens[i];
+            printf("%d ", token->type);
+        }
+        printf("\n");
+    }
 
     // Parser
     Node *node = parser(tokens, tokens_size);
