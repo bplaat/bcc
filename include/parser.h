@@ -1,8 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "lexer.h"
 
@@ -20,6 +20,16 @@ typedef enum NodeType {
     NODE_MUL,
     NODE_DIV,
     NODE_MOD,
+
+    NODE_COMPARE_BEGIN,
+    NODE_EQ,
+    NODE_NEQ,
+    NODE_LT,
+    NODE_LTEQ,
+    NODE_GT,
+    NODE_GTEQ,
+    NODE_COMPARE_END,
+
     NODE_OPERATION_END,
 } NodeType;
 
@@ -56,6 +66,8 @@ Node *parser(Token *tokens, size_t tokens_size);
 
 void parser_eat(Parser *parser, TokenType type);
 
+Node *parser_equality(Parser *parser);
+Node *parser_relational(Parser *parser);
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);

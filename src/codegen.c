@@ -76,6 +76,15 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
             x86_64_inst3(c, 0x48, 0xf7, 0xf9);  // idiv rcx
             x86_64_inst3(c, 0x48, 0x89, 0xd0);  // mov rax, rdx
         }
+        if (node->type > NODE_COMPARE_BEGIN && node->type < NODE_COMPARE_END) {
+            x86_64_inst3(c, 0x48, 0x39, 0xd0);                               // cmp rax, rdx
+            if (node->type == NODE_EQ) x86_64_inst3(c, 0x0f, 0x94, 0xc0);    // sete al
+            if (node->type == NODE_NEQ) x86_64_inst3(c, 0x0f, 0x95, 0xc0);   // setne al
+            if (node->type == NODE_LT) x86_64_inst3(c, 0x0f, 0x9c, 0xc0);    // setl al
+            if (node->type == NODE_LTEQ) x86_64_inst3(c, 0x0f, 0x9e, 0xc0);  // setle al
+            if (node->type == NODE_GT) x86_64_inst3(c, 0x0f, 0x9f, 0xc0);    // setg al
+            if (node->type == NODE_GTEQ) x86_64_inst3(c, 0x0f, 0x9d, 0xc0);  // setge al
+        }
     }
 }
 
@@ -111,6 +120,15 @@ void codegen_node_arm64(Codegen *c, Node *node) {
         if (node->type == NODE_MOD) {
             arm64_inst(c, 0x9AC10802);  // udiv x2, x0, x1
             arm64_inst(c, 0x9B018040);  // msub x0, x2, x1, x0
+        }
+        if (node->type > NODE_COMPARE_BEGIN && node->type < NODE_COMPARE_END) {
+            arm64_inst(c, 0xEB01001F);                               // cmp x0, x1
+            if (node->type == NODE_EQ) arm64_inst(c, 0x9A9F17E0);    // cset x0, eq
+            if (node->type == NODE_NEQ) arm64_inst(c, 0x9A9F07E0);   // cset x0, ne
+            if (node->type == NODE_LT) arm64_inst(c, 0x9A9FA7E0);    // cset x0, lt
+            if (node->type == NODE_LTEQ) arm64_inst(c, 0x9A9FC7E0);  // cset x0, le
+            if (node->type == NODE_GT) arm64_inst(c, 0x9A9FD7E0);    // cset x0, gt
+            if (node->type == NODE_GTEQ) arm64_inst(c, 0x9A9FB7E0);  // cset x0, ge
         }
     }
 }
