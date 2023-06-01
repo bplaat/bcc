@@ -25,6 +25,6 @@ void list_add(List *list, void *item);
 
 typedef void (*ListFreeFunc)(void *);
 
-void list_release(List *list, ListFreeFunc free_func);
+void list_free(List *list, ListFreeFunc free_func);
 
 #endif
