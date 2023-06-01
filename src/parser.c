@@ -11,6 +11,12 @@ Node *node_new(NodeType type, Token *token) {
     return node;
 }
 
+Node *node_new_unary(NodeType type, Token *token, Node *unary) {
+    Node *node = node_new(type, token);
+    node->unary = unary;
+    return node;
+}
+
 Node *node_new_operation(NodeType type, Token *token, Node *lhs, Node *rhs) {
     Node *node = node_new(type, token);
     node->lhs = lhs;
@@ -21,6 +27,15 @@ Node *node_new_operation(NodeType type, Token *token, Node *lhs, Node *rhs) {
 void node_dump(FILE *f, Node *node) {
     if (node->type == NODE_INTEGER) {
         fprintf(f, "%lld", node->integer);
+    }
+
+    if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
+        fprintf(f, "( ");
+
+        if (node->type == NODE_NEG) fprintf(f, "- ");
+
+        node_dump(f, node->unary);
+        fprintf(f, " )");
     }
 
     if (node->type > NODE_OPERATION_BEGIN && node->type < NODE_OPERATION_END) {
@@ -77,24 +92,38 @@ Node *parser_add(Parser *parser) {
 }
 
 Node *parser_mul(Parser *parser) {
-    Node *node = parser_primary(parser);
+    Node *node = parser_unary(parser);
     while (current()->type == TOKEN_MUL || current()->type == TOKEN_DIV || current()->type == TOKEN_MOD) {
         Token *token = current();
         if (token->type == TOKEN_MUL) {
             parser_eat(parser, TOKEN_MUL);
-            node = node_new_operation(NODE_MUL, token, node, parser_primary(parser));
+            node = node_new_operation(NODE_MUL, token, node, parser_unary(parser));
         }
         if (token->type == TOKEN_DIV) {
             parser_eat(parser, TOKEN_DIV);
-            node = node_new_operation(NODE_DIV, token, node, parser_primary(parser));
+            node = node_new_operation(NODE_DIV, token, node, parser_unary(parser));
         }
         if (token->type == TOKEN_MOD) {
             parser_eat(parser, TOKEN_MOD);
-            node = node_new_operation(NODE_MOD, token, node, parser_primary(parser));
+            node = node_new_operation(NODE_MOD, token, node, parser_unary(parser));
         }
     }
     return node;
 }
+
+Node *parser_unary(Parser *parser) {
+    Token *token = current();
+    if (token->type == TOKEN_ADD) {
+        parser_eat(parser, TOKEN_ADD);
+        return parser_unary(parser);
+    }
+    if (token->type == TOKEN_SUB) {
+        parser_eat(parser, TOKEN_SUB);
+        return node_new_unary(NODE_NEG, token, parser_unary(parser));
+    }
+    return parser_primary(parser);
+}
+
 
 Node *parser_primary(Parser *parser) {
     Token *token = current();
@@ -105,7 +134,6 @@ Node *parser_primary(Parser *parser) {
         parser_eat(parser, TOKEN_RPAREN);
         return node;
     }
-
     if (token->type == TOKEN_INTEGER) {
         Node *node = node_new(NODE_INTEGER, token);
         node->integer = token->integer;

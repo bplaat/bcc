@@ -10,6 +10,10 @@
 typedef enum NodeType {
     NODE_INTEGER,
 
+    NODE_UNARY_BEGIN,
+    NODE_NEG,
+    NODE_UNARY_END,
+
     NODE_OPERATION_BEGIN,
     NODE_ADD,
     NODE_SUB,
@@ -25,6 +29,7 @@ struct Node {
     Token *token;
     union {
         int64_t integer;
+        Node *unary;
         struct {
             Node *lhs;
             Node *rhs;
@@ -33,6 +38,8 @@ struct Node {
 };
 
 Node *node_new(NodeType type, Token *token);
+
+Node *node_new_unary(NodeType type, Token *token, Node *unary);
 
 Node *node_new_operation(NodeType type, Token *token, Node *lhs, Node *rhs);
 
@@ -51,6 +58,7 @@ void parser_eat(Parser *parser, TokenType type);
 
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
+Node *parser_unary(Parser *parser);
 Node *parser_primary(Parser *parser);
 
 #endif
