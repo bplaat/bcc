@@ -7,9 +7,10 @@ Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;
     Token *tokens = malloc(capacity * sizeof(Token));
     size_t size = 0;
+
     char *c = text;
-    int32_t line = 1;
     char *line_start = c;
+    int32_t line = 1;
     for (;;) {
         tokens[size].line = line;
         tokens[size].column = c - line_start + 1;
@@ -25,6 +26,26 @@ Token *lexer(char *text, size_t *tokens_size) {
             break;
         }
 
+        // Comments
+        if (*c == '/' && *(c + 1) == '/') {
+            while (*c != '\n' && *c != '\r') c++;
+            continue;
+        }
+        if (*c == '/' && *(c + 1) == '*') {
+            c += 2;
+            while (*c != '*' || *(c + 1) != '/') {
+                if (*c == '\n' || *c == '\r') {
+                    if (*c == '\r') c++;
+                    line_start = ++c;
+                    line++;
+                    continue;
+                }
+                c++;
+            }
+            c += 2;
+            continue;
+        }
+
         // Whitespace
         if (*c == ' ' || *c == '\t') {
             while (*c == ' ' || *c == '\t') c++;
@@ -32,8 +53,8 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
         if (*c == '\r' || *c == '\n') {
             if (*c == '\r') c++;
-            c++;
-            line_start = c;
+            line_start = ++c;
+            line++;
             continue;
         }
 
