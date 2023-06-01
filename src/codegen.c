@@ -42,7 +42,7 @@ void codegen(Arch arch, void *code, Node *node) {
 
 void codegen_node_x86_64(Codegen *c, Node *node) {
     if (node->type == NODE_INTEGER) {
-        x86_64_inst2(c, 0x48, 0xb8 | (x86_64_rax & 7));
+        x86_64_inst2(c, 0x48, 0xb8 | (x86_64_rax & 7)); // mov rax, imm
         *((int64_t *)c->byte) = node->integer;
         c->byte += sizeof(int64_t);
     }
