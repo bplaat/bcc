@@ -8,14 +8,17 @@
 typedef enum TokenType {
     TOKEN_EOF,
     TOKEN_UNKNOWN,
+    TOKEN_VARIABLE,
     TOKEN_INTEGER,
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LCURLY,
     TOKEN_RCURLY,
+    TOKEN_COMMA,
     TOKEN_SEMICOLON,
     TOKEN_NOT,
     TOKEN_LOGICAL_NOT,
+    TOKEN_ASSIGN,
     TOKEN_ADD,
     TOKEN_SUB,
     TOKEN_MUL,
@@ -43,6 +46,7 @@ typedef struct Token {
     union {
         char character;
         int64_t integer;
+        char *variable;
     };
 } Token;
 

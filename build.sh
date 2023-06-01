@@ -2,25 +2,13 @@
 # Build and run test suite for now only works on macOS
 
 # Compile bcc to both targets on macos
-clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-arm64 || exit
 clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
+clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-arm64 || exit
 
 # Function that runs a test
 assert() {
     expected=$1
     input=$2
-
-    # Compile and run for arm64
-    echo $input | ./bcc-arm64 -
-    actual=$?
-    if [[ $actual != $expected ]]; then
-        echo "[FAIL] Program:"
-        echo $input
-        echo "Node:"
-        echo $input | ./bcc-arm64 -d -
-        echo "Arch: arm64 | Return: $actual | Correct: $expected"
-        exit 1
-    fi
 
     # Compile and run for x86_64
     echo $input | ./bcc-x86_64 -
@@ -31,6 +19,18 @@ assert() {
         echo "Node:"
         echo $input | ./bcc-x86_64 -d -
         echo "Arch: x86_64 | Return: $actual | Correct: $expected"
+        exit 1
+    fi
+
+    # Compile and run for arm64
+    echo $input | ./bcc-arm64 -
+    actual=$?
+    if [[ $actual != $expected ]]; then
+        echo "[FAIL] Program:"
+        echo $input
+        echo "Node:"
+        echo $input | ./bcc-arm64 -d -
+        echo "Arch: arm64 | Return: $actual | Correct: $expected"
         exit 1
     fi
 }
@@ -77,5 +77,8 @@ assert 0 "0 && 1;"
 assert 1 "(20 > 5) && 1;"
 assert 1 "0 || 1;"
 assert 0 "0 || 0;"
+assert 15 "{a = 10; a + 5; }";
+assert 14 "{a = 10, b = 4; a + b; }";
+assert 2 "{a = 10, b = 4; a - (b \* 2); }";
 
 echo "[OK] All tests pass"
