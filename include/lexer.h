@@ -2,6 +2,7 @@
 #define LEXER_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 // Token
 typedef enum TokenType {
@@ -10,6 +11,9 @@ typedef enum TokenType {
     TOKEN_INTEGER,
     TOKEN_ADD,
     TOKEN_SUB,
+    TOKEN_MUL,
+    TOKEN_DIV,
+    TOKEN_MOD,
 } TokenType;
 
 typedef struct Token {
@@ -21,11 +25,6 @@ typedef struct Token {
 } Token;
 
 // Lexer
-typedef struct Lexer {
-    char *text;
-    char *c;
-} Lexer;
-
-Token lexer_next_token(Lexer *lexer);
+Token *lexer(char *text, size_t *tokens_size);
 
 #endif

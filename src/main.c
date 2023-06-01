@@ -59,9 +59,12 @@ int main(int argc, char **argv) {
     // Allocate code page
     Page *code = page_new(16 * 1024);
 
+    // Lexer
+    size_t tokens_size;
+    Token *tokens = lexer(text, &tokens_size);
+
     // Parser
-    Lexer lexer = {.text = text, .c = text};
-    Node *node = parser_add(&lexer);
+    Node *node = parser(tokens, tokens_size);
     if (debug) {
         node_dump(stdout, node);
         printf("\n");
