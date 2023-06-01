@@ -16,6 +16,12 @@ typedef enum TokenType {
     TOKEN_MUL,
     TOKEN_DIV,
     TOKEN_MOD,
+    TOKEN_EQ,
+    TOKEN_NEQ,
+    TOKEN_LT,
+    TOKEN_LTEQ,
+    TOKEN_GT,
+    TOKEN_GTEQ,
 } TokenType;
 
 typedef struct Token {
