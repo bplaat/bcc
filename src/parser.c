@@ -1,5 +1,6 @@
 #include "parser.h"
 
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,7 +71,7 @@ void node_dump(FILE *f, Node *node) {
         fprintf(f, "%s", node->local->name);
     }
     if (node->type == NODE_INTEGER) {
-        fprintf(f, "%lld", node->integer);
+        fprintf(f, "%" PRIi64, node->integer);
     }
 
     if (node->type == NODE_IF) {
@@ -460,8 +461,11 @@ Node *parser_primary(Parser *parser) {
             local->size = 8;
             local->address = local->size;
             for (size_t i = 0; i < locals->capacity; i++) {
-                Local *other_local = locals->values[i];
-                if (other_local) local->address += other_local->size;
+                char *key = locals->keys[i];
+                if (key) {
+                    Local *other_local = locals->values[i];
+                    local->address += other_local->size;
+                }
             }
             parser->currentFunction->locals_size += local->size;
             map_set(locals, token->variable, local);
