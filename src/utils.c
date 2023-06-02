@@ -5,6 +5,7 @@
 
 size_t align(size_t size, size_t alignment) { return (size + alignment - 1) / alignment * alignment; }
 
+// Strdup pollyfills
 char *strdup(const char *str) { return strndup(str, strlen(str)); }
 
 char *strndup(const char *str, size_t size) {
