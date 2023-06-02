@@ -43,19 +43,21 @@ Node *node_new_function(NodeType type, Token *token) {
     return node;
 }
 
-void node_dump(FILE *f, Node *node) {
+void node_dump(FILE *f, Node *node, int32_t indent) {
     if (node->type == NODE_FUNCTION) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->locals.capacity; i++) {
             char *key = node->locals.keys[i];
             if (key) {
                 Local *local = node->locals.values[i];
+                for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
                 fprintf(f, "long %s;\n", local->name);
             }
         }
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
-            node_dump(f, child);
+            for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
+            node_dump(f, child, indent + 1);
             fprintf(f, ";\n");
         }
         fprintf(f, "}\n");
@@ -64,9 +66,12 @@ void node_dump(FILE *f, Node *node) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
-            node_dump(f, child);
+            for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
+            node_dump(f, child, indent + 1);
             fprintf(f, ";\n");
         }
+
+        for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
         fprintf(f, "}");
     }
 
@@ -78,31 +83,33 @@ void node_dump(FILE *f, Node *node) {
     }
 
     if (node->type == NODE_IF) {
-        fprintf(f, "if ( ");
-        node_dump(f, node->condition);
-        fprintf(f, " ) ");
-        node_dump(f, node->thenBlock);
+        fprintf(f, "if (");
+        node_dump(f, node->condition, indent);
+        fprintf(f, ") ");
+        node_dump(f, node->thenBlock, indent + 1);
         if (node->elseBlock != NULL) {
+            for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
             fprintf(f, " else ");
-            node_dump(f, node->elseBlock);
+            node_dump(f, node->elseBlock, indent + 1);
         }
     }
     if (node->type == NODE_WHILE) {
-        fprintf(f, "while ( ");
-        node_dump(f, node->condition);
-        fprintf(f, " ) ");
-        node_dump(f, node->thenBlock);
+        fprintf(f, "while (");
+        node_dump(f, node->condition, indent);
+        fprintf(f, ") ");
+        node_dump(f, node->thenBlock, indent + 1);
     }
     if (node->type == NODE_DOWHILE) {
         fprintf(f, "do ");
-        node_dump(f, node->thenBlock);
-        fprintf(f, "while ( ");
-        node_dump(f, node->condition);
-        fprintf(f, " )");
+        node_dump(f, node->thenBlock, indent + 1);
+        for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
+        fprintf(f, "while (");
+        node_dump(f, node->condition, indent);
+        fprintf(f, ")");
     }
     if (node->type == NODE_RETURN) {
         fprintf(f, "return ");
-        node_dump(f, node->unary);
+        node_dump(f, node->unary, indent);
     }
 
     if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
@@ -112,13 +119,13 @@ void node_dump(FILE *f, Node *node) {
         if (node->type == NODE_NOT) fprintf(f, "~ ");
         if (node->type == NODE_LOGICAL_NOT) fprintf(f, "! ");
 
-        node_dump(f, node->unary);
+        node_dump(f, node->unary, indent);
         fprintf(f, " )");
     }
 
     if (node->type > NODE_OPERATION_BEGIN && node->type < NODE_OPERATION_END) {
         fprintf(f, "( ");
-        node_dump(f, node->lhs);
+        node_dump(f, node->lhs, indent);
 
         if (node->type == NODE_ASSIGN) fprintf(f, " = ");
         if (node->type == NODE_ADD) fprintf(f, " + ");
@@ -140,7 +147,7 @@ void node_dump(FILE *f, Node *node) {
         if (node->type == NODE_LOGICAL_AND) fprintf(f, " && ");
         if (node->type == NODE_LOGICAL_OR) fprintf(f, " || ");
 
-        node_dump(f, node->rhs);
+        node_dump(f, node->rhs, indent);
         fprintf(f, " )");
     }
 }

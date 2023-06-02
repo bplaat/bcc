@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
     // Parser
     Node *node = parser(text, tokens, tokens_size);
     if (debug) {
-        node_dump(stdout, node);
+        node_dump(stdout, node, 0);
         printf("\n");
     }
 

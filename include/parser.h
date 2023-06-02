@@ -108,7 +108,7 @@ Node *node_new_nodes(NodeType type, Token *token);
 
 Node *node_new_function(NodeType type, Token *token);
 
-void node_dump(FILE *f, Node *node);
+void node_dump(FILE *f, Node *node, int32_t indent);
 
 // Parser
 void print_error(char *text, Token *token, char *fmt, ...);
