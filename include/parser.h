@@ -25,7 +25,7 @@ typedef enum NodeType {
 
     NODE_IF,
     NODE_WHILE,
-    NODE_DO_WHILE,
+    NODE_DOWHILE,
     NODE_RETURN,
 
     NODE_UNARY_BEGIN,
@@ -74,7 +74,7 @@ struct Node {
             size_t locals_size;
         };
 
-        // If, while, do_while
+        // If, while, dowhile
         struct {
             Node *condition;
             Node *thenBlock;

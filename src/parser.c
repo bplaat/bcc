@@ -47,8 +47,11 @@ void node_dump(FILE *f, Node *node) {
     if (node->type == NODE_FUNCTION) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->locals.capacity; i++) {
-            Local *local = node->locals.values[i];
-            if (local) fprintf(f, "long %s;\n", node->locals.keys[i]);
+            char *key = node->locals.keys[i];
+            if (key) {
+                Local *local = node->locals.values[i];
+                fprintf(f, "long %s;\n", local->name);
+            }
         }
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
@@ -77,25 +80,25 @@ void node_dump(FILE *f, Node *node) {
     if (node->type == NODE_IF) {
         fprintf(f, "if ( ");
         node_dump(f, node->condition);
-        fprintf(f, ")\n");
+        fprintf(f, " ) ");
         node_dump(f, node->thenBlock);
         if (node->elseBlock != NULL) {
-            fprintf(f, "else\n");
+            fprintf(f, " else ");
             node_dump(f, node->elseBlock);
         }
     }
     if (node->type == NODE_WHILE) {
         fprintf(f, "while ( ");
         node_dump(f, node->condition);
-        fprintf(f, ")\n");
+        fprintf(f, " ) ");
         node_dump(f, node->thenBlock);
     }
-    if (node->type == NODE_DO_WHILE) {
-        fprintf(f, "do\n");
+    if (node->type == NODE_DOWHILE) {
+        fprintf(f, "do ");
         node_dump(f, node->thenBlock);
         fprintf(f, "while ( ");
         node_dump(f, node->condition);
-        fprintf(f, ")\n");
+        fprintf(f, " )");
     }
     if (node->type == NODE_RETURN) {
         fprintf(f, "return ");
@@ -232,9 +235,86 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_SEMICOLON);
         return NULL;
     }
+
     if (token->type == TOKEN_LCURLY) {
         return parser_block(parser);
     }
+
+    if (token->type == TOKEN_IF) {
+        Node *node = node_new(NODE_IF, token);
+        parser_eat(parser, TOKEN_IF);
+        parser_eat(parser, TOKEN_LPAREN);
+        node->condition = parser_assign(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        node->thenBlock = parser_block(parser);
+        if (current()->type == TOKEN_ELSE) {
+            parser_eat(parser, TOKEN_ELSE);
+            node->elseBlock = parser_block(parser);
+        } else {
+            node->elseBlock = NULL;
+        }
+        return node;
+    }
+
+    if (token->type == TOKEN_WHILE) {
+        Node *node = node_new(NODE_WHILE, token);
+        node->elseBlock = NULL;
+        parser_eat(parser, TOKEN_WHILE);
+        parser_eat(parser, TOKEN_LPAREN);
+        node->condition = parser_assigns(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        node->thenBlock = parser_block(parser);
+        return node;
+    }
+
+    if (token->type == TOKEN_DO) {
+        Node *node = node_new(NODE_DOWHILE, token);
+        node->elseBlock = NULL;
+        parser_eat(parser, TOKEN_DO);
+        node->thenBlock = parser_block(parser);
+        parser_eat(parser, TOKEN_WHILE);
+        parser_eat(parser, TOKEN_LPAREN);
+        node->condition = parser_assigns(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        parser_eat(parser, TOKEN_SEMICOLON);
+        return node;
+    }
+
+    if (token->type == TOKEN_FOR) {
+        Node *parentNode = node_new_nodes(NODE_NODES, token);
+        Node *node = node_new(NODE_WHILE, token);
+        node->thenBlock = node_new_nodes(NODE_NODES, token);
+
+        parser_eat(parser, TOKEN_FOR);
+        parser_eat(parser, TOKEN_LPAREN);
+
+        if (current()->type != TOKEN_SEMICOLON) {
+            list_add(&parentNode->nodes, parser_assigns(parser));
+        }
+        parser_eat(parser, TOKEN_SEMICOLON);
+
+        list_add(&parentNode->nodes, node);
+
+        if (current()->type != TOKEN_SEMICOLON) {
+            node->condition = parser_assign(parser);
+        } else {
+            node->condition = NULL;
+        }
+        parser_eat(parser, TOKEN_SEMICOLON);
+
+        Node *incrementNode = NULL;
+        if (current()->type != TOKEN_RPAREN) {
+            incrementNode = parser_assigns(parser);
+        }
+        parser_eat(parser, TOKEN_RPAREN);
+
+        list_add(&node->thenBlock->nodes, parser_block(parser));
+        if (incrementNode != NULL) {
+            list_add(&node->thenBlock->nodes, incrementNode);
+        }
+        return parentNode;
+    }
+
     if (token->type == TOKEN_RETURN) {
         parser_eat(parser, TOKEN_RETURN);
         Node *node = node_new_unary(NODE_RETURN, token, parser_assign(parser));
