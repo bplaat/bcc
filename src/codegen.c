@@ -6,16 +6,8 @@ void codegen(Arch arch, void *code, Node *node) {
         .code_byte_ptr = (uint8_t *)code,
         .code_word_ptr = (uint32_t *)code,
     };
-
-    if (arch == ARCH_X86_64) {
-        codegen_node_x86_64(&codegen, node);
-        *codegen.code_byte_ptr = 0xc3;  // ret
-    }
-
-    if (arch == ARCH_ARM64) {
-        codegen_node_arm64(&codegen, node);
-        *codegen.code_word_ptr = 0xD65F03C0;  // ret
-    }
+    if (arch == ARCH_X86_64) codegen_node_x86_64(&codegen, node);
+    if (arch == ARCH_ARM64) codegen_node_arm64(&codegen, node);
 }
 
 // x86_64
@@ -79,6 +71,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
             x86_64_inst3(0x48, 0x89, 0xec);         // mov rsp, rbp
             x86_64_inst1(0x58 | (x86_64_rbp & 7));  // pop rbp
         }
+        x86_64_inst1(0xc3);  // ret
 
         codegen->currentFunction = oldFunction;
         return;
@@ -99,8 +92,13 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     }
 
     if (node->type == NODE_INTEGER) {
-        x86_64_inst2(0x48, 0xb8 | (x86_64_rax & 7));  // movabs rax, imm
-        x86_64_imm64(node->integer);
+        if (node->integer > INT32_MIN && node->integer < INT32_MAX) {
+            x86_64_inst1(0xb8 | (x86_64_rax & 7));  // mov eax, imm
+            x86_64_imm32(node->integer);
+        } else {
+            x86_64_inst2(0x48, 0xb8 | (x86_64_rax & 7));  // movabs rax, imm
+            x86_64_imm64(node->integer);
+        }
         return;
     }
 
@@ -265,6 +263,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             arm64_inst(0x910003BF);                    // mov sp, fp
             arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
         }
+        arm64_inst(0xD65F03C0);  // ret
 
         codegen->currentFunction = oldFunction;
         return;
