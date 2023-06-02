@@ -8,15 +8,27 @@
 #include "list.h"
 #include "map.h"
 
+// Type
+typedef enum TypeKind {
+    TYPE_INTEGER,
+} TypeKind;
+
+typedef struct Type {
+    TypeKind kind;
+    size_t size;
+} Type;
+
+Type *type_new(TypeKind kind, size_t size);
+
 // Local
 typedef struct Local {
     char *name;
-    size_t size;
+    Type *type;
     size_t address;
 } Local;
 
 // Node
-typedef enum NodeType {
+typedef enum NodeKind {
     NODE_FUNCTION,
     NODE_NODES,
 
@@ -60,12 +72,13 @@ typedef enum NodeType {
     NODE_LOGICAL_OR,
 
     NODE_OPERATION_END,
-} NodeType;
+} NodeKind;
 
 typedef struct Node Node;
 struct Node {
-    NodeType type;
+    NodeKind kind;
     Token *token;
+    Type *type;
     union {
         // Function, nodes
         struct {
@@ -98,15 +111,15 @@ struct Node {
     };
 };
 
-Node *node_new(NodeType type, Token *token);
+Node *node_new(NodeKind kind, Token *token);
 
-Node *node_new_unary(NodeType type, Token *token, Node *unary);
+Node *node_new_unary(NodeKind kind, Token *token, Node *unary);
 
-Node *node_new_operation(NodeType type, Token *token, Node *lhs, Node *rhs);
+Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs);
 
-Node *node_new_nodes(NodeType type, Token *token);
+Node *node_new_nodes(NodeKind kind, Token *token);
 
-Node *node_new_function(NodeType type, Token *token);
+Node *node_new_function(NodeKind kind, Token *token);
 
 void node_dump(FILE *f, Node *node, int32_t indent);
 
@@ -123,11 +136,12 @@ typedef struct Parser {
 
 Node *parser(char *text, Token *tokens, size_t tokens_size);
 
-void parser_eat(Parser *parser, TokenType type);
+void parser_eat(Parser *parser, TokenKind token_kind);
 
 Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
 Node *parser_statement(Parser *parser);
+Node *parser_declarations(Parser *parser);
 Node *parser_assigns(Parser *parser);
 Node *parser_assign(Parser *parser);
 Node *parser_logical(Parser *parser);
