@@ -358,15 +358,58 @@ Node *parser_assigns(Parser *parser) {
 
 Node *parser_assign(Parser *parser) {
     Node *lhs = parser_logical(parser);
-    if (current()->type == TOKEN_ASSIGN) {
+    if (current()->type > TOKEN_ASSIGN_BEGIN && current()->type < TOKEN_ASSIGN_END) {
         Token *token = current();
-        parser_eat(parser, TOKEN_ASSIGN);
         if (lhs->type != NODE_LOCAL) {
             print_error(parser->text, lhs->token, "Unexpected token: '%s' wanted '%s'", token_type_to_string(lhs->token->type),
                         token_type_to_string(TOKEN_VARIABLE));
             exit(EXIT_FAILURE);
         }
-        return node_new_operation(NODE_ASSIGN, token, lhs, parser_assign(parser));
+
+        if (token->type == TOKEN_ASSIGN) {
+            parser_eat(parser, TOKEN_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, parser_assign(parser));
+        }
+        if (token->type == TOKEN_ADD_ASSIGN) {
+            parser_eat(parser, TOKEN_ADD_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_ADD, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_SUB_ASSIGN) {
+            parser_eat(parser, TOKEN_SUB_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_SUB, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_MUL_ASSIGN) {
+            parser_eat(parser, TOKEN_MUL_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_MUL, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_DIV_ASSIGN) {
+            parser_eat(parser, TOKEN_DIV_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_DIV, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_MOD_ASSIGN) {
+            parser_eat(parser, TOKEN_MOD_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_MOD, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_AND_ASSIGN) {
+            parser_eat(parser, TOKEN_AND_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_AND, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_OR_ASSIGN) {
+            parser_eat(parser, TOKEN_OR_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_OR, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_XOR_ASSIGN) {
+            parser_eat(parser, TOKEN_XOR_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_XOR, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_SHL_ASSIGN) {
+            parser_eat(parser, TOKEN_SHL_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_SHL, token, lhs, parser_assign(parser)));
+        }
+        if (token->type == TOKEN_SHR_ASSIGN) {
+            parser_eat(parser, TOKEN_SHR_ASSIGN);
+            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_SHR, token, lhs, parser_assign(parser)));
+        }
     }
     return lhs;
 }

@@ -33,6 +33,16 @@ char *token_type_to_string(TokenType type) {
     if (type == TOKEN_LOGICAL_NOT) return "~";
 
     if (type == TOKEN_ASSIGN) return "=";
+    if (type == TOKEN_ADD_ASSIGN) return "+=";
+    if (type == TOKEN_SUB_ASSIGN) return "-=";
+    if (type == TOKEN_MUL_ASSIGN) return "*=";
+    if (type == TOKEN_DIV_ASSIGN) return "/=";
+    if (type == TOKEN_MOD_ASSIGN) return "%=";
+    if (type == TOKEN_AND_ASSIGN) return "&=";
+    if (type == TOKEN_OR_ASSIGN) return "|=";
+    if (type == TOKEN_XOR_ASSIGN) return "^=";
+    if (type == TOKEN_SHL_ASSIGN) return "<<=";
+    if (type == TOKEN_SHR_ASSIGN) return ">>=";
     if (type == TOKEN_ADD) return "+";
     if (type == TOKEN_SUB) return "-";
     if (type == TOKEN_MUL) return "*";
@@ -201,26 +211,56 @@ Token *lexer(char *text, size_t *tokens_size) {
             continue;
         }
         if (*c == '+') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_ADD_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             tokens[size++].type = TOKEN_ADD;
             c++;
             continue;
         }
         if (*c == '-') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_SUB_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             tokens[size++].type = TOKEN_SUB;
             c++;
             continue;
         }
         if (*c == '*') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_MUL_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             tokens[size++].type = TOKEN_MUL;
             c++;
             continue;
         }
         if (*c == '/') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_DIV_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             tokens[size++].type = TOKEN_DIV;
             c++;
             continue;
         }
         if (*c == '%') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_MOD_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             tokens[size++].type = TOKEN_MOD;
             c++;
             continue;
@@ -249,6 +289,12 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
         if (*c == '<') {
             if (*(c + 1) == '<') {
+                if (*(c + 2) == '=') {
+                    tokens[size++].type = TOKEN_SHL_ASSIGN;
+                    c += 3;
+                    continue;
+                }
+
                 tokens[size++].type = TOKEN_SHL;
                 c += 2;
                 continue;
@@ -265,6 +311,12 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
         if (*c == '>') {
             if (*(c + 1) == '>') {
+                if (*(c + 2) == '=') {
+                    tokens[size++].type = TOKEN_SHR_ASSIGN;
+                    c += 3;
+                    continue;
+                }
+
                 tokens[size++].type = TOKEN_SHR;
                 c += 2;
                 continue;
@@ -280,6 +332,12 @@ Token *lexer(char *text, size_t *tokens_size) {
             continue;
         }
         if (*c == '&') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_AND_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             if (*(c + 1) == '&') {
                 tokens[size++].type = TOKEN_LOGICAL_AND;
                 c += 2;
@@ -291,6 +349,12 @@ Token *lexer(char *text, size_t *tokens_size) {
             continue;
         }
         if (*c == '|') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_OR_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             if (*(c + 1) == '|') {
                 tokens[size++].type = TOKEN_LOGICAL_OR;
                 c += 2;
@@ -302,6 +366,12 @@ Token *lexer(char *text, size_t *tokens_size) {
             continue;
         }
         if (*c == '^') {
+            if (*(c + 1) == '=') {
+                tokens[size++].type = TOKEN_XOR_ASSIGN;
+                c += 2;
+                continue;
+            }
+
             tokens[size++].type = TOKEN_XOR;
             c++;
             continue;
