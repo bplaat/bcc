@@ -15,6 +15,11 @@ char *token_type_to_string(TokenType type) {
     if (type == TOKEN_VARIABLE) return "variable";
     if (type == TOKEN_INTEGER) return "integer";
 
+    if (type == TOKEN_IF) return "if";
+    if (type == TOKEN_ELSE) return "else";
+    if (type == TOKEN_WHILE) return "while";
+    if (type == TOKEN_DO) return "do";
+    if (type == TOKEN_FOR) return "for";
     if (type == TOKEN_RETURN) return "return";
 
     if (type == TOKEN_LPAREN) return "(";
@@ -51,7 +56,7 @@ char *token_type_to_string(TokenType type) {
 }
 
 // Lexer
-Keyword keywords[] = {{"return", TOKEN_RETURN}};
+Keyword keywords[] = {{"if", TOKEN_IF}, {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"do", TOKEN_DO}, {"for", TOKEN_FOR}, {"return", TOKEN_RETURN}};
 
 Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;

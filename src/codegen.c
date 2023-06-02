@@ -44,24 +44,19 @@ void codegen(Arch arch, void *code, Node *node) {
     }
 
 void codegen_node_x86_64(Codegen *c, Node *node) {
-    if (node->type == NODE_BLOCK) {
-        Node *oldBlockNode = c->currentBlockNode;
-        c->currentBlockNode = node;
+    if (node->type == NODE_FUNCTION) {
+        Node *oldFunction = c->currentFunction;
+        c->currentFunction = node;
 
         // Calculate locals size
-        size_t locals_size = 0;
-        for (size_t i = 0; i < node->locals.capacity; i++) {
-            Local *local = node->locals.values[i];
-            if (local) locals_size += local->size;
-        }
-        locals_size = align(locals_size, 16);
+        size_t aligned_locals_size = align(node->locals_size, 16);
 
         // Allocate locals stack frame
-        if (locals_size > 0) {
+        if (aligned_locals_size > 0) {
             x86_64_inst1(c, 0x50 | (x86_64_rbp & 7));  // push rbp
             x86_64_inst3(c, 0x48, 0x89, 0xe5);         // mov rbp, rsp
             x86_64_inst3(c, 0x48, 0x81, 0xec);         // sub rsp, imm
-            *((int32_t *)c->code_byte_ptr) = locals_size;
+            *((int32_t *)c->code_byte_ptr) = aligned_locals_size;
             c->code_byte_ptr += sizeof(int32_t);
         }
 
@@ -71,12 +66,12 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
         }
 
         // Free locals stack frame
-        if (locals_size > 0) {
+        if (aligned_locals_size > 0) {
             x86_64_inst3(c, 0x48, 0x89, 0xec);         // mov rsp, rbp
             x86_64_inst1(c, 0x58 | (x86_64_rbp & 7));  // pop rbp
         }
 
-        c->currentBlockNode = oldBlockNode;
+        c->currentFunction = oldFunction;
         return;
     }
 
@@ -105,7 +100,7 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
     if (node->type == NODE_RETURN) {
         codegen_node_x86_64(c, node->unary);
 
-        if (c->currentBlockNode->locals.filled > 0) {
+        if (c->currentFunction->locals.filled > 0) {
             x86_64_inst3(c, 0x48, 0x89, 0xec);         // mov rsp, rbp
             x86_64_inst1(c, 0x58 | (x86_64_rbp & 7));  // pop rbp
         }
@@ -192,23 +187,18 @@ void codegen_node_x86_64(Codegen *c, Node *node) {
 #define arm64_inst(codegen, inst) *(codegen)->code_word_ptr++ = inst
 
 void codegen_node_arm64(Codegen *c, Node *node) {
-    if (node->type == NODE_BLOCK) {
-        Node *oldBlockNode = c->currentBlockNode;
-        c->currentBlockNode = node;
+    if (node->type == NODE_FUNCTION) {
+        Node *oldFunction = c->currentFunction;
+        c->currentFunction = node;
 
         // Calculate locals size
-        size_t locals_size = 0;
-        for (size_t i = 0; i < node->locals.capacity; i++) {
-            Local *local = node->locals.values[i];
-            if (local) locals_size += local->size;
-        }
-        locals_size = align(locals_size, 16);
+        size_t aligned_locals_size = align(node->locals_size, 16);
 
         // Allocate locals stack frame
-        if (locals_size > 0) {
-            arm64_inst(c, 0xF81F0FE0 | (arm64_fp & 31));                                                            // str fp, [sp, -16]!
-            arm64_inst(c, 0x910003FD);                                                                              // mov fp, sp
-            arm64_inst(c, 0xD1000000 | ((locals_size & 0x1fff) << 10) | ((arm64_sp & 31) << 5) | (arm64_sp & 31));  // sub sp, sp, imm
+        if (aligned_locals_size > 0) {
+            arm64_inst(c, 0xF81F0FE0 | (arm64_fp & 31));                                                                    // str fp, [sp, -16]!
+            arm64_inst(c, 0x910003FD);                                                                                      // mov fp, sp
+            arm64_inst(c, 0xD1000000 | ((aligned_locals_size & 0x1fff) << 10) | ((arm64_sp & 31) << 5) | (arm64_sp & 31));  // sub sp, sp, imm
         }
 
         for (size_t i = 0; i < node->nodes.size; i++) {
@@ -217,12 +207,12 @@ void codegen_node_arm64(Codegen *c, Node *node) {
         }
 
         // Free locals stack frame
-        if (locals_size > 0) {
+        if (aligned_locals_size > 0) {
             arm64_inst(c, 0x910003BF);                    // mov sp, fp
             arm64_inst(c, 0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
         }
 
-        c->currentBlockNode = oldBlockNode;
+        c->currentFunction = oldFunction;
         return;
     }
 
@@ -248,7 +238,7 @@ void codegen_node_arm64(Codegen *c, Node *node) {
     if (node->type == NODE_RETURN) {
         codegen_node_arm64(c, node->unary);
 
-        if (c->currentBlockNode->locals.filled > 0) {
+        if (c->currentFunction->locals.filled > 0) {
             arm64_inst(c, 0x910003BF);                    // mov sp, fp
             arm64_inst(c, 0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
         }

@@ -34,15 +34,16 @@ Node *node_new_nodes(NodeType type, Token *token) {
     return node;
 }
 
-Node *node_new_block(NodeType type, Token *token) {
+Node *node_new_function(NodeType type, Token *token) {
     Node *node = node_new_nodes(type, token);
     node->locals.capacity = 8;
     map_init(&node->locals);
+    node->locals_size = 0;
     return node;
 }
 
 void node_dump(FILE *f, Node *node) {
-    if (node->type == NODE_BLOCK) {
+    if (node->type == NODE_FUNCTION) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->locals.capacity; i++) {
             Local *local = node->locals.values[i];
@@ -55,7 +56,6 @@ void node_dump(FILE *f, Node *node) {
         }
         fprintf(f, "}\n");
     }
-
     if (node->type == NODE_NODES) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->nodes.size; i++) {
@@ -63,17 +63,39 @@ void node_dump(FILE *f, Node *node) {
             node_dump(f, child);
             fprintf(f, ";\n");
         }
-        fprintf(f, "}\n");
+        fprintf(f, "}");
     }
 
     if (node->type == NODE_LOCAL) {
         fprintf(f, "%s", node->local->name);
     }
-
     if (node->type == NODE_INTEGER) {
         fprintf(f, "%lld", node->integer);
     }
 
+    if (node->type == NODE_IF) {
+        fprintf(f, "if ( ");
+        node_dump(f, node->condition);
+        fprintf(f, ")\n");
+        node_dump(f, node->thenBlock);
+        if (node->elseBlock != NULL) {
+            fprintf(f, "else\n");
+            node_dump(f, node->elseBlock);
+        }
+    }
+    if (node->type == NODE_WHILE) {
+        fprintf(f, "while ( ");
+        node_dump(f, node->condition);
+        fprintf(f, ")\n");
+        node_dump(f, node->thenBlock);
+    }
+    if (node->type == NODE_DO_WHILE) {
+        fprintf(f, "do\n");
+        node_dump(f, node->thenBlock);
+        fprintf(f, "while ( ");
+        node_dump(f, node->condition);
+        fprintf(f, ")\n");
+    }
     if (node->type == NODE_RETURN) {
         fprintf(f, "return ");
         node_dump(f, node->unary);
@@ -153,7 +175,7 @@ Node *parser(char *text, Token *tokens, size_t tokens_size) {
         .tokens_size = tokens_size,
         .position = 0,
     };
-    return parser_block(&parser);
+    return parser_function(&parser);
 }
 
 #define current() (&parser->tokens[parser->position])
@@ -168,12 +190,26 @@ void parser_eat(Parser *parser, TokenType type) {
     }
 }
 
+Node *parser_function(Parser *parser) {
+    Token *token = current();
+    Node *node = node_new_function(NODE_FUNCTION, token);
+    Node *oldFunction = parser->currentFunction;
+    parser->currentFunction = node;
+
+    parser_eat(parser, TOKEN_LCURLY);
+    while (current()->type != TOKEN_RCURLY) {
+        Node *child = parser_statement(parser);
+        if (child != NULL) list_add(&node->nodes, child);
+    }
+    parser_eat(parser, TOKEN_RCURLY);
+
+    parser->currentFunction = oldFunction;
+    return node;
+}
+
 Node *parser_block(Parser *parser) {
     Token *token = current();
-    Node *node = node_new_block(NODE_BLOCK, token);
-    Node *oldBlockNode = parser->currentBlockNode;
-    parser->currentBlockNode = node;
-
+    Node *node = node_new_nodes(NODE_NODES, token);
     if (token->type == TOKEN_LCURLY) {
         parser_eat(parser, TOKEN_LCURLY);
         while (current()->type != TOKEN_RCURLY) {
@@ -185,8 +221,6 @@ Node *parser_block(Parser *parser) {
         Node *child = parser_statement(parser);
         if (child != NULL) list_add(&node->nodes, child);
     }
-
-    parser->currentBlockNode = oldBlockNode;
     return node;
 }
 
@@ -228,7 +262,7 @@ Node *parser_assigns(Parser *parser) {
         list_free(nodes, NULL);
         return first;
     }
-    Node *node = node_new_block(NODE_NODES, token);
+    Node *node = node_new_nodes(NODE_NODES, token);
     list_free(&node->nodes, NULL);
     node->nodes = *nodes;
     return node;
@@ -418,7 +452,7 @@ Node *parser_primary(Parser *parser) {
         Node *node = node_new(NODE_LOCAL, token);
 
         // Create local when it doesn't exists
-        Map *locals = &parser->currentBlockNode->locals;
+        Map *locals = &parser->currentFunction->locals;
         Local *local = map_get(locals, token->variable);
         if (local == NULL) {
             local = malloc(sizeof(Local));
@@ -429,6 +463,7 @@ Node *parser_primary(Parser *parser) {
                 Local *other_local = locals->values[i];
                 if (other_local) local->address += other_local->size;
             }
+            parser->currentFunction->locals_size += local->size;
             map_set(locals, token->variable, local);
         }
         node->local = local;

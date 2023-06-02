@@ -4,9 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "lexer.h"
 #include "list.h"
 #include "map.h"
-#include "lexer.h"
 
 // Local
 typedef struct Local {
@@ -17,12 +17,15 @@ typedef struct Local {
 
 // Node
 typedef enum NodeType {
-    NODE_BLOCK,
+    NODE_FUNCTION,
     NODE_NODES,
 
     NODE_LOCAL,
     NODE_INTEGER,
 
+    NODE_IF,
+    NODE_WHILE,
+    NODE_DO_WHILE,
     NODE_RETURN,
 
     NODE_UNARY_BEGIN,
@@ -64,13 +67,30 @@ struct Node {
     NodeType type;
     Token *token;
     union {
+        // Function, nodes
         struct {
             List nodes;
             Map locals;
+            size_t locals_size;
         };
+
+        // If, while, do_while
+        struct {
+            Node *condition;
+            Node *thenBlock;
+            Node *elseBlock;
+        };
+
+        // Local
         Local *local;
+
+        // Integer
         int64_t integer;
+
+        // Unary, return
         Node *unary;
+
+        // Operation
         struct {
             Node *lhs;
             Node *rhs;
@@ -86,7 +106,7 @@ Node *node_new_operation(NodeType type, Token *token, Node *lhs, Node *rhs);
 
 Node *node_new_nodes(NodeType type, Token *token);
 
-Node *node_new_block(NodeType type, Token *token);
+Node *node_new_function(NodeType type, Token *token);
 
 void node_dump(FILE *f, Node *node);
 
@@ -98,13 +118,14 @@ typedef struct Parser {
     Token *tokens;
     size_t tokens_size;
     size_t position;
-    Node *currentBlockNode;
+    Node *currentFunction;
 } Parser;
 
 Node *parser(char *text, Token *tokens, size_t tokens_size);
 
 void parser_eat(Parser *parser, TokenType type);
 
+Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
 Node *parser_statement(Parser *parser);
 Node *parser_assigns(Parser *parser);
