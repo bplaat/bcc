@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
     if (debug) {
         for (size_t i = 0; i < tokens_size; i++) {
             Token *token = &tokens[i];
-            printf("%s ", token_type_to_string(token->type));
+            printf("%s ", token_kind_to_string(token->kind));
         }
         printf("\n\n");
     }

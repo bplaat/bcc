@@ -5,13 +5,14 @@
 #include <stddef.h>
 
 // Token
-typedef enum TokenType {
+typedef enum TokenKind {
     TOKEN_EOF,
     TOKEN_UNKNOWN,
 
     TOKEN_VARIABLE,
     TOKEN_INTEGER,
 
+    TOKEN_INT,
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_WHILE,
@@ -61,10 +62,10 @@ typedef enum TokenType {
     TOKEN_GTEQ,
     TOKEN_LOGICAL_AND,
     TOKEN_LOGICAL_OR,
-} TokenType;
+} TokenKind;
 
 typedef struct Token {
-    TokenType type;
+    TokenKind kind;
     int32_t line;
     int32_t column;
     union {
@@ -74,12 +75,12 @@ typedef struct Token {
     };
 } Token;
 
-char *token_type_to_string(TokenType type);
+char *token_kind_to_string(TokenKind kind);
 
 // Lexer
 typedef struct Keyword {
     char *keyword;
-    TokenType type;
+    TokenKind kind;
 } Keyword;
 
 Token *lexer(char *text, size_t *tokens_size);
