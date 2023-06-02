@@ -1,9 +1,16 @@
 #!/bin/sh
-# Build and run test suite for now only works on macOS
+# Build bcc and run test suite
+# For now only works on macOS and Linux
 
-# Compile bcc to both targets on macos
-clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
-clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-arm64 || exit
+if [ "$(uname -s)" = Darwin ]; then
+    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
+    if [ "$(arch)" = arm64 ]; then
+        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-arm64 || exit
+    fi
+fi
+if [ "$(uname -s)" = Linux ]; then
+    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
+fi
 
 # Function that runs a test
 assert() {
@@ -11,27 +18,31 @@ assert() {
     input=$2
 
     # Compile and run for x86_64
-    echo $input | ./bcc-x86_64 -
-    actual=$?
-    if [[ $actual != $expected ]]; then
-        echo "[FAIL] Program:"
-        echo $input
-        echo "Dump:"
-        echo $input | ./bcc-x86_64 -d -
-        echo "Arch: x86_64 | Return: $actual | Correct: $expected"
-        exit 1
+    if [ -e "./bcc-x86_64" ]; then
+        echo $input | ./bcc-x86_64 -
+        actual=$?
+        if [ $actual != $expected ]; then
+            echo "[FAIL] Program:"
+            echo $input
+            echo "Dump:"
+            echo $input | ./bcc-x86_64 -d -
+            echo "Arch: x86_64 | Return: $actual | Correct: $expected"
+            exit 1
+        fi
     fi
 
     # Compile and run for arm64
-    echo $input | ./bcc-arm64 -
-    actual=$?
-    if [[ $actual != $expected ]]; then
-        echo "[FAIL] Program:"
-        echo $input
-        echo "Dump:"
-        echo $input | ./bcc-arm64 -d -
-        echo "Arch: arm64 | Return: $actual | Correct: $expected"
-        exit 1
+    if [ -e "./bcc-arm64" ]; then
+        echo $input | ./bcc-arm64 -
+        actual=$?
+        if [ $actual != $expected ]; then
+            echo "[FAIL] Program:"
+            echo $input
+            echo "Dump:"
+            echo $input | ./bcc-arm64 -d -
+            echo "Arch: arm64 | Return: $actual | Correct: $expected"
+            exit 1
+        fi
     fi
 }
 

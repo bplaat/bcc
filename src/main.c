@@ -8,7 +8,7 @@
 #include "lexer.h"
 #include "page.h"
 #include "parser.h"
-#include "util.h"
+#include "utils.h"
 
 typedef int64_t (*JitFunc)(void);
 
