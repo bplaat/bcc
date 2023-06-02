@@ -288,7 +288,47 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         return;
     }
 
-    // TODO
+    if (node->type == NODE_IF) {
+        codegen_node_arm64(codegen, node->condition);
+
+        uint32_t *else_label = codegen->code_word_ptr;
+        arm64_inst(0);  // cbz x0, else
+
+        codegen_node_arm64(codegen, node->thenBlock);
+
+        *else_label = 0xB4000000 | (((codegen->code_word_ptr - else_label) & 0x7ffff) << 5) | (arm64_x0 & 31);  // else:
+        if (node->elseBlock) {
+            codegen_node_arm64(codegen, node->elseBlock);
+        }
+    }
+
+    if (node->type == NODE_WHILE) {
+        uint32_t *loop_label = codegen->code_word_ptr;
+
+        uint32_t *done_label;
+        if (node->condition != NULL) {
+            codegen_node_arm64(codegen, node->condition);
+            done_label = codegen->code_word_ptr;
+            arm64_inst(0);  // cbz x0, done
+        }
+
+        codegen_node_arm64(codegen, node->thenBlock);
+
+        arm64_inst(0x14000000 | ((loop_label - codegen->code_word_ptr) & 0x7ffffff));  // b loop
+
+        if (node->condition != NULL) {
+            *done_label = 0xB4000000 | (((codegen->code_word_ptr - done_label) & 0x7ffff) << 5) | (arm64_x0 & 31);  // done:
+        }
+    }
+
+    if (node->type == NODE_DOWHILE) {
+        uint32_t *loop_label = codegen->code_word_ptr;
+
+        codegen_node_arm64(codegen, node->thenBlock);
+
+        codegen_node_arm64(codegen, node->condition);
+        arm64_inst(0xB5000000 | (((loop_label - codegen->code_word_ptr) & 0x7ffff) << 5) | (arm64_x0 & 31));  // cbnz x0, loop
+    }
 
     if (node->type == NODE_RETURN) {
         codegen_node_arm64(codegen, node->unary);
