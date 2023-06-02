@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "utils.h"
+
 static uint32_t map_hash(char *key) {
     uint32_t hash = 2166136261;
     while (*key) {

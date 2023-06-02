@@ -8,7 +8,7 @@
 #include "lexer.h"
 #include "page.h"
 #include "parser.h"
-#include "util.h"
+#include "utils.h"
 
 typedef int64_t (*JitFunc)(void);
 
@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
     // Parser
     Node *node = parser(text, tokens, tokens_size);
     if (debug) {
-        node_dump(stdout, node);
+        node_dump(stdout, node, 0);
         printf("\n");
     }
 
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     codegen(arch, code->data, node);
     // if (debug) {
     //     size_t i = 0;
-    //     for (size_t y = 0; y < 512; y += 16) {
+    //     for (size_t y = 0; y < 256; y += 16) {
     //         for (int32_t x = 0; x < 16; x++) {
     //             printf("%02x ", ((uint8_t *)code->data)[i++]);
     //         }

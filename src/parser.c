@@ -1,5 +1,6 @@
 #include "parser.h"
 
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,49 +35,81 @@ Node *node_new_nodes(NodeType type, Token *token) {
     return node;
 }
 
-Node *node_new_block(NodeType type, Token *token) {
+Node *node_new_function(NodeType type, Token *token) {
     Node *node = node_new_nodes(type, token);
     node->locals.capacity = 8;
     map_init(&node->locals);
+    node->locals_size = 0;
     return node;
 }
 
-void node_dump(FILE *f, Node *node) {
-    if (node->type == NODE_BLOCK) {
+void node_dump(FILE *f, Node *node, int32_t indent) {
+    if (node->type == NODE_FUNCTION) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->locals.capacity; i++) {
-            Local *local = node->locals.values[i];
-            if (local) fprintf(f, "long %s;\n", node->locals.keys[i]);
+            char *key = node->locals.keys[i];
+            if (key) {
+                Local *local = node->locals.values[i];
+                for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
+                fprintf(f, "long %s;\n", local->name);
+            }
         }
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
-            node_dump(f, child);
+            for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
+            node_dump(f, child, indent + 1);
             fprintf(f, ";\n");
         }
         fprintf(f, "}\n");
     }
-
     if (node->type == NODE_NODES) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
-            node_dump(f, child);
+            for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
+            node_dump(f, child, indent + 1);
             fprintf(f, ";\n");
         }
-        fprintf(f, "}\n");
+
+        for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
+        fprintf(f, "}");
     }
 
     if (node->type == NODE_LOCAL) {
         fprintf(f, "%s", node->local->name);
     }
-
     if (node->type == NODE_INTEGER) {
-        fprintf(f, "%lld", node->integer);
+        fprintf(f, "%" PRIi64, node->integer);
     }
 
+    if (node->type == NODE_IF) {
+        fprintf(f, "if (");
+        node_dump(f, node->condition, indent);
+        fprintf(f, ") ");
+        node_dump(f, node->thenBlock, indent + 1);
+        if (node->elseBlock != NULL) {
+            for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
+            fprintf(f, " else ");
+            node_dump(f, node->elseBlock, indent + 1);
+        }
+    }
+    if (node->type == NODE_WHILE) {
+        fprintf(f, "while (");
+        node_dump(f, node->condition, indent);
+        fprintf(f, ") ");
+        node_dump(f, node->thenBlock, indent + 1);
+    }
+    if (node->type == NODE_DOWHILE) {
+        fprintf(f, "do ");
+        node_dump(f, node->thenBlock, indent + 1);
+        for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
+        fprintf(f, "while (");
+        node_dump(f, node->condition, indent);
+        fprintf(f, ")");
+    }
     if (node->type == NODE_RETURN) {
         fprintf(f, "return ");
-        node_dump(f, node->unary);
+        node_dump(f, node->unary, indent);
     }
 
     if (node->type > NODE_UNARY_BEGIN && node->type < NODE_UNARY_END) {
@@ -86,13 +119,13 @@ void node_dump(FILE *f, Node *node) {
         if (node->type == NODE_NOT) fprintf(f, "~ ");
         if (node->type == NODE_LOGICAL_NOT) fprintf(f, "! ");
 
-        node_dump(f, node->unary);
+        node_dump(f, node->unary, indent);
         fprintf(f, " )");
     }
 
     if (node->type > NODE_OPERATION_BEGIN && node->type < NODE_OPERATION_END) {
         fprintf(f, "( ");
-        node_dump(f, node->lhs);
+        node_dump(f, node->lhs, indent);
 
         if (node->type == NODE_ASSIGN) fprintf(f, " = ");
         if (node->type == NODE_ADD) fprintf(f, " + ");
@@ -114,7 +147,7 @@ void node_dump(FILE *f, Node *node) {
         if (node->type == NODE_LOGICAL_AND) fprintf(f, " && ");
         if (node->type == NODE_LOGICAL_OR) fprintf(f, " || ");
 
-        node_dump(f, node->rhs);
+        node_dump(f, node->rhs, indent);
         fprintf(f, " )");
     }
 }
@@ -153,7 +186,7 @@ Node *parser(char *text, Token *tokens, size_t tokens_size) {
         .tokens_size = tokens_size,
         .position = 0,
     };
-    return parser_block(&parser);
+    return parser_function(&parser);
 }
 
 #define current() (&parser->tokens[parser->position])
@@ -168,12 +201,26 @@ void parser_eat(Parser *parser, TokenType type) {
     }
 }
 
+Node *parser_function(Parser *parser) {
+    Token *token = current();
+    Node *node = node_new_function(NODE_FUNCTION, token);
+    Node *oldFunction = parser->currentFunction;
+    parser->currentFunction = node;
+
+    parser_eat(parser, TOKEN_LCURLY);
+    while (current()->type != TOKEN_RCURLY) {
+        Node *child = parser_statement(parser);
+        if (child != NULL) list_add(&node->nodes, child);
+    }
+    parser_eat(parser, TOKEN_RCURLY);
+
+    parser->currentFunction = oldFunction;
+    return node;
+}
+
 Node *parser_block(Parser *parser) {
     Token *token = current();
-    Node *node = node_new_block(NODE_BLOCK, token);
-    Node *oldBlockNode = parser->currentBlockNode;
-    parser->currentBlockNode = node;
-
+    Node *node = node_new_nodes(NODE_NODES, token);
     if (token->type == TOKEN_LCURLY) {
         parser_eat(parser, TOKEN_LCURLY);
         while (current()->type != TOKEN_RCURLY) {
@@ -185,8 +232,6 @@ Node *parser_block(Parser *parser) {
         Node *child = parser_statement(parser);
         if (child != NULL) list_add(&node->nodes, child);
     }
-
-    parser->currentBlockNode = oldBlockNode;
     return node;
 }
 
@@ -197,9 +242,86 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_SEMICOLON);
         return NULL;
     }
+
     if (token->type == TOKEN_LCURLY) {
         return parser_block(parser);
     }
+
+    if (token->type == TOKEN_IF) {
+        Node *node = node_new(NODE_IF, token);
+        parser_eat(parser, TOKEN_IF);
+        parser_eat(parser, TOKEN_LPAREN);
+        node->condition = parser_assign(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        node->thenBlock = parser_block(parser);
+        if (current()->type == TOKEN_ELSE) {
+            parser_eat(parser, TOKEN_ELSE);
+            node->elseBlock = parser_block(parser);
+        } else {
+            node->elseBlock = NULL;
+        }
+        return node;
+    }
+
+    if (token->type == TOKEN_WHILE) {
+        Node *node = node_new(NODE_WHILE, token);
+        node->elseBlock = NULL;
+        parser_eat(parser, TOKEN_WHILE);
+        parser_eat(parser, TOKEN_LPAREN);
+        node->condition = parser_assigns(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        node->thenBlock = parser_block(parser);
+        return node;
+    }
+
+    if (token->type == TOKEN_DO) {
+        Node *node = node_new(NODE_DOWHILE, token);
+        node->elseBlock = NULL;
+        parser_eat(parser, TOKEN_DO);
+        node->thenBlock = parser_block(parser);
+        parser_eat(parser, TOKEN_WHILE);
+        parser_eat(parser, TOKEN_LPAREN);
+        node->condition = parser_assigns(parser);
+        parser_eat(parser, TOKEN_RPAREN);
+        parser_eat(parser, TOKEN_SEMICOLON);
+        return node;
+    }
+
+    if (token->type == TOKEN_FOR) {
+        Node *parentNode = node_new_nodes(NODE_NODES, token);
+        Node *node = node_new(NODE_WHILE, token);
+        node->thenBlock = node_new_nodes(NODE_NODES, token);
+
+        parser_eat(parser, TOKEN_FOR);
+        parser_eat(parser, TOKEN_LPAREN);
+
+        if (current()->type != TOKEN_SEMICOLON) {
+            list_add(&parentNode->nodes, parser_assigns(parser));
+        }
+        parser_eat(parser, TOKEN_SEMICOLON);
+
+        list_add(&parentNode->nodes, node);
+
+        if (current()->type != TOKEN_SEMICOLON) {
+            node->condition = parser_assign(parser);
+        } else {
+            node->condition = NULL;
+        }
+        parser_eat(parser, TOKEN_SEMICOLON);
+
+        Node *incrementNode = NULL;
+        if (current()->type != TOKEN_RPAREN) {
+            incrementNode = parser_assigns(parser);
+        }
+        parser_eat(parser, TOKEN_RPAREN);
+
+        list_add(&node->thenBlock->nodes, parser_block(parser));
+        if (incrementNode != NULL) {
+            list_add(&node->thenBlock->nodes, incrementNode);
+        }
+        return parentNode;
+    }
+
     if (token->type == TOKEN_RETURN) {
         parser_eat(parser, TOKEN_RETURN);
         Node *node = node_new_unary(NODE_RETURN, token, parser_assign(parser));
@@ -228,7 +350,7 @@ Node *parser_assigns(Parser *parser) {
         list_free(nodes, NULL);
         return first;
     }
-    Node *node = node_new_block(NODE_NODES, token);
+    Node *node = node_new_nodes(NODE_NODES, token);
     list_free(&node->nodes, NULL);
     node->nodes = *nodes;
     return node;
@@ -418,7 +540,7 @@ Node *parser_primary(Parser *parser) {
         Node *node = node_new(NODE_LOCAL, token);
 
         // Create local when it doesn't exists
-        Map *locals = &parser->currentBlockNode->locals;
+        Map *locals = &parser->currentFunction->locals;
         Local *local = map_get(locals, token->variable);
         if (local == NULL) {
             local = malloc(sizeof(Local));
@@ -426,9 +548,13 @@ Node *parser_primary(Parser *parser) {
             local->size = 8;
             local->address = local->size;
             for (size_t i = 0; i < locals->capacity; i++) {
-                Local *other_local = locals->values[i];
-                if (other_local) local->address += other_local->size;
+                char *key = locals->keys[i];
+                if (key) {
+                    Local *other_local = locals->values[i];
+                    local->address += other_local->size;
+                }
             }
+            parser->currentFunction->locals_size += local->size;
             map_set(locals, token->variable, local);
         }
         node->local = local;
