@@ -11,20 +11,27 @@
 // Type
 typedef enum TypeKind {
     TYPE_INTEGER,
+    TYPE_POINTER,
 } TypeKind;
 
-typedef struct Type {
+typedef struct Type Type;
+struct Type {
     TypeKind kind;
     size_t size;
-} Type;
+    Type *base;
+};
 
 Type *type_new(TypeKind kind, size_t size);
+
+Type *type_new_pointer(Type *base);
+
+void type_dump(FILE *f, Type *type);
 
 // Local
 typedef struct Local {
     char *name;
     Type *type;
-    size_t address;
+    size_t offset;
 } Local;
 
 // Node
@@ -44,6 +51,8 @@ typedef enum NodeKind {
     NODE_NEG,
     NODE_NOT,
     NODE_LOGICAL_NOT,
+    NODE_ADDR,
+    NODE_DEREF,
     NODE_UNARY_END,
 
     NODE_OPERATION_BEGIN,
@@ -90,8 +99,8 @@ struct Node {
         // If, while, dowhile
         struct {
             Node *condition;
-            Node *thenBlock;
-            Node *elseBlock;
+            Node *then_block;
+            Node *else_block;
         };
 
         // Local
@@ -124,19 +133,21 @@ Node *node_new_function(NodeKind kind, Token *token);
 void node_dump(FILE *f, Node *node, int32_t indent);
 
 // Parser
-void print_error(char *text, Token *token, char *fmt, ...);
-
 typedef struct Parser {
     char *text;
     Token *tokens;
     size_t tokens_size;
     size_t position;
-    Node *currentFunction;
+    Node *current_function;
 } Parser;
 
 Node *parser(char *text, Token *tokens, size_t tokens_size);
 
 void parser_eat(Parser *parser, TokenKind token_kind);
+
+bool parser_is_type_token_kind(TokenKind token_kind);
+
+Type *parser_type(Parser *parser);
 
 Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);

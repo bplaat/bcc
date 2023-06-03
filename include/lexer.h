@@ -12,7 +12,10 @@ typedef enum TokenKind {
     TOKEN_VARIABLE,
     TOKEN_INTEGER,
 
+    TOKEN_TYPE_BEGIN,
     TOKEN_INT,
+    TOKEN_TYPE_END,
+
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_WHILE,

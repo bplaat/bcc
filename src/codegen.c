@@ -1,7 +1,8 @@
 #include <codegen.h>
 
-void codegen(Arch arch, void *code, Node *node) {
+void codegen(Arch arch, void *code, char *text, Node *node) {
     Codegen codegen = {
+        .text = text,
         .code = code,
         .code_byte_ptr = (uint8_t *)code,
         .code_word_ptr = (uint32_t *)code,
@@ -45,10 +46,25 @@ void codegen(Arch arch, void *code, Node *node) {
         codegen->code_byte_ptr += sizeof(int64_t);  \
     }
 
+void codegen_addr_x86_64(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_LOCAL) {
+        x86_64_inst3(0x48, 0x8d, 0x85);  // lea rax, qword [rbp - imm]
+        x86_64_imm32(-node->local->offset);
+        return;
+    }
+    if (node->kind == NODE_DEREF) {
+        codegen_node_x86_64(codegen, node->lhs);
+        return;
+    }
+
+    print_error(codegen->text, node->token, "Node is not an lvalue");
+}
+
 void codegen_node_x86_64(Codegen *codegen, Node *node) {
+    // Blocks
     if (node->kind == NODE_FUNCTION) {
-        Node *oldFunction = codegen->currentFunction;
-        codegen->currentFunction = node;
+        Node *oldFunction = codegen->current_function;
+        codegen->current_function = node;
 
         // Calculate locals size
         size_t aligned_locals_size = align(node->locals_size, 16);
@@ -73,7 +89,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         }
         x86_64_inst1(0xc3);  // ret
 
-        codegen->currentFunction = oldFunction;
+        codegen->current_function = oldFunction;
         return;
     }
 
@@ -85,23 +101,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         return;
     }
 
-    if (node->kind == NODE_LOCAL) {
-        x86_64_inst3(0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
-        x86_64_imm32(-node->local->address);
-        return;
-    }
-
-    if (node->kind == NODE_INTEGER) {
-        if (node->integer > INT32_MIN && node->integer < INT32_MAX) {
-            x86_64_inst1(0xb8 | (x86_64_rax & 7));  // mov eax, imm
-            x86_64_imm32(node->integer);
-        } else {
-            x86_64_inst2(0x48, 0xb8 | (x86_64_rax & 7));  // movabs rax, imm
-            x86_64_imm64(node->integer);
-        }
-        return;
-    }
-
+    // Statements
     if (node->kind == NODE_IF) {
         codegen_node_x86_64(codegen, node->condition);
         x86_64_inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
@@ -109,11 +109,11 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         uint8_t *else_label = codegen->code_byte_ptr;
         x86_64_imm32(0);
 
-        codegen_node_x86_64(codegen, node->thenBlock);
+        codegen_node_x86_64(codegen, node->then_block);
 
         *((int32_t *)else_label) = codegen->code_byte_ptr - (else_label + sizeof(int32_t));  // else:
-        if (node->elseBlock) {
-            codegen_node_x86_64(codegen, node->elseBlock);
+        if (node->else_block) {
+            codegen_node_x86_64(codegen, node->else_block);
         }
     }
 
@@ -129,7 +129,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
             x86_64_imm32(0);
         }
 
-        codegen_node_x86_64(codegen, node->thenBlock);
+        codegen_node_x86_64(codegen, node->then_block);
 
         x86_64_inst1(0xe9);  // jmp loop
         x86_64_imm32(loop_label - (codegen->code_byte_ptr + sizeof(int32_t)));
@@ -142,7 +142,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_DOWHILE) {
         uint8_t *loop_label = codegen->code_byte_ptr;
 
-        codegen_node_x86_64(codegen, node->thenBlock);
+        codegen_node_x86_64(codegen, node->then_block);
 
         codegen_node_x86_64(codegen, node->condition);
         x86_64_inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
@@ -153,11 +153,23 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_RETURN) {
         codegen_node_x86_64(codegen, node->unary);
 
-        if (codegen->currentFunction->locals.filled > 0) {
+        if (codegen->current_function->locals_size > 0) {
             x86_64_inst3(0x48, 0x89, 0xec);         // mov rsp, rbp
             x86_64_inst1(0x58 | (x86_64_rbp & 7));  // pop rbp
         }
         x86_64_inst1(0xc3);  // ret
+        return;
+    }
+
+    // Unary
+    if (node->kind == NODE_ADDR) {
+        codegen_addr_x86_64(codegen, node->unary);
+        return;
+    }
+
+    if (node->kind == NODE_DEREF) {
+        codegen_node_x86_64(codegen, node->unary);
+        x86_64_inst3(0x48, 0x8b, 0x00);  // mov rax, qword [rax]
         return;
     }
 
@@ -174,11 +186,15 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         return;
     }
 
+    // Operators
     if (node->kind == NODE_ASSIGN) {
-        codegen_node_x86_64(codegen, node->rhs);
+        codegen_addr_x86_64(codegen, node->lhs);
+        x86_64_inst1(0x50 | (x86_64_rax & 7));  // push rax
 
-        x86_64_inst3(0x48, 0x89, 0x85);  // mov qword [rbp - imm], rax
-        x86_64_imm32(-node->lhs->local->address);
+        codegen_node_x86_64(codegen, node->rhs);
+        x86_64_inst1(0x58 | (x86_64_rcx & 7));  // pop rcx
+
+        x86_64_inst3(0x48, 0x89, 0x01);  // mov qword [rcx], rax
         return;
     }
 
@@ -227,6 +243,24 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         }
         return;
     }
+
+    // Values
+    if (node->kind == NODE_LOCAL) {
+        x86_64_inst3(0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
+        x86_64_imm32(-node->local->offset);
+        return;
+    }
+
+    if (node->kind == NODE_INTEGER) {
+        if (node->integer > INT32_MIN && node->integer < INT32_MAX) {
+            x86_64_inst1(0xb8 | (x86_64_rax & 7));  // mov eax, imm
+            x86_64_imm32(node->integer);
+        } else {
+            x86_64_inst2(0x48, 0xb8 | (x86_64_rax & 7));  // movabs rax, imm
+            x86_64_imm64(node->integer);
+        }
+        return;
+    }
 }
 
 // arm64
@@ -238,10 +272,24 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 
 #define arm64_inst(inst) *(codegen)->code_word_ptr++ = inst
 
+void codegen_addr_arm64(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_LOCAL) {
+        arm64_inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x0 & 31));  // sub x0, fp, imm
+        return;
+    }
+    if (node->kind == NODE_DEREF) {
+        codegen_node_arm64(codegen, node->lhs);
+        return;
+    }
+
+    print_error(codegen->text, node->token, "Node is not an lvalue");
+}
+
 void codegen_node_arm64(Codegen *codegen, Node *node) {
+    // Blocks
     if (node->kind == NODE_FUNCTION) {
-        Node *oldFunction = codegen->currentFunction;
-        codegen->currentFunction = node;
+        Node *oldFunction = codegen->current_function;
+        codegen->current_function = node;
 
         // Calculate locals size
         size_t aligned_locals_size = align(node->locals_size, 16);
@@ -265,7 +313,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         }
         arm64_inst(0xD65F03C0);  // ret
 
-        codegen->currentFunction = oldFunction;
+        codegen->current_function = oldFunction;
         return;
     }
 
@@ -277,28 +325,18 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         return;
     }
 
-    if (node->kind == NODE_LOCAL) {
-        arm64_inst(0xD1000000 | ((node->local->address & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-        arm64_inst(0xF9400020);                                                                                       // ldr x0, [x1]
-        return;
-    }
-
-    if (node->kind == NODE_INTEGER) {
-        arm64_inst(0xD2800000 | ((node->integer & 0xffff) << 5) | (arm64_x0 & 31));  // mov x0, imm
-        return;
-    }
-
+    // Statements
     if (node->kind == NODE_IF) {
         codegen_node_arm64(codegen, node->condition);
 
         uint32_t *else_label = codegen->code_word_ptr;
         arm64_inst(0);  // cbz x0, else
 
-        codegen_node_arm64(codegen, node->thenBlock);
+        codegen_node_arm64(codegen, node->then_block);
 
         *else_label = 0xB4000000 | (((codegen->code_word_ptr - else_label) & 0x7ffff) << 5) | (arm64_x0 & 31);  // else:
-        if (node->elseBlock) {
-            codegen_node_arm64(codegen, node->elseBlock);
+        if (node->else_block) {
+            codegen_node_arm64(codegen, node->else_block);
         }
     }
 
@@ -312,7 +350,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             arm64_inst(0);  // cbz x0, done
         }
 
-        codegen_node_arm64(codegen, node->thenBlock);
+        codegen_node_arm64(codegen, node->then_block);
 
         arm64_inst(0x14000000 | ((loop_label - codegen->code_word_ptr) & 0x7ffffff));  // b loop
 
@@ -324,7 +362,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_DOWHILE) {
         uint32_t *loop_label = codegen->code_word_ptr;
 
-        codegen_node_arm64(codegen, node->thenBlock);
+        codegen_node_arm64(codegen, node->then_block);
 
         codegen_node_arm64(codegen, node->condition);
         arm64_inst(0xB5000000 | (((loop_label - codegen->code_word_ptr) & 0x7ffff) << 5) | (arm64_x0 & 31));  // cbnz x0, loop
@@ -333,11 +371,23 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_RETURN) {
         codegen_node_arm64(codegen, node->unary);
 
-        if (codegen->currentFunction->locals.filled > 0) {
+        if (codegen->current_function->locals_size > 0) {
             arm64_inst(0x910003BF);                    // mov sp, fp
             arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
         }
         arm64_inst(0xD65F03C0);  // ret
+        return;
+    }
+
+    // Unary
+    if (node->kind == NODE_ADDR) {
+        codegen_addr_arm64(codegen, node->unary);
+        return;
+    }
+
+    if (node->kind == NODE_DEREF) {
+        codegen_node_arm64(codegen, node->unary);
+        arm64_inst(0xF9400000);  // ldr x0, [x0]
         return;
     }
 
@@ -353,11 +403,15 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         return;
     }
 
+    // Operators
     if (node->kind == NODE_ASSIGN) {
-        codegen_node_arm64(codegen, node->rhs);
+        codegen_addr_arm64(codegen, node->lhs);
+        arm64_inst(0xF81F0FE0 | (arm64_x0 & 31));  // str x0, [sp, -16]!
 
-        arm64_inst(0xD1000000 | ((node->lhs->local->address & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-        arm64_inst(0xF9000020);                                                                                            // str x0, [x1]
+        codegen_node_arm64(codegen, node->rhs);
+        arm64_inst(0xF84107E0 | (arm64_x1 & 31));  // ldr x1, [sp], 16
+
+        arm64_inst(0xF9000020);  // str x0, [x1]
         return;
     }
 
@@ -398,6 +452,18 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             arm64_inst(0xF100001F);                                      // cmp x0, 0
             arm64_inst(0x9A9F07E0);                                      // cset x0, ne
         }
+        return;
+    }
+
+    // Values
+    if (node->kind == NODE_LOCAL) {
+        arm64_inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
+        arm64_inst(0xF9400020);                                                                                      // ldr x0, [x1]
+        return;
+    }
+
+    if (node->kind == NODE_INTEGER) {
+        arm64_inst(0xD2800000 | ((node->integer & 0xffff) << 5) | (arm64_x0 & 31));  // mov x0, imm
         return;
     }
 }

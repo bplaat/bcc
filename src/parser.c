@@ -1,7 +1,6 @@
 #include "parser.h"
 
 #include <inttypes.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -13,6 +12,22 @@ Type *type_new(TypeKind kind, size_t size) {
     type->kind = kind;
     type->size = size;
     return type;
+}
+
+Type *type_new_pointer(Type *base) {
+    Type *type = type_new(TYPE_POINTER, 8);
+    type->base = base;
+    return type;
+}
+
+void type_dump(FILE *f, Type *type) {
+    if (type->kind == TYPE_INTEGER) {
+        fprintf(f, "int%zu_t", type->size * 8);
+    }
+    if (type->kind == TYPE_POINTER) {
+        type_dump(f, type->base);
+        fprintf(f, "*");
+    }
 }
 
 // Node
@@ -62,7 +77,8 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
             if (key) {
                 Local *local = node->locals.values[i];
                 for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
-                fprintf(f, "int%zu_t %s;\n", local->type->size * 8, local->name);
+                type_dump(f, local->type);
+                fprintf(f, " %s;\n", local->name);
             }
         }
         for (size_t i = 0; i < node->nodes.size; i++) {
@@ -97,22 +113,22 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
         fprintf(f, "if (");
         node_dump(f, node->condition, indent);
         fprintf(f, ") ");
-        node_dump(f, node->thenBlock, indent + 1);
-        if (node->elseBlock != NULL) {
+        node_dump(f, node->then_block, indent + 1);
+        if (node->else_block != NULL) {
             for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
             fprintf(f, " else ");
-            node_dump(f, node->elseBlock, indent + 1);
+            node_dump(f, node->else_block, indent + 1);
         }
     }
     if (node->kind == NODE_WHILE) {
         fprintf(f, "while (");
         node_dump(f, node->condition, indent);
         fprintf(f, ") ");
-        node_dump(f, node->thenBlock, indent + 1);
+        node_dump(f, node->then_block, indent + 1);
     }
     if (node->kind == NODE_DOWHILE) {
         fprintf(f, "do ");
-        node_dump(f, node->thenBlock, indent + 1);
+        node_dump(f, node->then_block, indent + 1);
         for (int32_t i = 0; i < indent; i++) fprintf(f, "  ");
         fprintf(f, "while (");
         node_dump(f, node->condition, indent);
@@ -129,6 +145,8 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
         if (node->kind == NODE_NEG) fprintf(f, "- ");
         if (node->kind == NODE_NOT) fprintf(f, "~ ");
         if (node->kind == NODE_LOGICAL_NOT) fprintf(f, "! ");
+        if (node->kind == NODE_ADDR) fprintf(f, "& ");
+        if (node->kind == NODE_DEREF) fprintf(f, "* ");
 
         node_dump(f, node->unary, indent);
         fprintf(f, " )");
@@ -163,32 +181,6 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
     }
 }
 
-// Print error
-void print_error(char *text, Token *token, char *fmt, ...) {
-    fprintf(stderr, "stdin:%d:%d ERROR: ", token->line, token->column);
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-
-    // Seek to the right line in text
-    char *c = text;
-    for (int32_t i = 0; i < token->line - 1; i++) {
-        while (*c != '\n' && *c != '\r') c++;
-        if (*c == '\r') c++;
-        c++;
-    }
-    char *line_start = c;
-    while (*c != '\n' && *c != '\r' && *c != '\0') c++;
-    int32_t line_length = c - line_start;
-
-    fprintf(stderr, "\n%4d | ", token->line);
-    fwrite(line_start, 1, line_length, stderr);
-    fprintf(stderr, "\n     | ");
-    for (int32_t i = 0; i < token->column - 1; i++) fprintf(stderr, " ");
-    fprintf(stderr, "^\n");
-}
-
 // Parser
 Node *parser(char *text, Token *tokens, size_t tokens_size) {
     Parser parser = {
@@ -212,11 +204,27 @@ void parser_eat(Parser *parser, TokenKind token_kind) {
     }
 }
 
+bool parser_is_type_token_kind(TokenKind token_kind) { return token_kind == TOKEN_INT; }
+
+Type *parser_type(Parser *parser) {
+    Type *type;
+    if (current()->kind == TOKEN_INT) {
+        parser_eat(parser, TOKEN_INT);
+        type = type_new(TYPE_INTEGER, 8);
+    }
+
+    while (current()->kind == TOKEN_MUL) {
+        parser_eat(parser, TOKEN_MUL);
+        type = type_new_pointer(type);
+    }
+    return type;
+}
+
 Node *parser_function(Parser *parser) {
     Token *token = current();
     Node *node = node_new_function(NODE_FUNCTION, token);
-    Node *oldFunction = parser->currentFunction;
-    parser->currentFunction = node;
+    Node *oldFunction = parser->current_function;
+    parser->current_function = node;
 
     parser_eat(parser, TOKEN_LCURLY);
     while (current()->kind != TOKEN_RCURLY) {
@@ -225,7 +233,7 @@ Node *parser_function(Parser *parser) {
     }
     parser_eat(parser, TOKEN_RCURLY);
 
-    parser->currentFunction = oldFunction;
+    parser->current_function = oldFunction;
     return node;
 }
 
@@ -264,32 +272,32 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_LPAREN);
         node->condition = parser_assign(parser);
         parser_eat(parser, TOKEN_RPAREN);
-        node->thenBlock = parser_block(parser);
+        node->then_block = parser_block(parser);
         if (current()->kind == TOKEN_ELSE) {
             parser_eat(parser, TOKEN_ELSE);
-            node->elseBlock = parser_block(parser);
+            node->else_block = parser_block(parser);
         } else {
-            node->elseBlock = NULL;
+            node->else_block = NULL;
         }
         return node;
     }
 
     if (token->kind == TOKEN_WHILE) {
         Node *node = node_new(NODE_WHILE, token);
-        node->elseBlock = NULL;
+        node->else_block = NULL;
         parser_eat(parser, TOKEN_WHILE);
         parser_eat(parser, TOKEN_LPAREN);
         node->condition = parser_assign(parser);
         parser_eat(parser, TOKEN_RPAREN);
-        node->thenBlock = parser_block(parser);
+        node->then_block = parser_block(parser);
         return node;
     }
 
     if (token->kind == TOKEN_DO) {
         Node *node = node_new(NODE_DOWHILE, token);
-        node->elseBlock = NULL;
+        node->else_block = NULL;
         parser_eat(parser, TOKEN_DO);
-        node->thenBlock = parser_block(parser);
+        node->then_block = parser_block(parser);
         parser_eat(parser, TOKEN_WHILE);
         parser_eat(parser, TOKEN_LPAREN);
         node->condition = parser_assign(parser);
@@ -299,19 +307,19 @@ Node *parser_statement(Parser *parser) {
     }
 
     if (token->kind == TOKEN_FOR) {
-        Node *parentNode = node_new_nodes(NODE_NODES, token);
+        Node *parent_node = node_new_nodes(NODE_NODES, token);
         Node *node = node_new(NODE_WHILE, token);
-        node->thenBlock = node_new_nodes(NODE_NODES, token);
+        node->then_block = node_new_nodes(NODE_NODES, token);
 
         parser_eat(parser, TOKEN_FOR);
         parser_eat(parser, TOKEN_LPAREN);
 
         if (current()->kind != TOKEN_SEMICOLON) {
-            list_add(&parentNode->nodes, parser_declarations(parser));
+            list_add(&parent_node->nodes, parser_declarations(parser));
         }
         parser_eat(parser, TOKEN_SEMICOLON);
 
-        list_add(&parentNode->nodes, node);
+        list_add(&parent_node->nodes, node);
 
         if (current()->kind != TOKEN_SEMICOLON) {
             node->condition = parser_assign(parser);
@@ -320,17 +328,17 @@ Node *parser_statement(Parser *parser) {
         }
         parser_eat(parser, TOKEN_SEMICOLON);
 
-        Node *incrementNode = NULL;
+        Node *increment_node = NULL;
         if (current()->kind != TOKEN_RPAREN) {
-            incrementNode = parser_assigns(parser);
+            increment_node = parser_assigns(parser);
         }
         parser_eat(parser, TOKEN_RPAREN);
 
-        list_add(&node->thenBlock->nodes, parser_block(parser));
-        if (incrementNode != NULL) {
-            list_add(&node->thenBlock->nodes, incrementNode);
+        list_add(&node->then_block->nodes, parser_block(parser));
+        if (increment_node != NULL) {
+            list_add(&node->then_block->nodes, increment_node);
         }
-        return parentNode;
+        return parent_node;
     }
 
     if (token->kind == TOKEN_RETURN) {
@@ -347,36 +355,34 @@ Node *parser_statement(Parser *parser) {
 
 Node *parser_declarations(Parser *parser) {
     Token *token = current();
-    if (token->kind == TOKEN_INT) {
+    if (parser_is_type_token_kind(token->kind)) {
+        Type *type = parser_type(parser);
         List *nodes = list_new();
-        Type *type = type_new(TYPE_INTEGER, 8);
-
-        parser_eat(parser, TOKEN_INT);
-
         for (;;) {
             char *name = current()->variable;
             parser_eat(parser, TOKEN_VARIABLE);
 
             // Create local when it doesn't exists
-            Map *locals = &parser->currentFunction->locals;
+            Map *locals = &parser->current_function->locals;
             Local *local = map_get(locals, name);
             if (local == NULL) {
                 local = malloc(sizeof(Local));
                 local->name = name;
                 local->type = type;
-                local->address = local->type->size;
-                for (size_t i = 0; i < locals->capacity; i++) {
-                    char *key = locals->keys[i];
-                    if (key) {
-                        Local *other_local = locals->values[i];
-                        local->address += other_local->type->size;
-                    }
-                }
-                parser->currentFunction->locals_size += local->type->size;
                 map_set(locals, name, local);
+
+                parser->current_function->locals_size += local->type->size;
+                local->offset = parser->current_function->locals_size;
             } else {
                 print_error(parser->text, token, "[TMP] Can't redefine variable: '%s'", name);
                 exit(EXIT_FAILURE);
+            }
+
+            if (current()->kind == TOKEN_ASSIGN) {
+                parser_eat(parser, TOKEN_ASSIGN);
+                Node *node = node_new(NODE_LOCAL, token);
+                node->local = local;
+                list_add(nodes, node_new_operation(NODE_ASSIGN, token, node, parser_assign(parser)));
             }
 
             if (current()->kind == TOKEN_COMMA) {
@@ -384,6 +390,10 @@ Node *parser_declarations(Parser *parser) {
             } else {
                 break;
             }
+        }
+        if (nodes->size == 0) {
+            list_free(nodes, NULL);
+            return NULL;
         }
         if (nodes->size == 1) {
             Node *first = list_get(nodes, 0);
@@ -409,6 +419,10 @@ Node *parser_assigns(Parser *parser) {
             break;
         }
     }
+    if (nodes->size == 0) {
+        list_free(nodes, NULL);
+        return NULL;
+    }
     if (nodes->size == 1) {
         Node *first = list_get(nodes, 0);
         list_free(nodes, NULL);
@@ -424,12 +438,6 @@ Node *parser_assign(Parser *parser) {
     Node *lhs = parser_logical(parser);
     if (current()->kind > TOKEN_ASSIGN_BEGIN && current()->kind < TOKEN_ASSIGN_END) {
         Token *token = current();
-        if (lhs->kind != NODE_LOCAL) {
-            print_error(parser->text, lhs->token, "Unexpected token: '%s' wanted '%s'", token_kind_to_string(lhs->token->kind),
-                        token_kind_to_string(TOKEN_VARIABLE));
-            exit(EXIT_FAILURE);
-        }
-
         if (token->kind == TOKEN_ASSIGN) {
             parser_eat(parser, TOKEN_ASSIGN);
             return node_new_operation(NODE_ASSIGN, token, lhs, parser_assign(parser));
@@ -625,6 +633,14 @@ Node *parser_unary(Parser *parser) {
         parser_eat(parser, TOKEN_LOGICAL_NOT);
         return node_new_unary(NODE_LOGICAL_NOT, token, parser_unary(parser));
     }
+    if (token->kind == TOKEN_AND) {
+        parser_eat(parser, TOKEN_AND);
+        return node_new_unary(NODE_ADDR, token, parser_unary(parser));
+    }
+    if (token->kind == TOKEN_MUL) {
+        parser_eat(parser, TOKEN_MUL);
+        return node_new_unary(NODE_DEREF, token, parser_unary(parser));
+    }
     return parser_primary(parser);
 }
 
@@ -646,7 +662,7 @@ Node *parser_primary(Parser *parser) {
     }
     if (token->kind == TOKEN_VARIABLE) {
         Node *node = node_new(NODE_LOCAL, token);
-        Local *local = map_get(&parser->currentFunction->locals, token->variable);
+        Local *local = map_get(&parser->current_function->locals, token->variable);
         if (local == NULL) {
             print_error(parser->text, token, "Undefined variable: '%s'", token->variable);
             exit(EXIT_FAILURE);
