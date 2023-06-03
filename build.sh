@@ -10,7 +10,7 @@ if [ "$(uname -s)" = Darwin ]; then
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name *.c) -lm -o bcc-x86_64 || exit
 fi
 
 # Function that runs a test
