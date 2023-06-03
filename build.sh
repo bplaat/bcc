@@ -132,5 +132,9 @@ if [ "$1" = "test" ]; then
     assert 7 "{ int x=3; int y=5; \*(&y-2+1)=7; return x; }"
     assert 5 "{ int x=3; return (&x+2)-&x+3; }"
 
+    assert 8 "{ int x=3; return sizeof x; }"
+    assert 4 "{ int x=3; return sizeof(x) - 4; }"
+    assert 12 "{ int *x=3; return sizeof x + 4; }"
+
     echo "[OK] All tests pass"
 fi
