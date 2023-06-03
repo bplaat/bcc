@@ -121,10 +121,16 @@ if [ "$1" = "test" ]; then
     assert 2 "{ int i = 7; while (i > 2) { i = i - 1; } return i; }"
     assert 16 "{ int x, y, q, i, j; x = 4, y = 4, q = 0; for (i = 0; i < y; i += 1)\n for (j = 0; j < x; j += 1)\n q += 1; return q; }"
 
-    assert 10 "{int x = 5; int \*y = &x; \*y = 10; return x; }"
-    assert 3 "{ int x=3; return *&x; }"
-    assert 3 "{ int x=3, y=&x, z=&y; return **z; }"
-    assert 5 "{ int x=3, y=&x; *y=5; return x; }"
+    assert 10 "{ int x = 5; int \*y = &x; \*y = 10; return x; }"
+    assert 3 "{ int x=3; return \*&x; }"
+    assert 3 "{ int x=3; int \*y=&x; int \*\*z=&y; return \*\*z; }"
+    assert 5 "{ int x=3; int y=5; return \*(&x+1); }"
+    assert 3 "{ int x=3; int y=5; return \*(&y-1); }"
+    assert 5 "{ int x=3; int y=5; return \*(&x-(-1)); }"
+    assert 5 "{ int x=3; int \*y=&x; \*y=5; return x; }"
+    assert 7 "{ int x=3; int y=5; \*(&x+1)=7; return y; }"
+    assert 7 "{ int x=3; int y=5; \*(&y-2+1)=7; return x; }"
+    assert 5 "{ int x=3; return (&x+2)-&x+3; }"
 
     echo "[OK] All tests pass"
 fi
