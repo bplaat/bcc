@@ -12,15 +12,20 @@ typedef enum Arch {
 
 // Codegen
 typedef struct Codegen {
+    char *text;
     void *code;
     uint8_t *code_byte_ptr;
     uint32_t *code_word_ptr;
-    Node *currentFunction;
+    Node *current_function;
 } Codegen;
 
-void codegen(Arch arch, void *code, Node *node);
+void codegen(Arch arch, void *code, char *text, Node *node);
+
+void codegen_addr_x86_64(Codegen *codegen, Node *node);
 
 void codegen_node_x86_64(Codegen *codegen, Node *node);
+
+void codegen_addr_arm64(Codegen *codegen, Node *node);
 
 void codegen_node_arm64(Codegen *codegen, Node *node);
 
