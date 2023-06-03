@@ -1,10 +1,18 @@
 #include "utils.h"
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdarg.h>
 
+// Math
 size_t align(size_t size, size_t align) { return (size + align - 1) / align * align; }
+
+bool power_of_two(int64_t x) {
+    if (x <= 0) {
+        return false;
+    }
+    return (x & (x - 1)) == 0;
+}
 
 // Strdup pollyfills
 char *strdup(const char *str) { return strndup(str, strlen(str)); }
