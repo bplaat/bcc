@@ -6,7 +6,6 @@
 
 #include "lexer.h"
 #include "list.h"
-#include "map.h"
 
 // Type
 typedef enum TypeKind {
@@ -92,7 +91,7 @@ struct Node {
         // Function, nodes
         struct {
             List nodes;
-            Map locals;
+            List locals;
             size_t locals_size;
         };
 
@@ -122,6 +121,8 @@ struct Node {
 
 Node *node_new(NodeKind kind, Token *token);
 
+Node *node_new_integer(Token *token, int64_t integer);
+
 Node *node_new_unary(NodeKind kind, Token *token, Node *unary);
 
 Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs);
@@ -129,6 +130,8 @@ Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs);
 Node *node_new_nodes(NodeKind kind, Token *token);
 
 Node *node_new_function(NodeKind kind, Token *token);
+
+Local *node_find_local(Node *node, char *name);
 
 void node_dump(FILE *f, Node *node, int32_t indent);
 

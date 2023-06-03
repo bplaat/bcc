@@ -66,10 +66,8 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         Node *oldFunction = codegen->current_function;
         codegen->current_function = node;
 
-        // Calculate locals size
-        size_t aligned_locals_size = align(node->locals_size, 16);
-
         // Allocate locals stack frame
+        size_t aligned_locals_size = align(node->locals_size, 16);
         if (aligned_locals_size > 0) {
             x86_64_inst1(0x50 | (x86_64_rbp & 7));  // push rbp
             x86_64_inst3(0x48, 0x89, 0xe5);         // mov rbp, rsp
@@ -291,10 +289,8 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         Node *oldFunction = codegen->current_function;
         codegen->current_function = node;
 
-        // Calculate locals size
-        size_t aligned_locals_size = align(node->locals_size, 16);
-
         // Allocate locals stack frame
+        size_t aligned_locals_size = align(node->locals_size, 16);
         if (aligned_locals_size > 0) {
             arm64_inst(0xF81F0FE0 | (arm64_fp & 31));                                                                    // str fp, [sp, -16]!
             arm64_inst(0x910003FD);                                                                                      // mov fp, sp
