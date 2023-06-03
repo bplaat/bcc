@@ -16,6 +16,7 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_INTEGER) return "integer";
 
     if (kind == TOKEN_INT) return "int";
+    if (kind == TOKEN_SIZEOF) return "sizeof";
     if (kind == TOKEN_IF) return "if";
     if (kind == TOKEN_ELSE) return "else";
     if (kind == TOKEN_WHILE) return "while";
@@ -67,8 +68,8 @@ char *token_kind_to_string(TokenKind kind) {
 }
 
 // Lexer
-Keyword keywords[] = {{"int", TOKEN_INT}, {"if", TOKEN_IF},   {"else", TOKEN_ELSE},    {"while", TOKEN_WHILE},
-                      {"do", TOKEN_DO},   {"for", TOKEN_FOR}, {"return", TOKEN_RETURN}};
+Keyword keywords[] = {{"int", TOKEN_INT},     {"sizeof", TOKEN_SIZEOF}, {"if", TOKEN_IF},   {"else", TOKEN_ELSE},
+                      {"while", TOKEN_WHILE}, {"do", TOKEN_DO},       {"for", TOKEN_FOR}, {"return", TOKEN_RETURN}};
 
 Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;

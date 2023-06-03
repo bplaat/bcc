@@ -220,8 +220,6 @@ void parser_eat(Parser *parser, TokenKind token_kind) {
     }
 }
 
-bool parser_is_type_token_kind(TokenKind token_kind) { return token_kind == TOKEN_INT; }
-
 Type *parser_type(Parser *parser) {
     Type *type;
     if (current()->kind == TOKEN_INT) {
@@ -431,7 +429,7 @@ Node *parser_statement(Parser *parser) {
 
 Node *parser_declarations(Parser *parser) {
     Token *token = current();
-    if (parser_is_type_token_kind(token->kind)) {
+    if (token->kind > TOKEN_TYPE_BEGIN && token->kind < TOKEN_TYPE_END) {
         Type *type = parser_type(parser);
         List *nodes = list_new();
         for (;;) {
@@ -721,6 +719,11 @@ Node *parser_unary(Parser *parser) {
         }
         node->type = node->type->base;
         return node;
+    }
+    if (token->kind == TOKEN_SIZEOF) {
+        parser_eat(parser, TOKEN_SIZEOF);
+        Node *node = parser_unary(parser);
+        return node_new_integer(token, node->type->size);
     }
     return parser_primary(parser);
 }

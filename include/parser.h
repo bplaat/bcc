@@ -148,7 +148,6 @@ Node *parser(char *text, Token *tokens, size_t tokens_size);
 
 void parser_eat(Parser *parser, TokenKind token_kind);
 
-bool parser_is_type_token_kind(TokenKind token_kind);
 Type *parser_type(Parser *parser);
 
 Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
