@@ -2,8 +2,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
-size_t align(size_t size, size_t alignment) { return (size + alignment - 1) / alignment * alignment; }
+size_t align(size_t size, size_t align) { return (size + align - 1) / align * align; }
 
 // Strdup pollyfills
 char *strdup(const char *str) { return strndup(str, strlen(str)); }
@@ -44,4 +45,30 @@ char *file_read(FILE *file) {
     file_size = fread(buffer, 1, file_size, file);
     buffer[file_size] = '\0';
     return buffer;
+}
+
+// Print error
+void print_error(char *text, Token *token, char *fmt, ...) {
+    fprintf(stderr, "stdin:%d:%d ERROR: ", token->line, token->column);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(stderr, fmt, args);
+    va_end(args);
+
+    // Seek to the right line in text
+    char *c = text;
+    for (int32_t i = 0; i < token->line - 1; i++) {
+        while (*c != '\n' && *c != '\r') c++;
+        if (*c == '\r') c++;
+        c++;
+    }
+    char *line_start = c;
+    while (*c != '\n' && *c != '\r' && *c != '\0') c++;
+    int32_t line_length = c - line_start;
+
+    fprintf(stderr, "\n%4d | ", token->line);
+    fwrite(line_start, 1, line_length, stderr);
+    fprintf(stderr, "\n     | ");
+    for (int32_t i = 0; i < token->column - 1; i++) fprintf(stderr, " ");
+    fprintf(stderr, "^\n");
 }
