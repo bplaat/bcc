@@ -10,7 +10,7 @@ if [ "$(uname -s)" = Darwin ]; then
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name *.c) -lm -o bcc-x86_64 || exit
 fi
 
 # Function that runs a test
@@ -131,6 +131,10 @@ if [ "$1" = "test" ]; then
     assert 7 "{ int x=3; int y=5; \*(&x+1)=7; return y; }"
     assert 7 "{ int x=3; int y=5; \*(&y-2+1)=7; return x; }"
     assert 5 "{ int x=3; return (&x+2)-&x+3; }"
+
+    assert 8 "{ int x=3; return sizeof x; }"
+    assert 4 "{ int x=3; return sizeof(x) - 4; }"
+    assert 12 "{ int *x=3; return sizeof x + 4; }"
 
     echo "[OK] All tests pass"
 fi

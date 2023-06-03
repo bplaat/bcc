@@ -1,6 +1,7 @@
 #include "parser.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -219,8 +220,6 @@ void parser_eat(Parser *parser, TokenKind token_kind) {
     }
 }
 
-bool parser_is_type_token_kind(TokenKind token_kind) { return token_kind == TOKEN_INT; }
-
 Type *parser_type(Parser *parser) {
     Type *type;
     if (current()->kind == TOKEN_INT) {
@@ -233,6 +232,58 @@ Type *parser_type(Parser *parser) {
         type = type_new_pointer(type);
     }
     return type;
+}
+
+Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
+    if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
+        return node_new_operation(NODE_ADD, token, lhs, rhs);
+    }
+    if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_POINTER) {
+        Node *tmp = rhs;
+        rhs = lhs;
+        lhs = tmp;
+    }
+    if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
+        return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, 8)));
+    }
+
+    print_error(parser->text, token, "Invalid add types");
+    exit(EXIT_FAILURE);
+}
+
+Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
+    if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
+        return node_new_operation(NODE_SUB, token, lhs, rhs);
+    }
+    if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
+        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, 8));
+        node->type = node->type->base;
+        return node;
+    }
+    if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
+        return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, 8)));
+    }
+
+    print_error(parser->text, token, "Invalid subtract types");
+    exit(EXIT_FAILURE);
+}
+
+Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
+    (void)parser;
+    if (rhs->kind == TYPE_INTEGER && power_of_two(rhs->integer)) {
+        rhs->integer = log(rhs->integer) / log(power_of_two(rhs->integer));
+        return node_new_operation(NODE_SHL, token, lhs, rhs);
+    }
+    return node_new_operation(NODE_MUL, token, lhs, rhs);
+}
+
+Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
+    (void)parser;
+    if (rhs->kind == TYPE_INTEGER && power_of_two(rhs->integer)) {
+        rhs->integer = log(rhs->integer) / log(power_of_two(rhs->integer));
+        return node_new_operation(NODE_SHR, token, lhs, rhs);
+    }
+    return node_new_operation(NODE_DIV, token, lhs, rhs);
 }
 
 Node *parser_function(Parser *parser) {
@@ -378,7 +429,7 @@ Node *parser_statement(Parser *parser) {
 
 Node *parser_declarations(Parser *parser) {
     Token *token = current();
-    if (parser_is_type_token_kind(token->kind)) {
+    if (token->kind > TOKEN_TYPE_BEGIN && token->kind < TOKEN_TYPE_END) {
         Type *type = parser_type(parser);
         List *nodes = list_new();
         for (;;) {
@@ -464,19 +515,19 @@ Node *parser_assign(Parser *parser) {
         }
         if (token->kind == TOKEN_ADD_ASSIGN) {
             parser_eat(parser, TOKEN_ADD_ASSIGN);
-            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_ADD, token, lhs, parser_assign(parser)));
+            return node_new_operation(NODE_ASSIGN, token, lhs, parser_add_node(parser, token, lhs, parser_assign(parser)));
         }
         if (token->kind == TOKEN_SUB_ASSIGN) {
             parser_eat(parser, TOKEN_SUB_ASSIGN);
-            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_SUB, token, lhs, parser_assign(parser)));
+            return node_new_operation(NODE_ASSIGN, token, lhs, parser_sub_node(parser, token, lhs, parser_assign(parser)));
         }
         if (token->kind == TOKEN_MUL_ASSIGN) {
             parser_eat(parser, TOKEN_MUL_ASSIGN);
-            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_MUL, token, lhs, parser_assign(parser)));
+            return node_new_operation(NODE_ASSIGN, token, lhs, parser_mul_node(parser, token, lhs, parser_assign(parser)));
         }
         if (token->kind == TOKEN_DIV_ASSIGN) {
             parser_eat(parser, TOKEN_DIV_ASSIGN);
-            return node_new_operation(NODE_ASSIGN, token, lhs, node_new_operation(NODE_DIV, token, lhs, parser_assign(parser)));
+            return node_new_operation(NODE_ASSIGN, token, lhs, parser_div_node(parser, token, lhs, parser_assign(parser)));
         }
         if (token->kind == TOKEN_MOD_ASSIGN) {
             parser_eat(parser, TOKEN_MOD_ASSIGN);
@@ -603,44 +654,13 @@ Node *parser_add(Parser *parser) {
     Node *node = parser_mul(parser);
     while (current()->kind == TOKEN_ADD || current()->kind == TOKEN_SUB) {
         Token *token = current();
-        Node *lhs = node;
         if (token->kind == TOKEN_ADD) {
             parser_eat(parser, TOKEN_ADD);
-            Node *rhs = parser_mul(parser);
-
-            if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
-                node = node_new_operation(NODE_ADD, token, lhs, rhs);
-            }
-            if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
-                print_error(parser->text, token, "Can't add to pointers");
-            }
-            if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_POINTER) {
-                Node *tmp = rhs;
-                rhs = lhs;
-                lhs = tmp;
-            }
-            if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
-                node = node_new_operation(NODE_ADD, token, lhs, node_new_operation(NODE_MUL, token, rhs, node_new_integer(token, 8)));
-            }
+            node = parser_add_node(parser, token, node, parser_mul(parser));
         }
-
         if (token->kind == TOKEN_SUB) {
             parser_eat(parser, TOKEN_SUB);
-            Node *rhs = parser_mul(parser);
-
-            if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
-                node = node_new_operation(NODE_SUB, token, lhs, rhs);
-            }
-            if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
-                node = node_new_operation(NODE_DIV, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, 8));
-                node->type = node->type->base;
-            }
-            if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_POINTER) {
-                print_error(parser->text, token, "Can't subtract pointer from integer");
-            }
-            if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
-                node = node_new_operation(NODE_SUB, token, lhs, node_new_operation(NODE_MUL, token, rhs, node_new_integer(token, 8)));
-            }
+            node = parser_sub_node(parser, token, node, parser_mul(parser));
         }
     }
     return node;
@@ -652,11 +672,11 @@ Node *parser_mul(Parser *parser) {
         Token *token = current();
         if (token->kind == TOKEN_MUL) {
             parser_eat(parser, TOKEN_MUL);
-            node = node_new_operation(NODE_MUL, token, node, parser_unary(parser));
+            node = parser_mul_node(parser, token, node, parser_unary(parser));
         }
         if (token->kind == TOKEN_DIV) {
             parser_eat(parser, TOKEN_DIV);
-            node = node_new_operation(NODE_DIV, token, node, parser_unary(parser));
+            node = parser_div_node(parser, token, node, parser_unary(parser));
         }
         if (token->kind == TOKEN_MOD) {
             parser_eat(parser, TOKEN_MOD);
@@ -699,6 +719,11 @@ Node *parser_unary(Parser *parser) {
         }
         node->type = node->type->base;
         return node;
+    }
+    if (token->kind == TOKEN_SIZEOF) {
+        parser_eat(parser, TOKEN_SIZEOF);
+        Node *node = parser_unary(parser);
+        return node_new_integer(token, node->type->size);
     }
     return parser_primary(parser);
 }
