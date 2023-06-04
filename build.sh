@@ -91,6 +91,11 @@ if [ "$1" = "test" ]; then
     assert 1 "int main() { return 0 || 1; }"
     assert 0 "int main() { return 0 || 0; }"
 
+    assert 56 "int main() { return 56u; }"
+    assert 40 "long main() { return 40ull; }"
+    assert 97 "char main() { return 'a'; }"
+    assert 53 "char main() { return '0' + 5; }"
+
     assert 15 "int main() { int a; a = 10; return a + 5; }"
     assert 15 "int main() { int a; a = 10; a += 5; return a; 45; }"
     assert 5 "int main() { int a; a = 10; a -= 5; return a; 45; }"
@@ -144,12 +149,12 @@ if [ "$1" = "test" ]; then
     assert 4 "int main() { int x[2][3]; int *y=x; *(y+4)=4; return *(*(x+1)+1); }"
     assert 5 "int main() { int x[2][3]; int *y=x; *(y+5)=5; return *(*(x+1)+2); }"
 
-    assert 8 "int main() { int x=3; return sizeof x; }"
-    assert 4 "int main() { int x=3; return sizeof(x) - 4; }"
+    assert 4 "int main() { int x=3; return sizeof x; }"
+    assert 2 "int main() { int x=3; return sizeof(x) - 2; }"
     assert 12 "int main() { int *x=3; return sizeof x + 4; }"
-    assert 32 "int main() { int x[4]; return sizeof x; }"
+    assert 16 "int main() { int x[4]; return sizeof x; }"
     assert 32 "int main() { int *x[4]; return sizeof x; }"
-    assert 64 "int main() { int x[4][2]; return sizeof x; }"
+    assert 32 "int main() { int x[4][2]; return sizeof x; }"
     assert 6 "int main() { int x = 10; return x > 5 ? 6 : 7; }"
     assert 32 "int main() { int x = 7 < 4 ? 45 : 32; return x; }"
 
@@ -170,10 +175,10 @@ if [ "$1" = "test" ]; then
     assert 8 "int a() { return 4; } int main() { return a() + 4; }"
     assert 4 "int a() { return 4; } int main() { return 20 - (a() * 4); }"
     assert 6 "int a() { return 4; } int b() { return 6; } int c() { return 2 + 2; } int main() { return a() + (b() - c()); }"
-    assert 32 'int ret32() { return 32; } int main() { return ret32(); }'
-    assert 7 'int add2(int x, int y) { return x+y; } int main() { return add2(3,4); }'
-    assert 1 'int sub2(int x, int y) { return x-y; } int main() { return sub2(4,3); }'
-    assert 55 'int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); } int main() { return fib(9); }'
+    assert 32 "int ret32() { return 32; } int main() { return ret32(); }"
+    assert 7 "int add2(int x, int y) { return x+y; } int main() { return add2(3,4); }"
+    assert 1 "int sub2(int x, int y) { return x-y; } int main() { return sub2(4,3); }"
+    assert 55 "int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); } int main() { return fib(9); }"
 
     echo "[OK] All tests pass"
 fi

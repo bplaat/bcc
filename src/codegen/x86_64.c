@@ -87,12 +87,31 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         for (int32_t i = node->function->arguments.size - 1; i >= 0; i--) {
             Argument *argument = node->function->arguments.items[i];
             Local *local = node_find_local(node, argument->name);
-            if (i == 0) x86_64_inst3(0x48, 0x89, 0xbd);  // mov qword [rbp - imm], rdi
-            if (i == 1) x86_64_inst3(0x48, 0x89, 0xb5);  // mov qword [rbp - imm], rsi
-            if (i == 2) x86_64_inst3(0x48, 0x89, 0x95);  // mov qword [rbp - imm], rdx
-            if (i == 3) x86_64_inst3(0x48, 0x89, 0x8d);  // mov qword [rbp - imm], rcx
-            if (i == 4) x86_64_inst3(0x4c, 0x89, 0x85);  // mov qword [rbp - imm], r8
-            if (i == 5) x86_64_inst3(0x4c, 0x89, 0x8d);  // mov qword [rbp - imm], r9
+
+            if (i == 0) {
+                if (local->type->size == 1) x86_64_inst3(0x40, 0x88, 0xbd);  // mov byte [rbp - imm], dil
+                if (local->type->size == 2) x86_64_inst3(0x66, 0x89, 0xbd);  // mov word [rbp - imm], di
+                if (local->type->size == 4) x86_64_inst2(0x89, 0xbd);        // mov dword [rbp - imm], edi
+                if (local->type->size == 8) x86_64_inst3(0x48, 0x89, 0xbd);  // mov qword [rbp - imm], rdi
+            }
+            if (i == 1) {
+                if (local->type->size == 1) x86_64_inst3(0x40, 0x88, 0xb5);  // mov byte [rbp - imm], sil
+                if (local->type->size == 2) x86_64_inst3(0x66, 0x89, 0xb5);  // mov word [rbp - imm], si
+                if (local->type->size == 4) x86_64_inst2(0x89, 0xb5);        // mov dword [rbp - imm], esi
+                if (local->type->size == 8) x86_64_inst3(0x48, 0x89, 0xb5);  // mov qword [rbp - imm], rsi
+            }
+            if (i == 2) {
+                if (local->type->size == 1) x86_64_inst2(0x88, 0x95);        // mov byte [rbp - imm], dl
+                if (local->type->size == 2) x86_64_inst3(0x66, 0x89, 0x95);  // mov word [rbp - imm], dx
+                if (local->type->size == 4) x86_64_inst2(0x89, 0x95);        // mov dword [rbp - imm], edx
+                if (local->type->size == 8) x86_64_inst3(0x48, 0x89, 0x95);  // mov qword [rbp - imm], rdx
+            }
+            if (i == 3) {
+                if (local->type->size == 1) x86_64_inst2(0x88, 0x8d);        // mov byte [rbp - imm], cl
+                if (local->type->size == 2) x86_64_inst3(0x66, 0x89, 0x8d);  // mov word [rbp - imm], cx
+                if (local->type->size == 4) x86_64_inst2(0x89, 0x8d);        // mov dword [rbp - imm], ecx
+                if (local->type->size == 8) x86_64_inst3(0x48, 0x89, 0x8d);  // mov qword [rbp - imm], rcx
+            }
             x86_64_imm32(-local->offset);
         }
 
@@ -219,7 +238,11 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         codegen_node_x86_64(codegen, node->rhs);
         x86_64_inst1(0x58 | (x86_64_rcx & 7));  // pop rcx
 
-        x86_64_inst3(0x48, 0x89, 0x01);  // mov qword [rcx], rax
+        Type *type = node->lhs->type;
+        if (type->size == 1) x86_64_inst3(0x88, 0x41, 0x01);  // mov byte [rcx], al
+        if (type->size == 2) x86_64_inst3(0x66, 0x89, 0x01);  // mov word [rcx], ax
+        if (type->size == 4) x86_64_inst2(0x89, 0x01);        // mov dword [rcx], eax
+        if (type->size == 8) x86_64_inst3(0x48, 0x89, 0x01);  // mov qword [rcx], rax
         return;
     }
 
@@ -272,11 +295,17 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     // Values
     if (node->kind == NODE_LOCAL) {
         // When we load an array we don't load value because the array becomes a pointer
-        if (node->local->type->kind == TYPE_ARRAY) {
+        Type *type = node->local->type;
+        if (type->kind == TYPE_ARRAY) {
             codegen_addr_x86_64(codegen, node);
         } else {
-            x86_64_inst3(0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
+            if (type->size == 1) x86_64_inst2(0x8a, 0x85);        // mov al, byte [rbp - imm]
+            if (type->size == 2) x86_64_inst3(0x66, 0x8b, 0x85);  // mov ax, word [rbp - imm]
+            if (type->size == 4) x86_64_inst2(0x8b, 0x85);        // mov eax, dword [rbp - imm]
+            if (type->size == 8) x86_64_inst3(0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
             x86_64_imm32(-node->local->offset);
+            if (type->size == 1) x86_64_inst4(0x48, 0x0f, 0xb6, 0xc0);  // movzx rax, al
+            if (type->size == 2) x86_64_inst4(0x48, 0x0f, 0xb7, 0xc0);  // movzx rax, ax
         }
         return;
     }
@@ -302,8 +331,6 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
             if (i == 1) x86_64_inst3(0x48, 0x89, 0xc6);  // mov rsi, rax
             if (i == 2) x86_64_inst3(0x48, 0x89, 0xc2);  // mov rdx, rax
             if (i == 3) x86_64_inst3(0x48, 0x89, 0xc1);  // mov rcx, rax
-            if (i == 4) x86_64_inst3(0x4c, 0x89, 0xc0);  // mov r8, rax
-            if (i == 5) x86_64_inst3(0x4c, 0x89, 0xc1);  // mov r9, rax
         }
 
         x86_64_inst1(0xe8);  // call function
