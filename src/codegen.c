@@ -100,7 +100,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     }
 
     // Statements
-    if (node->kind == NODE_IF) {
+    if (node->kind == NODE_TENARY || node->kind == NODE_IF) {
         codegen_node_x86_64(codegen, node->condition);
         x86_64_inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
         x86_64_inst2(0x0f, 0x84);              // je else
@@ -109,9 +109,18 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 
         codegen_node_x86_64(codegen, node->then_block);
 
+        uint8_t *done_label;
+        if (node->else_block) {
+            x86_64_inst1(0xe9);  // jmp done
+            done_label = codegen->code_byte_ptr;
+            x86_64_imm32(0);
+        }
+
         *((int32_t *)else_label) = codegen->code_byte_ptr - (else_label + sizeof(int32_t));  // else:
         if (node->else_block) {
             codegen_node_x86_64(codegen, node->else_block);
+
+            *((int32_t *)done_label) = codegen->code_byte_ptr - (done_label + sizeof(int32_t));  // done:
         }
     }
 
@@ -322,7 +331,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     }
 
     // Statements
-    if (node->kind == NODE_IF) {
+    if (node->kind == NODE_TENARY || node->kind == NODE_IF) {
         codegen_node_arm64(codegen, node->condition);
 
         uint32_t *else_label = codegen->code_word_ptr;
@@ -330,9 +339,17 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
 
         codegen_node_arm64(codegen, node->then_block);
 
+        uint32_t *done_label;
+        if (node->else_block) {
+            done_label = codegen->code_word_ptr;
+            arm64_inst(0);  // b done
+        }
+
         *else_label = 0xB4000000 | (((codegen->code_word_ptr - else_label) & 0x7ffff) << 5) | (arm64_x0 & 31);  // else:
         if (node->else_block) {
             codegen_node_arm64(codegen, node->else_block);
+
+            *done_label = 0x14000000 | ((codegen->code_word_ptr - done_label) & 0x7ffffff);  // done:
         }
     }
 

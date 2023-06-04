@@ -29,6 +29,8 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_LCURLY) return "{";
     if (kind == TOKEN_RCURLY) return "}";
     if (kind == TOKEN_COMMA) return ",";
+    if (kind == TOKEN_QUESTION) return "?";
+    if (kind == TOKEN_COLON) return ":";
     if (kind == TOKEN_SEMICOLON) return ";";
 
     if (kind == TOKEN_NOT) return "~";
@@ -198,6 +200,16 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
         if (*c == ',') {
             tokens[size++].kind = TOKEN_COMMA;
+            c++;
+            continue;
+        }
+        if (*c == '?') {
+            tokens[size++].kind = TOKEN_QUESTION;
+            c++;
+            continue;
+        }
+        if (*c == ':') {
+            tokens[size++].kind = TOKEN_COLON;
             c++;
             continue;
         }

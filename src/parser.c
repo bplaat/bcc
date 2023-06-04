@@ -125,6 +125,15 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
         fprintf(f, "%" PRIi64, node->integer);
     }
 
+    if (node->kind == NODE_TENARY) {
+        fprintf(f, "( ");
+        node_dump(f, node->condition, indent);
+        fprintf(f, " ? ");
+        node_dump(f, node->then_block, indent);
+        fprintf(f, " : ");
+        node_dump(f, node->else_block, indent);
+        fprintf(f, " )");
+    }
     if (node->kind == NODE_IF) {
         fprintf(f, "if (");
         node_dump(f, node->condition, indent);
@@ -506,7 +515,7 @@ Node *parser_assigns(Parser *parser) {
 }
 
 Node *parser_assign(Parser *parser) {
-    Node *lhs = parser_logical(parser);
+    Node *lhs = parser_tenary(parser);
     if (current()->kind > TOKEN_ASSIGN_BEGIN && current()->kind < TOKEN_ASSIGN_END) {
         Token *token = current();
         if (token->kind == TOKEN_ASSIGN) {
@@ -555,6 +564,20 @@ Node *parser_assign(Parser *parser) {
         }
     }
     return lhs;
+}
+
+Node *parser_tenary(Parser *parser) {
+    Node *node = parser_logical(parser);
+    if (current()->kind == TOKEN_QUESTION) {
+        Node *tenary_node = node_new(NODE_TENARY, current());
+        parser_eat(parser, TOKEN_QUESTION);
+        tenary_node->condition = node;
+        tenary_node->then_block = parser_tenary(parser);
+        parser_eat(parser, TOKEN_COLON);
+        tenary_node->else_block = parser_tenary(parser);
+        return tenary_node;
+    }
+    return node;
 }
 
 Node *parser_logical(Parser *parser) {
