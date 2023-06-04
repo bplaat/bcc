@@ -29,6 +29,14 @@ Type *type_new_array(Type *base, size_t size);
 
 void type_dump(FILE *f, Type *type);
 
+// Function
+typedef struct Function {
+    char *name;
+    Type *return_type;
+    bool is_leaf;
+    uint8_t *code_ptr;
+} Function;
+
 // Local
 typedef struct Local {
     char *name;
@@ -44,6 +52,7 @@ typedef enum NodeKind {
 
     NODE_LOCAL,
     NODE_INTEGER,
+    NODE_CALL,
 
     NODE_TENARY,
     NODE_IF,
@@ -93,16 +102,11 @@ struct Node {
     Token *token;
     Type *type;
     union {
-        // Program
+        // Program, Function, nodes, call
         struct {
-            List functions;
-        };
-
-        // Function, nodes
-        struct {
-            char *function_name;
-            Type *return_type;
+            Function *function;
             List nodes;
+            List functions;
             List locals;
             size_t locals_size;
         };
@@ -141,7 +145,7 @@ Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs);
 
 Node *node_new_nodes(NodeKind kind, Token *token);
 
-Node *node_new_function(NodeKind kind, Token *token);
+Function *node_find_function(Node *node, char *name);
 
 Local *node_find_local(Node *node, char *name);
 
