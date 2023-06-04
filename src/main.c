@@ -78,7 +78,8 @@ int main(int argc, char **argv) {
     }
 
     // Codegen
-    codegen(arch, code->data, text, node);
+    void *start;
+    codegen(arch, code->data, text, node, &start);
     if (debug) {
         size_t i = 0;
         for (size_t y = 0; y < 128; y += 16) {
@@ -91,5 +92,5 @@ int main(int argc, char **argv) {
 
     // Execute
     page_make_executable(code);
-    return ((JitFunc)code->data)();
+    return ((JitFunc)start)();
 }

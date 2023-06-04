@@ -75,14 +75,14 @@ Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs) {
 Node *node_new_nodes(NodeKind kind, Token *token) {
     Node *node = node_new(kind, token);
     node->type = NULL;
-    node->nodes.capacity = 8;
+    node->nodes.capacity = 0;
     list_init(&node->nodes);
     return node;
 }
 
 Node *node_new_function(NodeKind kind, Token *token) {
     Node *node = node_new_nodes(kind, token);
-    node->locals.capacity = 8;
+    node->locals.capacity = 0;
     list_init(&node->locals);
     node->locals_size = 0;
     return node;
@@ -99,8 +99,17 @@ Local *node_find_local(Node *node, char *name) {
 }
 
 void node_dump(FILE *f, Node *node, int32_t indent) {
+    if (node->kind == NODE_PROGRAM) {
+        for (size_t i = 0; i < node->functions.size; i++) {
+            Node *function_node = node->functions.items[i];
+            node_dump(f, function_node, indent);
+            fprintf(f, "\n");
+        }
+    }
+
     if (node->kind == NODE_FUNCTION) {
-        fprintf(f, "{\n");
+        type_dump(f, node->return_type);
+        fprintf(f, " %s() {\n", node->function_name);
         for (size_t i = 0; i < node->locals.size; i++) {
             Local *local = node->locals.items[i];
             for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
@@ -233,7 +242,7 @@ Node *parser(char *text, Token *tokens, size_t tokens_size) {
         .tokens_size = tokens_size,
         .position = 0,
     };
-    return parser_function(&parser);
+    return parser_program(&parser);
 }
 
 #define current() (&parser->tokens[parser->position])
@@ -249,6 +258,11 @@ void parser_eat(Parser *parser, TokenKind token_kind) {
 }
 
 Type *parser_type(Parser *parser) {
+    if (current()->kind < TOKEN_TYPE_BEGIN && current()->kind > TOKEN_TYPE_END) {
+        print_error(parser->text, current(), "Expected a type token");
+        exit(EXIT_FAILURE);
+    }
+
     Type *type;
     if (current()->kind == TOKEN_INT) {
         parser_eat(parser, TOKEN_INT);
@@ -351,10 +365,26 @@ Node *parser_deref_node(Parser *parser, Token *token, Node *unary) {
     return node;
 }
 
+Node *parser_program(Parser *parser) {
+    Node *node = node_new(NODE_PROGRAM, current());
+    parser->program = node;
+    node->functions.capacity = 0;
+    list_init(&node->functions);
+    while (current()->kind != TOKEN_EOF) {
+        Node *function_node = parser_function(parser);
+        list_add(&node->functions, function_node);
+    }
+    return node;
+}
+
 Node *parser_function(Parser *parser) {
     Token *token = current();
     Node *node = node_new_function(NODE_FUNCTION, token);
-    Node *oldFunction = parser->current_function;
+    node->return_type = parser_type(parser);
+    node->function_name = current()->variable;
+    parser_eat(parser, TOKEN_VARIABLE);
+    parser_eat(parser, TOKEN_LPAREN);
+    parser_eat(parser, TOKEN_RPAREN);
     parser->current_function = node;
 
     parser_eat(parser, TOKEN_LCURLY);
@@ -371,8 +401,6 @@ Node *parser_function(Parser *parser) {
         local->offset = local_offset;
         local_offset -= local->type->size;
     }
-
-    parser->current_function = oldFunction;
     return node;
 }
 
@@ -488,6 +516,13 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_RETURN);
         Node *node = node_new_unary(NODE_RETURN, token, parser_assign(parser));
         parser_eat(parser, TOKEN_SEMICOLON);
+
+        // Check return type
+        Type *return_type = parser->current_function->return_type;
+        if (node->type->kind != return_type->kind || node->type->size != return_type->size) {
+            print_error(parser->text, token, "Wrong return type");
+            exit(EXIT_FAILURE);
+        }
         return node;
     }
 
