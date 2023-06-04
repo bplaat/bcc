@@ -26,6 +26,8 @@ typedef enum TokenKind {
 
     TOKEN_LPAREN,
     TOKEN_RPAREN,
+    TOKEN_LBLOCK,
+    TOKEN_RBLOCK,
     TOKEN_LCURLY,
     TOKEN_RCURLY,
     TOKEN_COMMA,

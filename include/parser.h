@@ -11,6 +11,7 @@
 typedef enum TypeKind {
     TYPE_INTEGER,
     TYPE_POINTER,
+    TYPE_ARRAY,
 } TypeKind;
 
 typedef struct Type Type;
@@ -23,6 +24,8 @@ struct Type {
 Type *type_new(TypeKind kind, size_t size);
 
 Type *type_new_pointer(Type *base);
+
+Type *type_new_array(Type *base, size_t size);
 
 void type_dump(FILE *f, Type *type);
 
@@ -150,11 +153,13 @@ Node *parser(char *text, Token *tokens, size_t tokens_size);
 void parser_eat(Parser *parser, TokenKind token_kind);
 
 Type *parser_type(Parser *parser);
+Type *parser_type_suffix(Parser *parser, Type *type);
 
 Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
+Node *parser_deref_node(Parser *parser, Token *token, Node *unary);
 
 Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
@@ -171,6 +176,7 @@ Node *parser_shift(Parser *parser);
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);
+Node *parser_postfix(Parser *parser);
 Node *parser_primary(Parser *parser);
 
 #endif
