@@ -29,6 +29,20 @@ Type *type_new_array(Type *base, size_t size);
 
 void type_dump(FILE *f, Type *type);
 
+// Function
+typedef struct Argument {
+    char *name;
+    Type *type;
+} Argument;
+
+typedef struct Function {
+    char *name;
+    Type *return_type;
+    List arguments;
+    bool is_leaf;
+    uint8_t *address;
+} Function;
+
 // Local
 typedef struct Local {
     char *name;
@@ -38,11 +52,13 @@ typedef struct Local {
 
 // Node
 typedef enum NodeKind {
+    NODE_PROGRAM,
     NODE_FUNCTION,
     NODE_NODES,
 
     NODE_LOCAL,
     NODE_INTEGER,
+    NODE_CALL,
 
     NODE_TENARY,
     NODE_IF,
@@ -92,14 +108,16 @@ struct Node {
     Token *token;
     Type *type;
     union {
-        // Function, nodes
+        // Program, function, nodes, call
         struct {
+            Function *function;
             List nodes;
+            List functions;
             List locals;
             size_t locals_size;
         };
 
-        // Tenary, If, while, dowhile
+        // Tenary, if, while, dowhile
         struct {
             Node *condition;
             Node *then_block;
@@ -133,7 +151,7 @@ Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs);
 
 Node *node_new_nodes(NodeKind kind, Token *token);
 
-Node *node_new_function(NodeKind kind, Token *token);
+Function *node_find_function(Node *node, char *name);
 
 Local *node_find_local(Node *node, char *name);
 
@@ -145,6 +163,7 @@ typedef struct Parser {
     Token *tokens;
     size_t tokens_size;
     size_t position;
+    Node *program;
     Node *current_function;
 } Parser;
 
@@ -161,6 +180,7 @@ Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_deref_node(Parser *parser, Token *token, Node *unary);
 
+Node *parser_program(Parser *parser);
 Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
 Node *parser_statement(Parser *parser);
