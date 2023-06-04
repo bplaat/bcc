@@ -26,6 +26,8 @@ char *token_kind_to_string(TokenKind kind) {
 
     if (kind == TOKEN_LPAREN) return "(";
     if (kind == TOKEN_RPAREN) return ")";
+    if (kind == TOKEN_LBLOCK) return "[";
+    if (kind == TOKEN_RBLOCK) return "]";
     if (kind == TOKEN_LCURLY) return "{";
     if (kind == TOKEN_RCURLY) return "}";
     if (kind == TOKEN_COMMA) return ",";
@@ -185,6 +187,16 @@ Token *lexer(char *text, size_t *tokens_size) {
         }
         if (*c == ')') {
             tokens[size++].kind = TOKEN_RPAREN;
+            c++;
+            continue;
+        }
+        if (*c == '[') {
+            tokens[size++].kind = TOKEN_LBLOCK;
+            c++;
+            continue;
+        }
+        if (*c == ']') {
+            tokens[size++].kind = TOKEN_RBLOCK;
             c++;
             continue;
         }
@@ -394,7 +406,7 @@ Token *lexer(char *text, size_t *tokens_size) {
 
         // Unknown character
         tokens[size].kind = TOKEN_UNKNOWN;
-        tokens[size].character = *c++;
+        tokens[size++].character = *c++;
     }
     *tokens_size = size;
     return tokens;
