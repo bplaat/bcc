@@ -253,8 +253,13 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 
     // Values
     if (node->kind == NODE_LOCAL) {
-        x86_64_inst3(0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
-        x86_64_imm32(-node->local->offset);
+        // When we load an array we don't load value because the array becomes a pointer
+        if (node->local->type->kind == TYPE_ARRAY) {
+            codegen_addr_x86_64(codegen, node);
+        } else {
+            x86_64_inst3(0x48, 0x8b, 0x85);  // mov rax, qword [rbp - imm]
+            x86_64_imm32(-node->local->offset);
+        }
         return;
     }
 
@@ -470,8 +475,13 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
 
     // Values
     if (node->kind == NODE_LOCAL) {
-        arm64_inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-        arm64_inst(0xF9400020);                                                                                      // ldr x0, [x1]
+        // When we load an array we don't load value because the array becomes a pointer
+        if (node->local->type->kind == TYPE_ARRAY) {
+            codegen_addr_arm64(codegen, node);
+        } else {
+            arm64_inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
+            arm64_inst(0xF9400020);  // ldr x0, [x1]
+        }
         return;
     }
 

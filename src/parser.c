@@ -22,6 +22,12 @@ Type *type_new_pointer(Type *base) {
     return type;
 }
 
+Type *type_new_array(Type *base, size_t size) {
+    Type *type = type_new(TYPE_ARRAY, base->size * size);
+    type->base = base;
+    return type;
+}
+
 void type_dump(FILE *f, Type *type) {
     if (type->kind == TYPE_INTEGER) {
         fprintf(f, "int%zu_t", type->size * 8);
@@ -29,6 +35,10 @@ void type_dump(FILE *f, Type *type) {
     if (type->kind == TYPE_POINTER) {
         type_dump(f, type->base);
         fprintf(f, "*");
+    }
+    if (type->kind == TYPE_ARRAY) {
+        type_dump(f, type->base);
+        fprintf(f, "[%zu]", type->size / type->base->size);
     }
 }
 
@@ -243,17 +253,27 @@ Type *parser_type(Parser *parser) {
     return type;
 }
 
+Type *parser_type_suffix(Parser *parser, Type *type) {
+    while (current()->kind == TOKEN_LBLOCK) {
+        parser_eat(parser, TOKEN_LBLOCK);
+        type = type_new_array(type, current()->integer);
+        parser_eat(parser, TOKEN_INTEGER);
+        parser_eat(parser, TOKEN_RBLOCK);
+    }
+    return type;
+}
+
 Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
         return node_new_operation(NODE_ADD, token, lhs, rhs);
     }
-    if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_POINTER) {
+    if (lhs->type->kind == TYPE_INTEGER && (rhs->type->kind == TYPE_POINTER || rhs->type->kind == TYPE_ARRAY)) {
         Node *tmp = rhs;
         rhs = lhs;
         lhs = tmp;
     }
-    if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
-        return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, 8)));
+    if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
+        return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->base->size)));
     }
 
     print_error(parser->text, token, "Invalid add types");
@@ -265,12 +285,12 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         return node_new_operation(NODE_SUB, token, lhs, rhs);
     }
     if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
-        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, 8));
+        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, lhs->type->base->size));
         node->type = node->type->base;
         return node;
     }
-    if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_INTEGER) {
-        return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, 8)));
+    if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
+        return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->base->size)));
     }
 
     print_error(parser->text, token, "Invalid subtract types");
@@ -439,18 +459,19 @@ Node *parser_statement(Parser *parser) {
 Node *parser_declarations(Parser *parser) {
     Token *token = current();
     if (token->kind > TOKEN_TYPE_BEGIN && token->kind < TOKEN_TYPE_END) {
-        Type *type = parser_type(parser);
+        Type *base_type = parser_type(parser);
         List *nodes = list_new();
         for (;;) {
             char *name = current()->variable;
             parser_eat(parser, TOKEN_VARIABLE);
+            Type *local_type = parser_type_suffix(parser, base_type);
 
             // Create local when it doesn't exists
             Local *local = node_find_local(parser->current_function, name);
             if (local == NULL) {
                 local = malloc(sizeof(Local));
                 local->name = name;
-                local->type = type;
+                local->type = local_type;
                 list_add(&parser->current_function->locals, local);
                 parser->current_function->locals_size += local->type->size;
             } else {
@@ -518,6 +539,10 @@ Node *parser_assign(Parser *parser) {
     Node *lhs = parser_tenary(parser);
     if (current()->kind > TOKEN_ASSIGN_BEGIN && current()->kind < TOKEN_ASSIGN_END) {
         Token *token = current();
+        if (lhs->type->kind == TYPE_ARRAY) {
+            print_error(parser->text, token, "Can't assign an array type");
+        }
+
         if (token->kind == TOKEN_ASSIGN) {
             parser_eat(parser, TOKEN_ASSIGN);
             return node_new_operation(NODE_ASSIGN, token, lhs, parser_assign(parser));
@@ -730,13 +755,17 @@ Node *parser_unary(Parser *parser) {
     if (token->kind == TOKEN_AND) {
         parser_eat(parser, TOKEN_AND);
         Node *node = node_new_unary(NODE_ADDR, token, parser_unary(parser));
-        node->type = type_new_pointer(node->type);
+        if (node->type->kind == TYPE_ARRAY) {
+            node->type = type_new_pointer(node->type->base);
+        } else {
+            node->type = type_new_pointer(node->type);
+        }
         return node;
     }
     if (token->kind == TOKEN_MUL) {
         parser_eat(parser, TOKEN_MUL);
         Node *node = node_new_unary(NODE_DEREF, token, parser_unary(parser));
-        if (node->type->kind != TYPE_POINTER) {
+        if (node->type->kind != TYPE_POINTER && node->type->kind != TYPE_ARRAY) {
             print_error(parser->text, token, "Type is not a pointer");
             exit(EXIT_FAILURE);
         }
