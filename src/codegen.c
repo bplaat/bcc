@@ -80,16 +80,6 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
             codegen_node_x86_64(codegen, child);
         }
 
-        Node *last_child = node->nodes.items[node->nodes.size - 1];
-        if (last_child->kind != NODE_RETURN) {
-            // Free locals stack frame
-            if (aligned_locals_size > 0) {
-                x86_64_inst3(0x48, 0x89, 0xec);         // mov rsp, rbp
-                x86_64_inst1(0x58 | (x86_64_rbp & 7));  // pop rbp
-            }
-            x86_64_inst1(0xc3);  // ret
-        }
-
         codegen->current_function = oldFunction;
         return;
     }
@@ -322,16 +312,6 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
             codegen_node_arm64(codegen, child);
-        }
-
-        Node *last_child = node->nodes.items[node->nodes.size - 1];
-        if (last_child->kind != NODE_RETURN) {
-            // Free locals stack frame
-            if (aligned_locals_size > 0) {
-                arm64_inst(0x910003BF);                    // mov sp, fp
-                arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
-            }
-            arm64_inst(0xD65F03C0);  // ret
         }
 
         codegen->current_function = oldFunction;
