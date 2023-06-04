@@ -13,9 +13,16 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_UNKNOWN) return "unknown?";
 
     if (kind == TOKEN_VARIABLE) return "variable";
-    if (kind == TOKEN_INTEGER) return "integer";
+    if (kind == TOKEN_I8) return "character";
+    else if (kind > TOKEN_INTEGER_BEGIN && kind < TOKEN_INTEGER_END) return "integer";
 
+    if (kind == TOKEN_CHAR) return "char";
+    if (kind == TOKEN_SHORT) return "short";
     if (kind == TOKEN_INT) return "int";
+    if (kind == TOKEN_LONG) return "long";
+    if (kind == TOKEN_SIGNED) return "signed";
+    if (kind == TOKEN_UNSIGNED) return "unsigned";
+
     if (kind == TOKEN_SIZEOF) return "sizeof";
     if (kind == TOKEN_IF) return "if";
     if (kind == TOKEN_ELSE) return "else";
@@ -72,8 +79,11 @@ char *token_kind_to_string(TokenKind kind) {
 }
 
 // Lexer
-Keyword keywords[] = {{"int", TOKEN_INT},     {"sizeof", TOKEN_SIZEOF}, {"if", TOKEN_IF},   {"else", TOKEN_ELSE},
-                      {"while", TOKEN_WHILE}, {"do", TOKEN_DO},         {"for", TOKEN_FOR}, {"return", TOKEN_RETURN}};
+Keyword keywords[] = {{"char", TOKEN_CHAR},         {"short", TOKEN_SHORT},  {"int", TOKEN_INT},   {"long", TOKEN_LONG},   {"signed", TOKEN_SIGNED},
+                      {"unsigned", TOKEN_UNSIGNED},
+
+                      {"sizeof", TOKEN_SIZEOF},     {"if", TOKEN_IF},        {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"do", TOKEN_DO},
+                      {"for", TOKEN_FOR},           {"return", TOKEN_RETURN}};
 
 Keyword operators[] = {{"<<=", TOKEN_SHL_ASSIGN}, {">>=", TOKEN_SHR_ASSIGN},
 
@@ -87,6 +97,28 @@ Keyword operators[] = {{"<<=", TOKEN_SHL_ASSIGN}, {">>=", TOKEN_SHR_ASSIGN},
                        {"~", TOKEN_NOT},          {"!", TOKEN_LOGICAL_NOT},  {"=", TOKEN_ASSIGN},      {"+", TOKEN_ADD},         {"-", TOKEN_SUB},
                        {"*", TOKEN_MUL},          {"/", TOKEN_DIV},          {"%", TOKEN_MOD},         {"&", TOKEN_AND},         {"|", TOKEN_OR},
                        {"^", TOKEN_XOR},          {"<", TOKEN_LT},           {">", TOKEN_GT}};
+
+static TokenKind lexer_integer_suffix(char *c, char **c_ptr) {
+    if (*c == 'u' || *c == 'U') {
+        c++;
+        if (*c == 'l' || *c == 'L') {
+            c++;
+            if (*c == 'l' || *c == 'L') c++;
+            *c_ptr = c;
+            return TOKEN_U64;
+        }
+        *c_ptr = c;
+        return TOKEN_U32;
+    }
+    if (*c == 'l' || *c == 'L') {
+        c++;
+        if (*c == 'l' || *c == 'L') c++;
+        *c_ptr = c;
+        return TOKEN_I64;
+    }
+    *c_ptr = c;
+    return TOKEN_I32;
+}
 
 Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;
@@ -146,26 +178,39 @@ Token *lexer(char *text, size_t *tokens_size) {
         // Integers
         if (*c == '0' && *(c + 1) == 'b') {
             c += 2;
-            tokens[size].kind = TOKEN_INTEGER;
-            tokens[size++].integer = strtol(c, &c, 2);
+            int64_t integer = strtol(c, &c, 2);
+            tokens[size].kind = lexer_integer_suffix(c, &c);
+            tokens[size++].integer = integer;
             continue;
         }
         if (*c == '0' && (isdigit(*(c + 1)) || *(c + 1) == 'o')) {
             if (*(c + 1) == 'o') c++;
             c++;
-            tokens[size].kind = TOKEN_INTEGER;
-            tokens[size++].integer = strtol(c, &c, 8);
+            int64_t integer = strtol(c, &c, 8);
+            tokens[size].kind = lexer_integer_suffix(c, &c);
+            tokens[size++].integer = integer;
             continue;
         }
         if (*c == '0' && *(c + 1) == 'x') {
             c += 2;
-            tokens[size].kind = TOKEN_INTEGER;
-            tokens[size++].integer = strtol(c, &c, 16);
+            int64_t integer = strtol(c, &c, 16);
+            tokens[size].kind = lexer_integer_suffix(c, &c);
+            tokens[size++].integer = integer;
             continue;
         }
         if (isdigit(*c)) {
-            tokens[size].kind = TOKEN_INTEGER;
-            tokens[size++].integer = strtol(c, &c, 10);
+            int64_t integer = strtol(c, &c, 10);
+            tokens[size].kind = lexer_integer_suffix(c, &c);
+            tokens[size++].integer = integer;
+            continue;
+        }
+
+        // Characters
+        if (*c == '\'') {
+            c++;
+            tokens[size].kind = TOKEN_I8;
+            tokens[size++].integer = *c;
+            c += 2;
             continue;
         }
 

@@ -65,13 +65,32 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         for (int32_t i = node->function->arguments.size - 1; i >= 0; i--) {
             Argument *argument = node->function->arguments.items[i];
             Local *local = node_find_local(node, argument->name);
+
             arm64_inst(0xD1000000 | ((local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x6 & 31));  // sub x6, fp, imm
-            if (i == 0) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x0 & 31));                         // str x0, [x6]
-            if (i == 1) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x1 & 31));                         // str x1, [x6]
-            if (i == 2) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x2 & 31));                         // str x2, [x6]
-            if (i == 3) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x3 & 31));                         // str x3, [x6]
-            if (i == 4) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x4 & 31));                         // str x4, [x6]
-            if (i == 5) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x5 & 31));                         // str x5, [x6]
+            if (i == 0) {
+                if (local->type->size == 1) arm64_inst(0x3D000000 | ((arm64_x6 & 31) << 5) | (arm64_x0 & 31));  // str b0, [x6]
+                if (local->type->size == 2) arm64_inst(0x7D000000 | ((arm64_x6 & 31) << 5) | (arm64_x0 & 31));  // str w0, [x6]
+                if (local->type->size == 4) arm64_inst(0xB9000000 | ((arm64_x6 & 31) << 5) | (arm64_x0 & 31));  // str h0, [x6]
+                if (local->type->size == 8) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x0 & 31));  // str x0, [x6]
+            }
+            if (i == 1) {
+                if (local->type->size == 1) arm64_inst(0x3D000000 | ((arm64_x6 & 31) << 5) | (arm64_x1 & 31));  // str b1, [x6]
+                if (local->type->size == 2) arm64_inst(0x7D000000 | ((arm64_x6 & 31) << 5) | (arm64_x1 & 31));  // str w1, [x6]
+                if (local->type->size == 4) arm64_inst(0xB9000000 | ((arm64_x6 & 31) << 5) | (arm64_x1 & 31));  // str h1, [x6]
+                if (local->type->size == 8) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x1 & 31));  // str x1, [x6]
+            }
+            if (i == 2) {
+                if (local->type->size == 1) arm64_inst(0x3D000000 | ((arm64_x6 & 31) << 5) | (arm64_x2 & 31));  // str b2, [x6]
+                if (local->type->size == 2) arm64_inst(0x7D000000 | ((arm64_x6 & 31) << 5) | (arm64_x2 & 31));  // str w2, [x6]
+                if (local->type->size == 4) arm64_inst(0xB9000000 | ((arm64_x6 & 31) << 5) | (arm64_x2 & 31));  // str h2, [x6]
+                if (local->type->size == 8) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x2 & 31));  // str x2, [x6]
+            }
+            if (i == 3) {
+                if (local->type->size == 1) arm64_inst(0x3D000000 | ((arm64_x6 & 31) << 5) | (arm64_x3 & 31));  // str b3, [x6]
+                if (local->type->size == 2) arm64_inst(0x7D000000 | ((arm64_x6 & 31) << 5) | (arm64_x3 & 31));  // str w3, [x6]
+                if (local->type->size == 4) arm64_inst(0xB9000000 | ((arm64_x6 & 31) << 5) | (arm64_x3 & 31));  // str h3, [x6]
+                if (local->type->size == 8) arm64_inst(0xF9000000 | ((arm64_x6 & 31) << 5) | (arm64_x3 & 31));  // str x3, [x6]
+            }
         }
 
         for (size_t i = 0; i < node->nodes.size; i++) {
@@ -193,7 +212,11 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         codegen_node_arm64(codegen, node->rhs);
         arm64_inst(0xF84107E0 | (arm64_x1 & 31));  // ldr x1, [sp], 16
 
-        arm64_inst(0xF9000020);  // str x0, [x1]
+        Type *type = node->lhs->type;
+        if (type->size == 1) arm64_inst(0x3D000020);  // str b0, [x1]
+        if (type->size == 2) arm64_inst(0x7D000020);  // str h0, [x1]
+        if (type->size == 4) arm64_inst(0xB9000020);  // str w0, [x1]
+        if (type->size == 8) arm64_inst(0xF9000020);  // str x0, [x1]
         return;
     }
 
@@ -240,11 +263,15 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     // Values
     if (node->kind == NODE_LOCAL) {
         // When we load an array we don't load value because the array becomes a pointer
-        if (node->local->type->kind == TYPE_ARRAY) {
+        Type *type = node->local->type;
+        if (type->kind == TYPE_ARRAY) {
             codegen_addr_arm64(codegen, node);
         } else {
             arm64_inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-            arm64_inst(0xF9400020);                                                                                      // ldr x0, [x1]
+            if (type->size == 1) arm64_inst(0x3D400020);                                                                 // ldr b0, [x1]
+            if (type->size == 2) arm64_inst(0x7D400020);                                                                 // ldr h0, [x1]
+            if (type->size == 4) arm64_inst(0xB9400020);                                                                 // ldr w0, [x1]
+            if (type->size == 8) arm64_inst(0xF9400020);                                                                 // ldr x0, [x1]
         }
         return;
     }
@@ -263,8 +290,6 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             if (i == 1) arm64_inst(0xAA0003E0 | (arm64_x1 & 31));  // mov x1, x0
             if (i == 2) arm64_inst(0xAA0003E0 | (arm64_x2 & 31));  // mov x2, x0
             if (i == 3) arm64_inst(0xAA0003E0 | (arm64_x3 & 31));  // mov x3, x0
-            if (i == 4) arm64_inst(0xAA0003E0 | (arm64_x4 & 31));  // mov x4, x0
-            if (i == 5) arm64_inst(0xAA0003E0 | (arm64_x5 & 31));  // mov x5, x0
         }
 
         arm64_inst(0x94000000 | (((uint32_t *)node->function->address - codegen->code_word_ptr) & 0x7ffffff));  // bl function
