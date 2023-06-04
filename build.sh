@@ -166,7 +166,10 @@ if [ "$1" = "test" ]; then
     assert 4 "int main() { int x[2][3]; int *y=x; y[4]=4; return x[1][1]; }"
     assert 5 "int main() { int x[2][3]; int *y=x; y[5]=5; return x[1][2]; }"
 
-    assert 10 "int a() { return 4; } int b() { return 4; } int main() { return 10; }"
+    assert 10 "int a() { return 4; } int main() { return 10; }"
+    assert 8 "int a() { return 4; } int main() { return a() + 4; }"
+    assert 4 "int a() { return 4; } int main() { return 20 - (a() * 4); }"
+    assert 6 "int a() { return 4; } int b() { return 6; } int c() { return 2 + 2; } int main() { return a() + (b() - c()); }"
 
     echo "[OK] All tests pass"
 fi

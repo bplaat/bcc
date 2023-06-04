@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-void codegen(Arch arch, void *code, char *text, Node *node, void **start_ptr) {
+void codegen(Arch arch, void *code, char *text, Node *node, void **main) {
     Codegen codegen = {
         .text = text,
         .code = code,
@@ -11,7 +11,7 @@ void codegen(Arch arch, void *code, char *text, Node *node, void **start_ptr) {
     };
     if (arch == ARCH_X86_64) codegen_node_x86_64(&codegen, node);
     if (arch == ARCH_ARM64) codegen_node_arm64(&codegen, node);
-    *start_ptr = codegen.start;
+    *main = codegen.main;
 }
 
 // x86_64
@@ -67,8 +67,8 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     // Program
     if (node->kind == NODE_PROGRAM) {
         codegen->program = node;
-        for (size_t i = 0; i < node->functions.size; i++) {
-            Node *function_node = node->functions.items[i];
+        for (size_t i = 0; i < node->nodes.size; i++) {
+            Node *function_node = node->nodes.items[i];
             codegen_node_x86_64(codegen, function_node);
         }
     }
@@ -77,9 +77,12 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_FUNCTION) {
         codegen->current_function = node;
 
-        // Set start address
-        if (!strcmp(node->function_name, "main")) {
-            codegen->start = codegen->code_byte_ptr;
+        // Set function ptr to current code offset
+        node->function->code_ptr = codegen->code_byte_ptr;
+
+        // Set main address
+        if (!strcmp(node->function->name, "main")) {
+            codegen->main = codegen->code_byte_ptr;
         }
 
         // Allocate locals stack frame
@@ -286,6 +289,12 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         }
         return;
     }
+
+    if (node->kind == NODE_CALL) {
+        x86_64_inst1(0xe8);  // call function
+        x86_64_imm32((uint8_t *)node->function->code_ptr - (codegen->code_byte_ptr + sizeof(int32_t)));
+        return;
+    }
 }
 
 // arm64
@@ -293,6 +302,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 #define arm64_x1 1
 #define arm64_x2 2
 #define arm64_fp 29
+#define arm64_lr 30
 #define arm64_sp 31
 
 #define arm64_inst(inst) *(codegen)->code_word_ptr++ = inst
@@ -314,8 +324,8 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     // Program
     if (node->kind == NODE_PROGRAM) {
         codegen->program = node;
-        for (size_t i = 0; i < node->functions.size; i++) {
-            Node *function_node = node->functions.items[i];
+        for (size_t i = 0; i < node->nodes.size; i++) {
+            Node *function_node = node->nodes.items[i];
             codegen_node_arm64(codegen, function_node);
         }
     }
@@ -324,10 +334,16 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_FUNCTION) {
         codegen->current_function = node;
 
-        // Set start address
-        if (!strcmp(node->function_name, "main")) {
-            codegen->start = (uint8_t *)codegen->code_word_ptr;
+        // Set function ptr to current code offset
+        node->function->code_ptr = (uint8_t *)codegen->code_word_ptr;
+
+        // Set main address
+        if (!strcmp(node->function->name, "main")) {
+            codegen->main = (uint8_t *)codegen->code_word_ptr;
         }
+
+        // Push link register
+        if (!node->function->is_leaf) arm64_inst(0xF81F0FE0 | (arm64_lr & 31));  // str lr, [sp, -16]!
 
         // Allocate locals stack frame
         size_t aligned_locals_size = align(node->locals_size, 16);
@@ -412,6 +428,10 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             arm64_inst(0x910003BF);                    // mov sp, fp
             arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
         }
+
+        // Push link register
+        if (!codegen->current_function->function->is_leaf) arm64_inst(0xF84107E0 | (arm64_lr & 31));  // ldr fp, [sp], 16
+
         arm64_inst(0xD65F03C0);  // ret
         return;
     }
@@ -510,6 +530,11 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
 
     if (node->kind == NODE_INTEGER) {
         arm64_inst(0xD2800000 | ((node->integer & 0xffff) << 5) | (arm64_x0 & 31));  // mov x0, imm
+        return;
+    }
+
+    if (node->kind == NODE_CALL) {
+        arm64_inst(0x94000000 | (((uint32_t *)node->function->code_ptr - codegen->code_word_ptr) & 0x7ffffff));  // bl function
         return;
     }
 }

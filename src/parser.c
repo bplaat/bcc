@@ -80,12 +80,14 @@ Node *node_new_nodes(NodeKind kind, Token *token) {
     return node;
 }
 
-Node *node_new_function(NodeKind kind, Token *token) {
-    Node *node = node_new_nodes(kind, token);
-    node->locals.capacity = 0;
-    list_init(&node->locals);
-    node->locals_size = 0;
-    return node;
+Function *node_find_function(Node *node, char *name) {
+    for (size_t i = 0; i < node->functions.size; i++) {
+        Function *function = node->functions.items[i];
+        if (!strcmp(function->name, name)) {
+            return function;
+        }
+    }
+    return NULL;
 }
 
 Local *node_find_local(Node *node, char *name) {
@@ -101,15 +103,22 @@ Local *node_find_local(Node *node, char *name) {
 void node_dump(FILE *f, Node *node, int32_t indent) {
     if (node->kind == NODE_PROGRAM) {
         for (size_t i = 0; i < node->functions.size; i++) {
-            Node *function_node = node->functions.items[i];
-            node_dump(f, function_node, indent);
+            Function *function = node->functions.items[i];
+            type_dump(f, function->return_type);
+            fprintf(f, " %s();\n", function->name);
+        }
+        fprintf(f, "\n");
+
+        for (size_t i = 0; i < node->nodes.size; i++) {
+            Node *child = node->nodes.items[i];
+            node_dump(f, child, indent);
             fprintf(f, "\n");
         }
     }
 
     if (node->kind == NODE_FUNCTION) {
-        type_dump(f, node->return_type);
-        fprintf(f, " %s() {\n", node->function_name);
+        type_dump(f, node->function->return_type);
+        fprintf(f, " %s() {\n", node->function->name);
         for (size_t i = 0; i < node->locals.size; i++) {
             Local *local = node->locals.items[i];
             for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
@@ -142,6 +151,9 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
     }
     if (node->kind == NODE_INTEGER) {
         fprintf(f, "%" PRIi64, node->integer);
+    }
+    if (node->kind == NODE_CALL) {
+        fprintf(f, "%s()", node->function->name);
     }
 
     if (node->kind == NODE_TENARY) {
@@ -366,22 +378,30 @@ Node *parser_deref_node(Parser *parser, Token *token, Node *unary) {
 }
 
 Node *parser_program(Parser *parser) {
-    Node *node = node_new(NODE_PROGRAM, current());
-    parser->program = node;
+    Node *node = node_new_nodes(NODE_PROGRAM, current());
     node->functions.capacity = 0;
     list_init(&node->functions);
+    parser->program = node;
     while (current()->kind != TOKEN_EOF) {
         Node *function_node = parser_function(parser);
-        list_add(&node->functions, function_node);
+        list_add(&node->functions, function_node->function);
+        list_add(&node->nodes, function_node);
     }
     return node;
 }
 
 Node *parser_function(Parser *parser) {
     Token *token = current();
-    Node *node = node_new_function(NODE_FUNCTION, token);
-    node->return_type = parser_type(parser);
-    node->function_name = current()->variable;
+    Node *node = node_new_nodes(NODE_FUNCTION, token);
+    node->locals.capacity = 0;
+    list_init(&node->locals);
+    node->locals_size = 0;
+
+    Function *function = malloc(sizeof(Function));
+    node->function = function;
+    function->return_type = parser_type(parser);
+    function->name = current()->variable;
+    function->is_leaf = true;
     parser_eat(parser, TOKEN_VARIABLE);
     parser_eat(parser, TOKEN_LPAREN);
     parser_eat(parser, TOKEN_RPAREN);
@@ -518,7 +538,7 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_SEMICOLON);
 
         // Check return type
-        Type *return_type = parser->current_function->return_type;
+        Type *return_type = parser->current_function->function->return_type;
         if (node->type->kind != return_type->kind || node->type->size != return_type->size) {
             print_error(parser->text, token, "Wrong return type");
             exit(EXIT_FAILURE);
@@ -879,15 +899,32 @@ Node *parser_primary(Parser *parser) {
         return node;
     }
     if (token->kind == TOKEN_VARIABLE) {
+        char *name = token->variable;
+        parser_eat(parser, TOKEN_VARIABLE);
+
+        // Function call
+        if (current()->kind == TOKEN_LPAREN) {
+            parser_eat(parser, TOKEN_LPAREN);
+            parser_eat(parser, TOKEN_RPAREN);
+            Node *node = node_new(NODE_CALL, token);
+            node->function = node_find_function(parser->program, name);
+            if (node->function == NULL) {
+                print_error(parser->text, token, "Undefined function: '%s'", name);
+                exit(EXIT_FAILURE);
+            }
+            node->type = node->function->return_type;
+            parser->current_function->function->is_leaf = false;
+            return node;
+        }
+
+        // Local
         Node *node = node_new(NODE_LOCAL, token);
-        Local *local = node_find_local(parser->current_function, token->variable);
-        if (local == NULL) {
-            print_error(parser->text, token, "Undefined variable: '%s'", token->variable);
+        node->local = node_find_local(parser->current_function, name);
+        if (node->local == NULL) {
+            print_error(parser->text, token, "Undefined variable: '%s'", name);
             exit(EXIT_FAILURE);
         }
-        node->local = local;
-        node->type = local->type;
-        parser_eat(parser, TOKEN_VARIABLE);
+        node->type = node->local->type;
         return node;
     }
 

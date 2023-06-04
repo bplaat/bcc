@@ -16,13 +16,13 @@ typedef struct Codegen {
     void *code;
     uint8_t *code_byte_ptr;
     uint32_t *code_word_ptr;
-    void *start;
+    void *main;
 
     Node *program;
     Node *current_function;
 } Codegen;
 
-void codegen(Arch arch, void *code, char *text, Node *node, void **start_ptr);
+void codegen(Arch arch, void *code, char *text, Node *node, void **main);
 
 void codegen_addr_x86_64(Codegen *codegen, Node *node);
 
