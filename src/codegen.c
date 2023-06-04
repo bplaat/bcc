@@ -1,6 +1,8 @@
-#include <codegen.h>
+#include "codegen.h"
 
-void codegen(Arch arch, void *code, char *text, Node *node) {
+#include <string.h>
+
+void codegen(Arch arch, void *code, char *text, Node *node, void **start_ptr) {
     Codegen codegen = {
         .text = text,
         .code = code,
@@ -9,6 +11,7 @@ void codegen(Arch arch, void *code, char *text, Node *node) {
     };
     if (arch == ARCH_X86_64) codegen_node_x86_64(&codegen, node);
     if (arch == ARCH_ARM64) codegen_node_arm64(&codegen, node);
+    *start_ptr = codegen.start;
 }
 
 // x86_64
@@ -61,10 +64,23 @@ void codegen_addr_x86_64(Codegen *codegen, Node *node) {
 }
 
 void codegen_node_x86_64(Codegen *codegen, Node *node) {
-    // Blocks
+    // Program
+    if (node->kind == NODE_PROGRAM) {
+        codegen->program = node;
+        for (size_t i = 0; i < node->functions.size; i++) {
+            Node *function_node = node->functions.items[i];
+            codegen_node_x86_64(codegen, function_node);
+        }
+    }
+
+    // Function
     if (node->kind == NODE_FUNCTION) {
-        Node *oldFunction = codegen->current_function;
         codegen->current_function = node;
+
+        // Set start address
+        if (!strcmp(node->function_name, "main")) {
+            codegen->start = codegen->code_byte_ptr;
+        }
 
         // Allocate locals stack frame
         size_t aligned_locals_size = align(node->locals_size, 16);
@@ -79,11 +95,10 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
             Node *child = node->nodes.items[i];
             codegen_node_x86_64(codegen, child);
         }
-
-        codegen->current_function = oldFunction;
         return;
     }
 
+    // Nodes
     if (node->kind == NODE_NODES) {
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
@@ -296,10 +311,23 @@ void codegen_addr_arm64(Codegen *codegen, Node *node) {
 }
 
 void codegen_node_arm64(Codegen *codegen, Node *node) {
-    // Blocks
+    // Program
+    if (node->kind == NODE_PROGRAM) {
+        codegen->program = node;
+        for (size_t i = 0; i < node->functions.size; i++) {
+            Node *function_node = node->functions.items[i];
+            codegen_node_arm64(codegen, function_node);
+        }
+    }
+
+    // Function
     if (node->kind == NODE_FUNCTION) {
-        Node *oldFunction = codegen->current_function;
         codegen->current_function = node;
+
+        // Set start address
+        if (!strcmp(node->function_name, "main")) {
+            codegen->start = (uint8_t *)codegen->code_word_ptr;
+        }
 
         // Allocate locals stack frame
         size_t aligned_locals_size = align(node->locals_size, 16);
@@ -313,11 +341,10 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             Node *child = node->nodes.items[i];
             codegen_node_arm64(codegen, child);
         }
-
-        codegen->current_function = oldFunction;
         return;
     }
 
+    // Nodes
     if (node->kind == NODE_NODES) {
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
@@ -476,7 +503,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             codegen_addr_arm64(codegen, node);
         } else {
             arm64_inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((arm64_fp & 31) << 5) | (arm64_x1 & 31));  // sub x1, fp, imm
-            arm64_inst(0xF9400020);  // ldr x0, [x1]
+            arm64_inst(0xF9400020);                                                                                      // ldr x0, [x1]
         }
         return;
     }

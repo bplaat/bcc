@@ -38,6 +38,7 @@ typedef struct Local {
 
 // Node
 typedef enum NodeKind {
+    NODE_PROGRAM,
     NODE_FUNCTION,
     NODE_NODES,
 
@@ -92,8 +93,15 @@ struct Node {
     Token *token;
     Type *type;
     union {
+        // Program
+        struct {
+            List functions;
+        };
+
         // Function, nodes
         struct {
+            char *function_name;
+            Type *return_type;
             List nodes;
             List locals;
             size_t locals_size;
@@ -145,6 +153,7 @@ typedef struct Parser {
     Token *tokens;
     size_t tokens_size;
     size_t position;
+    Node *program;
     Node *current_function;
 } Parser;
 
@@ -161,6 +170,7 @@ Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_deref_node(Parser *parser, Token *token, Node *unary);
 
+Node *parser_program(Parser *parser);
 Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
 Node *parser_statement(Parser *parser);
