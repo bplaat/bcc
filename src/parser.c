@@ -16,6 +16,12 @@ Type *type_new(TypeKind kind, size_t size) {
     return type;
 }
 
+Type *type_new_integer(size_t size, bool is_signed) {
+    Type *type = type_new(TYPE_INTEGER, size);
+    type->is_signed = is_signed;
+    return type;
+}
+
 Type *type_new_pointer(Type *base) {
     Type *type = type_new(TYPE_POINTER, 8);
     type->base = base;
@@ -30,7 +36,11 @@ Type *type_new_array(Type *base, size_t size) {
 
 void type_dump(FILE *f, Type *type) {
     if (type->kind == TYPE_INTEGER) {
-        fprintf(f, "int%zu_t", type->size * 8);
+        if (type->is_signed) {
+            fprintf(f, "i%zu", type->size * 8);
+        } else {
+            fprintf(f, "u%zu", type->size * 8);
+        }
     }
     if (type->kind == TYPE_POINTER) {
         type_dump(f, type->base);
@@ -50,9 +60,10 @@ Node *node_new(NodeKind kind, Token *token) {
     return node;
 }
 
+// Deprecated
 Node *node_new_integer(Token *token, int64_t integer) {
     Node *node = node_new(NODE_INTEGER, token);
-    node->type = type_new(TYPE_INTEGER, 8);
+    node->type = type_new_integer(4, true);
     node->integer = integer;
     return node;
 }
@@ -299,10 +310,32 @@ Type *parser_type(Parser *parser) {
         exit(EXIT_FAILURE);
     }
 
-    Type *type;
-    if (current()->kind == TOKEN_INT) {
-        parser_eat(parser, TOKEN_INT);
-        type = type_new(TYPE_INTEGER, 8);
+    Type *type = type_new_integer(4, true);
+    while (current()->kind > TOKEN_TYPE_BEGIN && current()->kind < TOKEN_TYPE_END) {
+        if (current()->kind == TOKEN_CHAR) {
+            type->size = 1;
+            parser_eat(parser, TOKEN_CHAR);
+        }
+        if (current()->kind == TOKEN_SHORT) {
+            type->size = 2;
+            parser_eat(parser, TOKEN_SHORT);
+        }
+        if (current()->kind == TOKEN_INT) {
+            type->size = 4;
+            parser_eat(parser, TOKEN_INT);
+        }
+        if (current()->kind == TOKEN_LONG) {
+            type->size = 8;
+            parser_eat(parser, TOKEN_LONG);
+        }
+        if (current()->kind == TOKEN_SIGNED) {
+            type->is_signed = true;
+            parser_eat(parser, TOKEN_SIGNED);
+        }
+        if (current()->kind == TOKEN_UNSIGNED) {
+            type->is_signed = false;
+            parser_eat(parser, TOKEN_UNSIGNED);
+        }
     }
 
     while (current()->kind == TOKEN_MUL) {
@@ -316,7 +349,11 @@ Type *parser_type_suffix(Parser *parser, Type *type) {
     if (current()->kind == TOKEN_LBLOCK) {
         parser_eat(parser, TOKEN_LBLOCK);
         int64_t size = current()->integer;
-        parser_eat(parser, TOKEN_INTEGER);
+        if (current()->kind > TOKEN_INTEGER_BEGIN && current()->kind < TOKEN_INTEGER_END) {
+            parser_eat(parser, current()->kind);
+        } else {
+            parser_eat(parser, TOKEN_I32);
+        }
         parser_eat(parser, TOKEN_RBLOCK);
         type = type_new_array(parser_type_suffix(parser, type), size);
     }
@@ -325,7 +362,10 @@ Type *parser_type_suffix(Parser *parser, Type *type) {
 
 Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
-        return node_new_integer(token, lhs->integer + rhs->integer);
+        Node *node = node_new(NODE_INTEGER, token);
+        node->type = lhs->type;
+        node->integer = lhs->integer + rhs->integer;
+        return node;
     }
 
     if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
@@ -941,11 +981,43 @@ Node *parser_primary(Parser *parser) {
         parser_eat(parser, TOKEN_RPAREN);
         return node;
     }
-    if (token->kind == TOKEN_INTEGER) {
-        Node *node = node_new_integer(token, token->integer);
-        parser_eat(parser, TOKEN_INTEGER);
+
+    if (token->kind == TOKEN_I8) {
+        Node *node = node_new(NODE_INTEGER, token);
+        node->type = type_new_integer(1, true);
+        node->integer = token->integer;
+        parser_eat(parser, TOKEN_I8);
         return node;
     }
+    if (token->kind == TOKEN_I32) {
+        Node *node = node_new(NODE_INTEGER, token);
+        node->type = type_new_integer(4, true);
+        node->integer = token->integer;
+        parser_eat(parser, TOKEN_I32);
+        return node;
+    }
+    if (token->kind == TOKEN_I64) {
+        Node *node = node_new(NODE_INTEGER, token);
+        node->type = type_new_integer(8, true);
+        node->integer = token->integer;
+        parser_eat(parser, TOKEN_I64);
+        return node;
+    }
+    if (token->kind == TOKEN_U32) {
+        Node *node = node_new(NODE_INTEGER, token);
+        node->type = type_new_integer(4, false);
+        node->integer = token->integer;
+        parser_eat(parser, TOKEN_U32);
+        return node;
+    }
+    if (token->kind == TOKEN_U64) {
+        Node *node = node_new(NODE_INTEGER, token);
+        node->type = type_new_integer(8, false);
+        node->integer = token->integer;
+        parser_eat(parser, TOKEN_U64);
+        return node;
+    }
+
     if (token->kind == TOKEN_VARIABLE) {
         char *name = token->variable;
         parser_eat(parser, TOKEN_VARIABLE);
