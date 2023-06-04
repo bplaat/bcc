@@ -29,6 +29,8 @@ typedef enum TokenKind {
     TOKEN_LCURLY,
     TOKEN_RCURLY,
     TOKEN_COMMA,
+    TOKEN_QUESTION,
+    TOKEN_COLON,
     TOKEN_SEMICOLON,
 
     TOKEN_NOT,

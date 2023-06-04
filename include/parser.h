@@ -41,6 +41,7 @@ typedef enum NodeKind {
     NODE_LOCAL,
     NODE_INTEGER,
 
+    NODE_TENARY,
     NODE_IF,
     NODE_WHILE,
     NODE_DOWHILE,
@@ -95,7 +96,7 @@ struct Node {
             size_t locals_size;
         };
 
-        // If, while, dowhile
+        // Tenary, If, while, dowhile
         struct {
             Node *condition;
             Node *then_block;
@@ -161,6 +162,7 @@ Node *parser_statement(Parser *parser);
 Node *parser_declarations(Parser *parser);
 Node *parser_assigns(Parser *parser);
 Node *parser_assign(Parser *parser);
+Node *parser_tenary(Parser *parser);
 Node *parser_logical(Parser *parser);
 Node *parser_equality(Parser *parser);
 Node *parser_relational(Parser *parser);
