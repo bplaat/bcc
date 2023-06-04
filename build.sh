@@ -170,6 +170,10 @@ if [ "$1" = "test" ]; then
     assert 8 "int a() { return 4; } int main() { return a() + 4; }"
     assert 4 "int a() { return 4; } int main() { return 20 - (a() * 4); }"
     assert 6 "int a() { return 4; } int b() { return 6; } int c() { return 2 + 2; } int main() { return a() + (b() - c()); }"
+    assert 32 'int ret32() { return 32; } int main() { return ret32(); }'
+    assert 7 'int add2(int x, int y) { return x+y; } int main() { return add2(3,4); }'
+    assert 1 'int sub2(int x, int y) { return x-y; } int main() { return sub2(4,3); }'
+    assert 55 'int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); } int main() { return fib(9); }'
 
     echo "[OK] All tests pass"
 fi

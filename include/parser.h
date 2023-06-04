@@ -30,11 +30,17 @@ Type *type_new_array(Type *base, size_t size);
 void type_dump(FILE *f, Type *type);
 
 // Function
+typedef struct Argument {
+    char *name;
+    Type *type;
+} Argument;
+
 typedef struct Function {
     char *name;
     Type *return_type;
+    List arguments;
     bool is_leaf;
-    uint8_t *code_ptr;
+    uint8_t *address;
 } Function;
 
 // Local
@@ -102,7 +108,7 @@ struct Node {
     Token *token;
     Type *type;
     union {
-        // Program, Function, nodes, call
+        // Program, function, nodes, call
         struct {
             Function *function;
             List nodes;
@@ -111,7 +117,7 @@ struct Node {
             size_t locals_size;
         };
 
-        // Tenary, If, while, dowhile
+        // Tenary, if, while, dowhile
         struct {
             Node *condition;
             Node *then_block;

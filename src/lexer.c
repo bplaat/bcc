@@ -36,7 +36,7 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_SEMICOLON) return ";";
 
     if (kind == TOKEN_NOT) return "~";
-    if (kind == TOKEN_LOGICAL_NOT) return "~";
+    if (kind == TOKEN_LOGICAL_NOT) return "!";
 
     if (kind == TOKEN_ASSIGN) return "=";
     if (kind == TOKEN_ADD_ASSIGN) return "+=";
@@ -73,7 +73,20 @@ char *token_kind_to_string(TokenKind kind) {
 
 // Lexer
 Keyword keywords[] = {{"int", TOKEN_INT},     {"sizeof", TOKEN_SIZEOF}, {"if", TOKEN_IF},   {"else", TOKEN_ELSE},
-                      {"while", TOKEN_WHILE}, {"do", TOKEN_DO},       {"for", TOKEN_FOR}, {"return", TOKEN_RETURN}};
+                      {"while", TOKEN_WHILE}, {"do", TOKEN_DO},         {"for", TOKEN_FOR}, {"return", TOKEN_RETURN}};
+
+Keyword operators[] = {{"<<=", TOKEN_SHL_ASSIGN}, {">>=", TOKEN_SHR_ASSIGN},
+
+                       {"+=", TOKEN_ADD_ASSIGN},  {"-=", TOKEN_SUB_ASSIGN},  {"*=", TOKEN_MUL_ASSIGN}, {"/=", TOKEN_DIV_ASSIGN}, {"%=", TOKEN_MOD_ASSIGN},
+                       {"&=", TOKEN_AND_ASSIGN},  {"|=", TOKEN_OR_ASSIGN},   {"^=", TOKEN_XOR_ASSIGN}, {"<<", TOKEN_SHL},        {">>", TOKEN_SHR},
+                       {"==", TOKEN_EQ},          {"!=", TOKEN_NEQ},         {"<=", TOKEN_LTEQ},       {">=", TOKEN_GTEQ},       {"&&", TOKEN_LOGICAL_AND},
+                       {"||", TOKEN_LOGICAL_OR},
+
+                       {"(", TOKEN_LPAREN},       {")", TOKEN_RPAREN},       {"[", TOKEN_LBLOCK},      {"]", TOKEN_RBLOCK},      {"{", TOKEN_LCURLY},
+                       {"}", TOKEN_RCURLY},       {",", TOKEN_COMMA},        {"?", TOKEN_QUESTION},    {":", TOKEN_COLON},       {";", TOKEN_SEMICOLON},
+                       {"~", TOKEN_NOT},          {"!", TOKEN_LOGICAL_NOT},  {"=", TOKEN_ASSIGN},      {"+", TOKEN_ADD},         {"-", TOKEN_SUB},
+                       {"*", TOKEN_MUL},          {"/", TOKEN_DIV},          {"%", TOKEN_MOD},         {"&", TOKEN_AND},         {"|", TOKEN_OR},
+                       {"^", TOKEN_XOR},          {"<", TOKEN_LT},           {">", TOKEN_GT}};
 
 Token *lexer(char *text, size_t *tokens_size) {
     size_t capacity = 1024;
@@ -162,245 +175,36 @@ Token *lexer(char *text, size_t *tokens_size) {
             while (isalnum(*c) || *c == '_') c++;
             size_t string_size = c - string;
 
-            bool found = false;
+            bool keyword_found = false;
             for (size_t i = 0; i < sizeof(keywords) / sizeof(Keyword); i++) {
                 Keyword *keyword = &keywords[i];
-                size_t keywordSize = strlen(keyword->keyword);
-                if (!memcmp(string, keyword->keyword, keywordSize) && string_size == keywordSize) {
+                size_t keyword_size = strlen(keyword->keyword);
+                if (!memcmp(string, keyword->keyword, keyword_size) && string_size == keyword_size) {
                     tokens[size++].kind = keyword->kind;
-                    found = true;
+                    keyword_found = true;
                     break;
                 }
             }
-            if (!found) {
+            if (!keyword_found) {
                 tokens[size].kind = TOKEN_VARIABLE;
                 tokens[size++].variable = strndup(string, string_size);
             }
             continue;
         }
 
-        // Syntax
-        if (*c == '(') {
-            tokens[size++].kind = TOKEN_LPAREN;
-            c++;
-            continue;
-        }
-        if (*c == ')') {
-            tokens[size++].kind = TOKEN_RPAREN;
-            c++;
-            continue;
-        }
-        if (*c == '[') {
-            tokens[size++].kind = TOKEN_LBLOCK;
-            c++;
-            continue;
-        }
-        if (*c == ']') {
-            tokens[size++].kind = TOKEN_RBLOCK;
-            c++;
-            continue;
-        }
-        if (*c == '{') {
-            tokens[size++].kind = TOKEN_LCURLY;
-            c++;
-            continue;
-        }
-        if (*c == '}') {
-            tokens[size++].kind = TOKEN_RCURLY;
-            c++;
-            continue;
-        }
-        if (*c == ',') {
-            tokens[size++].kind = TOKEN_COMMA;
-            c++;
-            continue;
-        }
-        if (*c == '?') {
-            tokens[size++].kind = TOKEN_QUESTION;
-            c++;
-            continue;
-        }
-        if (*c == ':') {
-            tokens[size++].kind = TOKEN_COLON;
-            c++;
-            continue;
-        }
-        if (*c == ';') {
-            tokens[size++].kind = TOKEN_SEMICOLON;
-            c++;
-            continue;
-        }
-
         // Operators
-        if (*c == '~') {
-            tokens[size++].kind = TOKEN_NOT;
-            c++;
-            continue;
+        bool operator_found = false;
+        for (size_t i = 0; i < sizeof(operators) / sizeof(Keyword); i++) {
+            Keyword *keyword = &operators[i];
+            size_t keyword_size = strlen(keyword->keyword);
+            if (!memcmp(c, keyword->keyword, keyword_size)) {
+                tokens[size++].kind = keyword->kind;
+                c += keyword_size;
+                operator_found = true;
+                break;
+            }
         }
-        if (*c == '+') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_ADD_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_ADD;
-            c++;
-            continue;
-        }
-        if (*c == '-') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_SUB_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_SUB;
-            c++;
-            continue;
-        }
-        if (*c == '*') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_MUL_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_MUL;
-            c++;
-            continue;
-        }
-        if (*c == '/') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_DIV_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_DIV;
-            c++;
-            continue;
-        }
-        if (*c == '%') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_MOD_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_MOD;
-            c++;
-            continue;
-        }
-        if (*c == '=') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_EQ;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_ASSIGN;
-            c++;
-            continue;
-        }
-        if (*c == '!') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_NEQ;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_LOGICAL_NOT;
-            c++;
-            continue;
-        }
-        if (*c == '<') {
-            if (*(c + 1) == '<') {
-                if (*(c + 2) == '=') {
-                    tokens[size++].kind = TOKEN_SHL_ASSIGN;
-                    c += 3;
-                    continue;
-                }
-
-                tokens[size++].kind = TOKEN_SHL;
-                c += 2;
-                continue;
-            }
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_LTEQ;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_LT;
-            c++;
-            continue;
-        }
-        if (*c == '>') {
-            if (*(c + 1) == '>') {
-                if (*(c + 2) == '=') {
-                    tokens[size++].kind = TOKEN_SHR_ASSIGN;
-                    c += 3;
-                    continue;
-                }
-
-                tokens[size++].kind = TOKEN_SHR;
-                c += 2;
-                continue;
-            }
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_GTEQ;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_GT;
-            c++;
-            continue;
-        }
-        if (*c == '&') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_AND_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            if (*(c + 1) == '&') {
-                tokens[size++].kind = TOKEN_LOGICAL_AND;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_AND;
-            c++;
-            continue;
-        }
-        if (*c == '|') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_OR_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            if (*(c + 1) == '|') {
-                tokens[size++].kind = TOKEN_LOGICAL_OR;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_OR;
-            c++;
-            continue;
-        }
-        if (*c == '^') {
-            if (*(c + 1) == '=') {
-                tokens[size++].kind = TOKEN_XOR_ASSIGN;
-                c += 2;
-                continue;
-            }
-
-            tokens[size++].kind = TOKEN_XOR;
-            c++;
+        if (operator_found) {
             continue;
         }
 
