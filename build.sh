@@ -132,16 +132,26 @@ if [ "$1" = "test" ]; then
     assert 7 "{ int x=3; int y=5; *(&y-2+1)=7; return x; }"
     assert 5 "{ int x=3; return (&x+2)-&x+3; }"
 
+    assert 3 "{ int x[2]; int *y=&x; *y=3; return *x; }"
+    assert 3 "{ int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *x; }"
+    assert 4 "{ int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1); }"
+    assert 5 "{ int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+2); }"
+
+    assert 0 "{ int x[2][3]; int *y=x; *y=0; return **x; }"
+    assert 1 "{ int x[2][3]; int *y=x; *(y+1)=1; return *(*x+1); }"
+    assert 2 "{ int x[2][3]; int *y=x; *(y+2)=2; return *(*x+2); }"
+    assert 3 "{ int x[2][3]; int *y=x; *(y+3)=3; return **(x+1); }"
+    assert 4 "{ int x[2][3]; int *y=x; *(y+4)=4; return *(*(x+1)+1); }"
+    assert 5 "{ int x[2][3]; int *y=x; *(y+5)=5; return *(*(x+1)+2); }"
+
     assert 8 "{ int x=3; return sizeof x; }"
     assert 4 "{ int x=3; return sizeof(x) - 4; }"
     assert 12 "{ int *x=3; return sizeof x + 4; }"
+    assert 32 "{ int x[4]; return sizeof x; }"
+    assert 32 "{ int *x[4]; return sizeof x; }"
+    assert 64 "{ int x[4][2]; return sizeof x; }"
     assert 6 "{ int x = 10; return x > 5 ? 6 : 7; }"
     assert 32 "{ int x = 7 < 4 ? 45 : 32; return x; }"
-
-    assert 3 '{ int x[2]; int *y=&x; *y=3; return *x; }'
-    assert 3 '{ int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *x; }'
-    assert 4 '{ int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1); }'
-    assert 5 '{ int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+2); }'
 
     echo "[OK] All tests pass"
 fi

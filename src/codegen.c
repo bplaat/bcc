@@ -80,12 +80,15 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
             codegen_node_x86_64(codegen, child);
         }
 
-        // Free locals stack frame
-        if (aligned_locals_size > 0) {
-            x86_64_inst3(0x48, 0x89, 0xec);         // mov rsp, rbp
-            x86_64_inst1(0x58 | (x86_64_rbp & 7));  // pop rbp
+        Node *last_child = node->nodes.items[node->nodes.size - 1];
+        if (last_child->kind != NODE_RETURN) {
+            // Free locals stack frame
+            if (aligned_locals_size > 0) {
+                x86_64_inst3(0x48, 0x89, 0xec);         // mov rsp, rbp
+                x86_64_inst1(0x58 | (x86_64_rbp & 7));  // pop rbp
+            }
+            x86_64_inst1(0xc3);  // ret
         }
-        x86_64_inst1(0xc3);  // ret
 
         codegen->current_function = oldFunction;
         return;
@@ -160,6 +163,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_RETURN) {
         codegen_node_x86_64(codegen, node->unary);
 
+        // Free locals stack frame
         if (codegen->current_function->locals_size > 0) {
             x86_64_inst3(0x48, 0x89, 0xec);         // mov rsp, rbp
             x86_64_inst1(0x58 | (x86_64_rbp & 7));  // pop rbp
@@ -176,7 +180,11 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 
     if (node->kind == NODE_DEREF) {
         codegen_node_x86_64(codegen, node->unary);
-        x86_64_inst3(0x48, 0x8b, 0x00);  // mov rax, qword [rax]
+
+        // When array in array just return the pointer
+        if (node->type->kind != TYPE_ARRAY) {
+            x86_64_inst3(0x48, 0x8b, 0x00);  // mov rax, qword [rax]
+        }
         return;
     }
 
@@ -316,12 +324,15 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
             codegen_node_arm64(codegen, child);
         }
 
-        // Free locals stack frame
-        if (aligned_locals_size > 0) {
-            arm64_inst(0x910003BF);                    // mov sp, fp
-            arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
+        Node *last_child = node->nodes.items[node->nodes.size - 1];
+        if (last_child->kind != NODE_RETURN) {
+            // Free locals stack frame
+            if (aligned_locals_size > 0) {
+                arm64_inst(0x910003BF);                    // mov sp, fp
+                arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
+            }
+            arm64_inst(0xD65F03C0);  // ret
         }
-        arm64_inst(0xD65F03C0);  // ret
 
         codegen->current_function = oldFunction;
         return;
@@ -389,6 +400,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_RETURN) {
         codegen_node_arm64(codegen, node->unary);
 
+        // Free locals stack frame
         if (codegen->current_function->locals_size > 0) {
             arm64_inst(0x910003BF);                    // mov sp, fp
             arm64_inst(0xF84107E0 | (arm64_fp & 31));  // ldr fp, [sp], 16
@@ -405,7 +417,11 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
 
     if (node->kind == NODE_DEREF) {
         codegen_node_arm64(codegen, node->unary);
-        arm64_inst(0xF9400000);  // ldr x0, [x0]
+
+        // When array in array just return the pointer
+        if (node->type->kind != TYPE_ARRAY) {
+            arm64_inst(0xF9400000);  // ldr x0, [x0]
+        }
         return;
     }
 

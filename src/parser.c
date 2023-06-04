@@ -30,7 +30,7 @@ Type *type_new_array(Type *base, size_t size) {
 
 void type_dump(FILE *f, Type *type) {
     if (type->kind == TYPE_INTEGER) {
-        fprintf(f, "int%zu_t", type->size * 8);
+        fprintf(f, "i%zu", type->size * 8);
     }
     if (type->kind == TYPE_POINTER) {
         type_dump(f, type->base);
@@ -183,12 +183,18 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
         if (node->kind == NODE_ADDR) fprintf(f, "& ");
         if (node->kind == NODE_DEREF) fprintf(f, "* ");
 
+        fprintf(f, "|");
+        type_dump(f, node->unary->type);
+        fprintf(f, "|");
         node_dump(f, node->unary, indent);
         fprintf(f, " )");
     }
 
     if (node->kind > NODE_OPERATION_BEGIN && node->kind < NODE_OPERATION_END) {
         fprintf(f, "( ");
+        fprintf(f, "|");
+        type_dump(f, node->lhs->type);
+        fprintf(f, "|");
         node_dump(f, node->lhs, indent);
 
         if (node->kind == NODE_ASSIGN) fprintf(f, " = ");
@@ -211,6 +217,9 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
         if (node->kind == NODE_LOGICAL_AND) fprintf(f, " && ");
         if (node->kind == NODE_LOGICAL_OR) fprintf(f, " || ");
 
+        fprintf(f, "|");
+        type_dump(f, node->rhs->type);
+        fprintf(f, "|");
         node_dump(f, node->rhs, indent);
         fprintf(f, " )");
     }
@@ -254,16 +263,21 @@ Type *parser_type(Parser *parser) {
 }
 
 Type *parser_type_suffix(Parser *parser, Type *type) {
-    while (current()->kind == TOKEN_LBLOCK) {
+    if (current()->kind == TOKEN_LBLOCK) {
         parser_eat(parser, TOKEN_LBLOCK);
-        type = type_new_array(type, current()->integer);
+        int64_t size = current()->integer;
         parser_eat(parser, TOKEN_INTEGER);
         parser_eat(parser, TOKEN_RBLOCK);
+        type = type_new_array(parser_type_suffix(parser, type), size);
     }
     return type;
 }
 
 Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
+    if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
+        return node_new_integer(token, lhs->integer + rhs->integer);
+    }
+
     if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
         return node_new_operation(NODE_ADD, token, lhs, rhs);
     }
@@ -281,10 +295,14 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
 }
 
 Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
+    if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
+        return node_new_integer(token, lhs->integer - rhs->integer);
+    }
+
     if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
         return node_new_operation(NODE_SUB, token, lhs, rhs);
     }
-    if (lhs->type->kind == TYPE_POINTER && rhs->type->kind == TYPE_POINTER) {
+    if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && (rhs->type->kind == TYPE_POINTER || rhs->type->kind == TYPE_ARRAY)) {
         Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, lhs->type->base->size));
         node->type = node->type->base;
         return node;
@@ -299,6 +317,10 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
 
 Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     (void)parser;
+    if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
+        return node_new_integer(token, lhs->integer * rhs->integer);
+    }
+
     if (rhs->kind == TYPE_INTEGER && power_of_two(rhs->integer)) {
         rhs->integer = log(rhs->integer) / log(power_of_two(rhs->integer));
         return node_new_operation(NODE_SHL, token, lhs, rhs);
@@ -308,6 +330,10 @@ Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
 
 Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     (void)parser;
+    if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
+        return node_new_integer(token, lhs->integer / rhs->integer);
+    }
+
     if (rhs->kind == TYPE_INTEGER && power_of_two(rhs->integer)) {
         rhs->integer = log(rhs->integer) / log(power_of_two(rhs->integer));
         return node_new_operation(NODE_SHR, token, lhs, rhs);
@@ -371,6 +397,7 @@ Node *parser_statement(Parser *parser) {
 
     if (token->kind == TOKEN_IF) {
         Node *node = node_new(NODE_IF, token);
+        node->type = NULL;
         parser_eat(parser, TOKEN_IF);
         parser_eat(parser, TOKEN_LPAREN);
         node->condition = parser_assign(parser);
@@ -387,6 +414,7 @@ Node *parser_statement(Parser *parser) {
 
     if (token->kind == TOKEN_WHILE) {
         Node *node = node_new(NODE_WHILE, token);
+        node->type = NULL;
         node->else_block = NULL;
         parser_eat(parser, TOKEN_WHILE);
         parser_eat(parser, TOKEN_LPAREN);
@@ -398,6 +426,7 @@ Node *parser_statement(Parser *parser) {
 
     if (token->kind == TOKEN_DO) {
         Node *node = node_new(NODE_DOWHILE, token);
+        node->type = NULL;
         node->else_block = NULL;
         parser_eat(parser, TOKEN_DO);
         node->then_block = parser_block(parser);
@@ -412,6 +441,7 @@ Node *parser_statement(Parser *parser) {
     if (token->kind == TOKEN_FOR) {
         Node *parent_node = node_new_nodes(NODE_NODES, token);
         Node *node = node_new(NODE_WHILE, token);
+        node->type = NULL;
         node->then_block = node_new_nodes(NODE_NODES, token);
 
         parser_eat(parser, TOKEN_FOR);
@@ -483,6 +513,7 @@ Node *parser_declarations(Parser *parser) {
                 parser_eat(parser, TOKEN_ASSIGN);
                 Node *node = node_new(NODE_LOCAL, token);
                 node->local = local;
+                node->type = local->type;
                 list_add(nodes, node_new_operation(NODE_ASSIGN, token, node, parser_assign(parser)));
             }
 
@@ -600,6 +631,7 @@ Node *parser_tenary(Parser *parser) {
         tenary_node->then_block = parser_tenary(parser);
         parser_eat(parser, TOKEN_COLON);
         tenary_node->else_block = parser_tenary(parser);
+        tenary_node->type = tenary_node->then_block->type;
         return tenary_node;
     }
     return node;
