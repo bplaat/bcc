@@ -341,6 +341,16 @@ Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     return node_new_operation(NODE_DIV, token, lhs, rhs);
 }
 
+Node *parser_deref_node(Parser *parser, Token *token, Node *unary) {
+    Node *node = node_new_unary(NODE_DEREF, token, unary);
+    if (node->type->kind != TYPE_POINTER && node->type->kind != TYPE_ARRAY) {
+        print_error(parser->text, token, "Type is not a pointer");
+        exit(EXIT_FAILURE);
+    }
+    node->type = node->type->base;
+    return node;
+}
+
 Node *parser_function(Parser *parser) {
     Token *token = current();
     Node *node = node_new_function(NODE_FUNCTION, token);
@@ -796,20 +806,27 @@ Node *parser_unary(Parser *parser) {
     }
     if (token->kind == TOKEN_MUL) {
         parser_eat(parser, TOKEN_MUL);
-        Node *node = node_new_unary(NODE_DEREF, token, parser_unary(parser));
-        if (node->type->kind != TYPE_POINTER && node->type->kind != TYPE_ARRAY) {
-            print_error(parser->text, token, "Type is not a pointer");
-            exit(EXIT_FAILURE);
-        }
-        node->type = node->type->base;
-        return node;
+        return parser_deref_node(parser, token, parser_unary(parser));
     }
     if (token->kind == TOKEN_SIZEOF) {
         parser_eat(parser, TOKEN_SIZEOF);
         Node *node = parser_unary(parser);
         return node_new_integer(token, node->type->size);
     }
-    return parser_primary(parser);
+    return parser_postfix(parser);
+}
+
+Node *parser_postfix(Parser *parser) {
+    Node *node = parser_primary(parser);
+    // x[y] is short for *(x + y)
+    while (current()->kind == TOKEN_LBLOCK) {
+        Token *token = current();
+        parser_eat(parser, TOKEN_LBLOCK);
+        Node *index = parser_assign(parser);
+        parser_eat(parser, TOKEN_RBLOCK);
+        node = parser_deref_node(parser, token, parser_add_node(parser, token, node, index));
+    }
+    return node;
 }
 
 Node *parser_primary(Parser *parser) {

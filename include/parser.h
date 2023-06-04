@@ -159,6 +159,7 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
+Node *parser_deref_node(Parser *parser, Token *token, Node *unary);
 
 Node *parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
@@ -175,6 +176,7 @@ Node *parser_shift(Parser *parser);
 Node *parser_add(Parser *parser);
 Node *parser_mul(Parser *parser);
 Node *parser_unary(Parser *parser);
+Node *parser_postfix(Parser *parser);
 Node *parser_primary(Parser *parser);
 
 #endif
