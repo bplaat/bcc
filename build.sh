@@ -4,29 +4,29 @@
 # For now only works on macOS and Linux
 
 if [ "$(uname -s)" = Darwin ]; then
-    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-x86_64 || exit
+    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
     if [ "$(arch)" = arm64 ]; then
-        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name *.c) -o bcc-arm64 || exit
+        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-arm64 || exit
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name *.c) -lm -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
 fi
 
 # Function that runs a test
 assert() {
     expected=$1
-    input=$2
+    input="$2"
 
     # Compile and run for x86_64
     if [ -e "./bcc-x86_64" ]; then
         echo "$input" | ./bcc-x86_64 -
         actual=$?
-        if [ $actual != $expected ]; then
+        if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
-            echo $input
+            echo "$input"
             echo "Dump:"
-            echo $input | ./bcc-x86_64 -d -
+            echo "$input" | ./bcc-x86_64 -d -
             echo "Arch: x86_64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -36,11 +36,11 @@ assert() {
     if [ -e "./bcc-arm64" ]; then
         echo "$input" | ./bcc-arm64 -
         actual=$?
-        if [ $actual != $expected ]; then
+        if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
-            echo $input
+            echo "$input"
             echo "Dump:"
-            echo $input | ./bcc-arm64 -d -
+            echo "$input" | ./bcc-arm64 -d -
             echo "Arch: arm64 | Return: $actual | Correct: $expected"
             exit 1
         fi

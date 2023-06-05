@@ -4,6 +4,16 @@
 #include <stdint.h>
 #include <stddef.h>
 
+// Source
+typedef struct Source {
+    char *path;
+    char *basename;
+    char *dirname;
+    char *text;
+} Source;
+
+Source *source_new(char *path, char *text);
+
 // Token
 typedef enum TokenKind {
     TOKEN_EOF,
@@ -86,10 +96,10 @@ typedef enum TokenKind {
 
 typedef struct Token {
     TokenKind kind;
+    Source *source;
     int32_t line;
     int32_t column;
     union {
-        char character;
         int64_t integer;
         char *variable;
     };
@@ -103,6 +113,6 @@ typedef struct Keyword {
     TokenKind kind;
 } Keyword;
 
-Token *lexer(char *text, size_t *tokens_size);
+Token *lexer(char *path, char *text, size_t *tokens_size);
 
 #endif

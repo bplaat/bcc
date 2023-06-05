@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include "codegen.h"
@@ -13,110 +14,90 @@
 #define lr 30
 #define sp 31
 
-#define inst(inst) *(codegen)->code_word_ptr++ = inst
-
-void codegen_addr_arm64(Codegen *codegen, Node *node) {
-    if (node->kind == NODE_LOCAL) {
-        inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((fp & 31) << 5) | (x0 & 31));  // sub x0, fp, imm
-        return;
-    }
-    if (node->kind == NODE_DEREF) {
-        codegen_node_arm64(codegen, node->lhs);
-        return;
+#define inst(inst)                      \
+    {                                   \
+        *codegen->code_word_ptr = inst; \
+        codegen->code_word_ptr++;       \
     }
 
-    print_error(codegen->text, node->token, "Node is not an lvalue");
+void codegen_func_arm64(Codegen *codegen, Function *function) {
+    codegen->current_function = function;
+
+    // Set function ptr to current code offset
+    function->address = (uint8_t *)codegen->code_word_ptr;
+
+    // Set main address
+    if (!strcmp(function->name, "main")) {
+        codegen->program->main_func = codegen->code_word_ptr;
+    }
+
+    // Push link register
+    if (!function->is_leaf) inst(0xF81F0FE0 | (lr & 31));  // str lr, [sp, -16]!
+
+    // Allocate locals stack frame
+    size_t aligned_locals_size = align(function->locals_size, 16);
+    if (aligned_locals_size > 0) {
+        inst(0xF81F0FE0 | (fp & 31));                                                              // str fp, [sp, -16]!
+        inst(0x910003FD);                                                                          // mov fp, sp
+        inst(0xD1000000 | ((aligned_locals_size & 0x1fff) << 10) | ((sp & 31) << 5) | (sp & 31));  // sub sp, sp, imm
+    }
+
+    // Write arguments to locals
+    for (int32_t i = function->arguments.size - 1; i >= 0; i--) {
+        Argument *argument = function->arguments.items[i];
+        Local *local = function_find_local(function, argument->name);
+
+        inst(0xD1000000 | ((local->offset & 0x1fff) << 10) | ((fp & 31) << 5) | (x6 & 31));  // sub x6, fp, imm
+        if (i == 0) {
+            if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x0 & 31));  // str b0, [x6]
+            if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x0 & 31));  // str w0, [x6]
+            if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x0 & 31));  // str h0, [x6]
+            if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x0 & 31));  // str x0, [x6]
+        }
+        if (i == 1) {
+            if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x1 & 31));  // str b1, [x6]
+            if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x1 & 31));  // str w1, [x6]
+            if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x1 & 31));  // str h1, [x6]
+            if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x1 & 31));  // str x1, [x6]
+        }
+        if (i == 2) {
+            if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x2 & 31));  // str b2, [x6]
+            if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x2 & 31));  // str w2, [x6]
+            if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x2 & 31));  // str h2, [x6]
+            if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x2 & 31));  // str x2, [x6]
+        }
+        if (i == 3) {
+            if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x3 & 31));  // str b3, [x6]
+            if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x3 & 31));  // str w3, [x6]
+            if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x3 & 31));  // str h3, [x6]
+            if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x3 & 31));  // str x3, [x6]
+        }
+    }
+
+    for (size_t i = 0; i < function->nodes.size; i++) {
+        Node *child = function->nodes.items[i];
+        codegen_stat_arm64(codegen, child);
+    }
 }
 
-void codegen_node_arm64(Codegen *codegen, Node *node) {
-    // Program
-    if (node->kind == NODE_PROGRAM) {
-        codegen->program = node;
-        for (size_t i = 0; i < node->nodes.size; i++) {
-            Node *function_node = node->nodes.items[i];
-            codegen_node_arm64(codegen, function_node);
-        }
-    }
-
-    // Function
-    if (node->kind == NODE_FUNCTION) {
-        codegen->current_function = node;
-
-        // Set function ptr to current code offset
-        node->function->address = (uint8_t *)codegen->code_word_ptr;
-
-        // Set main address
-        if (!strcmp(node->function->name, "main")) {
-            codegen->main = (uint8_t *)codegen->code_word_ptr;
-        }
-
-        // Push link register
-        if (!node->function->is_leaf) inst(0xF81F0FE0 | (lr & 31));  // str lr, [sp, -16]!
-
-        // Allocate locals stack frame
-        size_t aligned_locals_size = align(node->locals_size, 16);
-        if (aligned_locals_size > 0) {
-            inst(0xF81F0FE0 | (fp & 31));                                                              // str fp, [sp, -16]!
-            inst(0x910003FD);                                                                          // mov fp, sp
-            inst(0xD1000000 | ((aligned_locals_size & 0x1fff) << 10) | ((sp & 31) << 5) | (sp & 31));  // sub sp, sp, imm
-        }
-
-        // Write arguments to locals
-        for (int32_t i = node->function->arguments.size - 1; i >= 0; i--) {
-            Argument *argument = node->function->arguments.items[i];
-            Local *local = node_find_local(node, argument->name);
-
-            inst(0xD1000000 | ((local->offset & 0x1fff) << 10) | ((fp & 31) << 5) | (x6 & 31));  // sub x6, fp, imm
-            if (i == 0) {
-                if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x0 & 31));  // str b0, [x6]
-                if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x0 & 31));  // str w0, [x6]
-                if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x0 & 31));  // str h0, [x6]
-                if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x0 & 31));  // str x0, [x6]
-            }
-            if (i == 1) {
-                if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x1 & 31));  // str b1, [x6]
-                if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x1 & 31));  // str w1, [x6]
-                if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x1 & 31));  // str h1, [x6]
-                if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x1 & 31));  // str x1, [x6]
-            }
-            if (i == 2) {
-                if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x2 & 31));  // str b2, [x6]
-                if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x2 & 31));  // str w2, [x6]
-                if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x2 & 31));  // str h2, [x6]
-                if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x2 & 31));  // str x2, [x6]
-            }
-            if (i == 3) {
-                if (local->type->size == 1) inst(0x3D000000 | ((x6 & 31) << 5) | (x3 & 31));  // str b3, [x6]
-                if (local->type->size == 2) inst(0x7D000000 | ((x6 & 31) << 5) | (x3 & 31));  // str w3, [x6]
-                if (local->type->size == 4) inst(0xB9000000 | ((x6 & 31) << 5) | (x3 & 31));  // str h3, [x6]
-                if (local->type->size == 8) inst(0xF9000000 | ((x6 & 31) << 5) | (x3 & 31));  // str x3, [x6]
-            }
-        }
-
-        for (size_t i = 0; i < node->nodes.size; i++) {
-            Node *child = node->nodes.items[i];
-            codegen_node_arm64(codegen, child);
-        }
-        return;
-    }
-
+void codegen_stat_arm64(Codegen *codegen, Node *node) {
     // Nodes
     if (node->kind == NODE_NODES) {
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
-            codegen_node_arm64(codegen, child);
+            codegen_stat_arm64(codegen, child);
         }
         return;
     }
 
     // Statements
-    if (node->kind == NODE_TENARY || node->kind == NODE_IF) {
-        codegen_node_arm64(codegen, node->condition);
+    if (node->kind == NODE_IF) {
+        codegen_expr_arm64(codegen, node->condition);
 
         uint32_t *else_label = codegen->code_word_ptr;
         inst(0);  // cbz x0, else
 
-        codegen_node_arm64(codegen, node->then_block);
+        codegen_stat_arm64(codegen, node->then_block);
 
         uint32_t *done_label;
         if (node->else_block) {
@@ -126,10 +107,11 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
 
         *else_label = 0xB4000000 | (((codegen->code_word_ptr - else_label) & 0x7ffff) << 5) | (x0 & 31);  // else:
         if (node->else_block) {
-            codegen_node_arm64(codegen, node->else_block);
+            codegen_stat_arm64(codegen, node->else_block);
 
             *done_label = 0x14000000 | ((codegen->code_word_ptr - done_label) & 0x7ffffff);  // done:
         }
+        return;
     }
 
     if (node->kind == NODE_WHILE) {
@@ -137,31 +119,33 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
 
         uint32_t *done_label;
         if (node->condition != NULL) {
-            codegen_node_arm64(codegen, node->condition);
+            codegen_expr_arm64(codegen, node->condition);
             done_label = codegen->code_word_ptr;
             inst(0);  // cbz x0, done
         }
 
-        codegen_node_arm64(codegen, node->then_block);
+        codegen_stat_arm64(codegen, node->then_block);
 
         inst(0x14000000 | ((loop_label - codegen->code_word_ptr) & 0x7ffffff));  // b loop
 
         if (node->condition != NULL) {
             *done_label = 0xB4000000 | (((codegen->code_word_ptr - done_label) & 0x7ffff) << 5) | (x0 & 31);  // done:
         }
+        return;
     }
 
     if (node->kind == NODE_DOWHILE) {
         uint32_t *loop_label = codegen->code_word_ptr;
 
-        codegen_node_arm64(codegen, node->then_block);
+        codegen_stat_arm64(codegen, node->then_block);
 
-        codegen_node_arm64(codegen, node->condition);
+        codegen_expr_arm64(codegen, node->condition);
         inst(0xB5000000 | (((loop_label - codegen->code_word_ptr) & 0x7ffff) << 5) | (x0 & 31));  // cbnz x0, loop
+        return;
     }
 
     if (node->kind == NODE_RETURN) {
-        codegen_node_arm64(codegen, node->unary);
+        codegen_expr_arm64(codegen, node->unary);
 
         // Free locals stack frame
         if (codegen->current_function->locals_size > 0) {
@@ -170,9 +154,46 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         }
 
         // Push link register
-        if (!codegen->current_function->function->is_leaf) inst(0xF84107E0 | (lr & 31));  // ldr fp, [sp], 16
+        if (!codegen->current_function->is_leaf) inst(0xF84107E0 | (lr & 31));  // ldr fp, [sp], 16
 
         inst(0xD65F03C0);  // ret
+        return;
+    }
+
+    codegen_expr_arm64(codegen, node);
+}
+
+void codegen_addr_arm64(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_LOCAL) {
+        inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((fp & 31) << 5) | (x0 & 31));  // sub x0, fp, imm
+        return;
+    }
+    if (node->kind == NODE_DEREF) {
+        codegen_expr_arm64(codegen, node->lhs);
+        return;
+    }
+
+    print_error(node->token, "Node is not an lvalue");
+}
+
+void codegen_expr_arm64(Codegen *codegen, Node *node) {
+    // Tenary
+    if (node->kind == NODE_TENARY || node->kind == NODE_IF) {
+        codegen_expr_arm64(codegen, node->condition);
+
+        uint32_t *else_label = codegen->code_word_ptr;
+        inst(0);  // cbz x0, else
+
+        codegen_expr_arm64(codegen, node->then_block);
+
+        uint32_t *done_label = codegen->code_word_ptr;
+        inst(0);  // b done
+
+        *else_label = 0xB4000000 | (((codegen->code_word_ptr - else_label) & 0x7ffff) << 5) | (x0 & 31);  // else:
+
+        codegen_expr_arm64(codegen, node->else_block);
+
+        *done_label = 0x14000000 | ((codegen->code_word_ptr - done_label) & 0x7ffffff);  // done:
         return;
     }
 
@@ -183,7 +204,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind == NODE_DEREF) {
-        codegen_node_arm64(codegen, node->unary);
+        codegen_expr_arm64(codegen, node->unary);
 
         // When array in array just return the pointer
         if (node->type->kind != TYPE_ARRAY) {
@@ -193,7 +214,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind > NODE_UNARY_BEGIN && node->kind < NODE_UNARY_END) {
-        codegen_node_arm64(codegen, node->unary);
+        codegen_expr_arm64(codegen, node->unary);
 
         if (node->kind == NODE_NEG) inst(0xCB0003E0);  // sub x0, xzr, x0
         if (node->kind == NODE_NOT) inst(0xAA2003E0);  // mvn x0, x0
@@ -209,7 +230,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         codegen_addr_arm64(codegen, node->lhs);
         inst(0xF81F0FE0 | (x0 & 31));  // str x0, [sp, -16]!
 
-        codegen_node_arm64(codegen, node->rhs);
+        codegen_expr_arm64(codegen, node->rhs);
         inst(0xF84107E0 | (x1 & 31));  // ldr x1, [sp], 16
 
         Type *type = node->lhs->type;
@@ -221,10 +242,10 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind > NODE_OPERATION_BEGIN && node->kind < NODE_OPERATION_END) {
-        codegen_node_arm64(codegen, node->rhs);
+        codegen_expr_arm64(codegen, node->rhs);
         inst(0xF81F0FE0 | (x0 & 31));  // str x0, [sp, -16]!
 
-        codegen_node_arm64(codegen, node->lhs);
+        codegen_expr_arm64(codegen, node->lhs);
         inst(0xF84107E0 | (x1 & 31));  // ldr x1, [sp], 16
 
         if (node->kind == NODE_ADD) inst(0x8B010000);  // add x0, x0, x1
@@ -285,7 +306,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         // Write arguments to registers
         for (int32_t i = node->nodes.size - 1; i >= 0; i--) {
             Node *argument = node->nodes.items[i];
-            codegen_node_arm64(codegen, argument);
+            codegen_expr_arm64(codegen, argument);
 
             if (i == 1) inst(0xAA0003E0 | (x1 & 31));  // mov x1, x0
             if (i == 2) inst(0xAA0003E0 | (x2 & 31));  // mov x2, x0
@@ -295,4 +316,7 @@ void codegen_node_arm64(Codegen *codegen, Node *node) {
         inst(0x94000000 | (((uint32_t *)node->function->address - codegen->code_word_ptr) & 0x7ffffff));  // bl function
         return;
     }
+
+    print_error(node->token, "Unknown node kind");
+    exit(EXIT_FAILURE);
 }
