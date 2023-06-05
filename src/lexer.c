@@ -7,14 +7,31 @@
 
 #include "utils.h"
 
+// Source
+Source *source_new(char *path, char *text) {
+    Source *source = malloc(sizeof(Source));
+    source->path = strdup(path);
+    source->text = strdup(text);
+
+    // Reverse loop over path to find basename
+    char *c = source->path + strlen(source->path);
+    while (*c != '/' && c != source->path) c--;
+    source->basename = c + 1;
+
+    source->dirname = strndup(source->path, source->basename - 1 - source->path);
+    return source;
+}
+
 // Token
 char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_EOF) return "EOF";
     if (kind == TOKEN_UNKNOWN) return "unknown?";
 
     if (kind == TOKEN_VARIABLE) return "variable";
-    if (kind == TOKEN_I8) return "character";
-    else if (kind > TOKEN_INTEGER_BEGIN && kind < TOKEN_INTEGER_END) return "integer";
+    if (kind > TOKEN_INTEGER_BEGIN && kind < TOKEN_INTEGER_END) {
+        if (kind == TOKEN_I8) return "character";
+        return "integer";
+    }
 
     if (kind == TOKEN_CHAR) return "char";
     if (kind == TOKEN_SHORT) return "short";
@@ -79,24 +96,25 @@ char *token_kind_to_string(TokenKind kind) {
 }
 
 // Lexer
-Keyword keywords[] = {{"char", TOKEN_CHAR},         {"short", TOKEN_SHORT},  {"int", TOKEN_INT},   {"long", TOKEN_LONG},   {"signed", TOKEN_SIGNED},
-                      {"unsigned", TOKEN_UNSIGNED},
+static Keyword keywords[] = {{"char", TOKEN_CHAR},         {"short", TOKEN_SHORT},  {"int", TOKEN_INT},   {"long", TOKEN_LONG},   {"signed", TOKEN_SIGNED},
+                             {"unsigned", TOKEN_UNSIGNED},
 
-                      {"sizeof", TOKEN_SIZEOF},     {"if", TOKEN_IF},        {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"do", TOKEN_DO},
-                      {"for", TOKEN_FOR},           {"return", TOKEN_RETURN}};
+                             {"sizeof", TOKEN_SIZEOF},     {"if", TOKEN_IF},        {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"do", TOKEN_DO},
+                             {"for", TOKEN_FOR},           {"return", TOKEN_RETURN}};
 
-Keyword operators[] = {{"<<=", TOKEN_SHL_ASSIGN}, {">>=", TOKEN_SHR_ASSIGN},
+static Keyword operators[] = {
+    {"<<=", TOKEN_SHL_ASSIGN}, {">>=", TOKEN_SHR_ASSIGN},
 
-                       {"+=", TOKEN_ADD_ASSIGN},  {"-=", TOKEN_SUB_ASSIGN},  {"*=", TOKEN_MUL_ASSIGN}, {"/=", TOKEN_DIV_ASSIGN}, {"%=", TOKEN_MOD_ASSIGN},
-                       {"&=", TOKEN_AND_ASSIGN},  {"|=", TOKEN_OR_ASSIGN},   {"^=", TOKEN_XOR_ASSIGN}, {"<<", TOKEN_SHL},        {">>", TOKEN_SHR},
-                       {"==", TOKEN_EQ},          {"!=", TOKEN_NEQ},         {"<=", TOKEN_LTEQ},       {">=", TOKEN_GTEQ},       {"&&", TOKEN_LOGICAL_AND},
-                       {"||", TOKEN_LOGICAL_OR},
+    {"+=", TOKEN_ADD_ASSIGN},  {"-=", TOKEN_SUB_ASSIGN},  {"*=", TOKEN_MUL_ASSIGN}, {"/=", TOKEN_DIV_ASSIGN}, {"%=", TOKEN_MOD_ASSIGN},
+    {"&=", TOKEN_AND_ASSIGN},  {"|=", TOKEN_OR_ASSIGN},   {"^=", TOKEN_XOR_ASSIGN}, {"<<", TOKEN_SHL},        {">>", TOKEN_SHR},
+    {"==", TOKEN_EQ},          {"!=", TOKEN_NEQ},         {"<=", TOKEN_LTEQ},       {">=", TOKEN_GTEQ},       {"&&", TOKEN_LOGICAL_AND},
+    {"||", TOKEN_LOGICAL_OR},
 
-                       {"(", TOKEN_LPAREN},       {")", TOKEN_RPAREN},       {"[", TOKEN_LBLOCK},      {"]", TOKEN_RBLOCK},      {"{", TOKEN_LCURLY},
-                       {"}", TOKEN_RCURLY},       {",", TOKEN_COMMA},        {"?", TOKEN_QUESTION},    {":", TOKEN_COLON},       {";", TOKEN_SEMICOLON},
-                       {"~", TOKEN_NOT},          {"!", TOKEN_LOGICAL_NOT},  {"=", TOKEN_ASSIGN},      {"+", TOKEN_ADD},         {"-", TOKEN_SUB},
-                       {"*", TOKEN_MUL},          {"/", TOKEN_DIV},          {"%", TOKEN_MOD},         {"&", TOKEN_AND},         {"|", TOKEN_OR},
-                       {"^", TOKEN_XOR},          {"<", TOKEN_LT},           {">", TOKEN_GT}};
+    {"(", TOKEN_LPAREN},       {")", TOKEN_RPAREN},       {"[", TOKEN_LBLOCK},      {"]", TOKEN_RBLOCK},      {"{", TOKEN_LCURLY},
+    {"}", TOKEN_RCURLY},       {",", TOKEN_COMMA},        {"?", TOKEN_QUESTION},    {":", TOKEN_COLON},       {";", TOKEN_SEMICOLON},
+    {"~", TOKEN_NOT},          {"!", TOKEN_LOGICAL_NOT},  {"=", TOKEN_ASSIGN},      {"+", TOKEN_ADD},         {"-", TOKEN_SUB},
+    {"*", TOKEN_MUL},          {"/", TOKEN_DIV},          {"%", TOKEN_MOD},         {"&", TOKEN_AND},         {"|", TOKEN_OR},
+    {"^", TOKEN_XOR},          {"<", TOKEN_LT},           {">", TOKEN_GT}};
 
 static TokenKind lexer_integer_suffix(char *c, char **c_ptr) {
     if (*c == 'u' || *c == 'U') {
@@ -120,7 +138,9 @@ static TokenKind lexer_integer_suffix(char *c, char **c_ptr) {
     return TOKEN_I32;
 }
 
-Token *lexer(char *text, size_t *tokens_size) {
+Token *lexer(char *path, char *text, size_t *tokens_size) {
+    Source *source = source_new(path, text);
+
     size_t capacity = 1024;
     Token *tokens = malloc(capacity * sizeof(Token));
     size_t size = 0;
@@ -129,6 +149,7 @@ Token *lexer(char *text, size_t *tokens_size) {
     char *line_start = c;
     int32_t line = 1;
     for (;;) {
+        tokens[size].source = source;
         tokens[size].line = line;
         tokens[size].column = c - line_start + 1;
 
@@ -255,7 +276,7 @@ Token *lexer(char *text, size_t *tokens_size) {
 
         // Unknown character
         tokens[size].kind = TOKEN_UNKNOWN;
-        tokens[size++].character = *c++;
+        tokens[size++].integer = *c++;
     }
     *tokens_size = size;
     return tokens;

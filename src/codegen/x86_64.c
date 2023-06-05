@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <string.h>
 
 #include "codegen.h"
@@ -12,19 +13,19 @@
 #define rdi 7
 
 #define inst1(a) *codegen->code_byte_ptr++ = a
-#define inst2(a, b)                      \
-    {                                    \
-        inst1(a);                        \
+#define inst2(a, b)                    \
+    {                                  \
+        inst1(a);                      \
         *codegen->code_byte_ptr++ = b; \
     }
-#define inst3(a, b, c)                   \
-    {                                    \
-        inst2(a, b);                     \
+#define inst3(a, b, c)                 \
+    {                                  \
+        inst2(a, b);                   \
         *codegen->code_byte_ptr++ = c; \
     }
-#define inst4(a, b, c, d)                \
-    {                                    \
-        inst3(a, b, c);                  \
+#define inst4(a, b, c, d)              \
+    {                                  \
+        inst3(a, b, c);                \
         *codegen->code_byte_ptr++ = d; \
     }
 
@@ -39,108 +40,83 @@
         codegen->code_byte_ptr += sizeof(int64_t);  \
     }
 
-void codegen_addr_x86_64(Codegen *codegen, Node *node) {
-    if (node->kind == NODE_LOCAL) {
-        inst3(0x48, 0x8d, 0x85);  // lea rax, qword [rbp - imm]
-        imm32(-node->local->offset);
-        return;
-    }
-    if (node->kind == NODE_DEREF) {
-        codegen_node_x86_64(codegen, node->lhs);
-        return;
+void codegen_func_x86_64(Codegen *codegen, Function *function) {
+    codegen->current_function = function;
+
+    // Set function ptr to current code offset
+    function->address = codegen->code_byte_ptr;
+
+    // Set main address
+    if (!strcmp(function->name, "main")) {
+        codegen->program->main_func = codegen->code_byte_ptr;
     }
 
-    print_error(codegen->text, node->token, "Node is not an lvalue");
+    // Allocate locals stack frame
+    size_t aligned_locals_size = align(function->locals_size, 16);
+    if (aligned_locals_size > 0) {
+        inst1(0x50 | (rbp & 7));  // push rbp
+        inst3(0x48, 0x89, 0xe5);  // mov rbp, rsp
+        inst3(0x48, 0x81, 0xec);  // sub rsp, imm
+        imm32(aligned_locals_size);
+    }
+
+    // Write arguments to locals
+    for (int32_t i = function->arguments.size - 1; i >= 0; i--) {
+        Argument *argument =function->arguments.items[i];
+        Local *local = function_find_local(function, argument->name);
+
+        if (i == 0) {
+            if (local->type->size == 1) inst3(0x40, 0x88, 0xbd);  // mov byte [rbp - imm], dil
+            if (local->type->size == 2) inst3(0x66, 0x89, 0xbd);  // mov word [rbp - imm], di
+            if (local->type->size == 4) inst2(0x89, 0xbd);        // mov dword [rbp - imm], edi
+            if (local->type->size == 8) inst3(0x48, 0x89, 0xbd);  // mov qword [rbp - imm], rdi
+        }
+        if (i == 1) {
+            if (local->type->size == 1) inst3(0x40, 0x88, 0xb5);  // mov byte [rbp - imm], sil
+            if (local->type->size == 2) inst3(0x66, 0x89, 0xb5);  // mov word [rbp - imm], si
+            if (local->type->size == 4) inst2(0x89, 0xb5);        // mov dword [rbp - imm], esi
+            if (local->type->size == 8) inst3(0x48, 0x89, 0xb5);  // mov qword [rbp - imm], rsi
+        }
+        if (i == 2) {
+            if (local->type->size == 1) inst2(0x88, 0x95);        // mov byte [rbp - imm], dl
+            if (local->type->size == 2) inst3(0x66, 0x89, 0x95);  // mov word [rbp - imm], dx
+            if (local->type->size == 4) inst2(0x89, 0x95);        // mov dword [rbp - imm], edx
+            if (local->type->size == 8) inst3(0x48, 0x89, 0x95);  // mov qword [rbp - imm], rdx
+        }
+        if (i == 3) {
+            if (local->type->size == 1) inst2(0x88, 0x8d);        // mov byte [rbp - imm], cl
+            if (local->type->size == 2) inst3(0x66, 0x89, 0x8d);  // mov word [rbp - imm], cx
+            if (local->type->size == 4) inst2(0x89, 0x8d);        // mov dword [rbp - imm], ecx
+            if (local->type->size == 8) inst3(0x48, 0x89, 0x8d);  // mov qword [rbp - imm], rcx
+        }
+        imm32(-local->offset);
+    }
+
+    for (size_t i = 0; i < function->nodes.size; i++) {
+        Node *child = function->nodes.items[i];
+        codegen_stat_x86_64(codegen, child);
+    }
 }
 
-void codegen_node_x86_64(Codegen *codegen, Node *node) {
-    // Program
-    if (node->kind == NODE_PROGRAM) {
-        codegen->program = node;
-        for (size_t i = 0; i < node->nodes.size; i++) {
-            Node *function_node = node->nodes.items[i];
-            codegen_node_x86_64(codegen, function_node);
-        }
-    }
-
-    // Function
-    if (node->kind == NODE_FUNCTION) {
-        codegen->current_function = node;
-
-        // Set function ptr to current code offset
-        node->function->address = codegen->code_byte_ptr;
-
-        // Set main address
-        if (!strcmp(node->function->name, "main")) {
-            codegen->main = codegen->code_byte_ptr;
-        }
-
-        // Allocate locals stack frame
-        size_t aligned_locals_size = align(node->locals_size, 16);
-        if (aligned_locals_size > 0) {
-            inst1(0x50 | (rbp & 7));  // push rbp
-            inst3(0x48, 0x89, 0xe5);  // mov rbp, rsp
-            inst3(0x48, 0x81, 0xec);  // sub rsp, imm
-            imm32(aligned_locals_size);
-        }
-
-        // Write arguments to locals
-        for (int32_t i = node->function->arguments.size - 1; i >= 0; i--) {
-            Argument *argument = node->function->arguments.items[i];
-            Local *local = node_find_local(node, argument->name);
-
-            if (i == 0) {
-                if (local->type->size == 1) inst3(0x40, 0x88, 0xbd);  // mov byte [rbp - imm], dil
-                if (local->type->size == 2) inst3(0x66, 0x89, 0xbd);  // mov word [rbp - imm], di
-                if (local->type->size == 4) inst2(0x89, 0xbd);        // mov dword [rbp - imm], edi
-                if (local->type->size == 8) inst3(0x48, 0x89, 0xbd);  // mov qword [rbp - imm], rdi
-            }
-            if (i == 1) {
-                if (local->type->size == 1) inst3(0x40, 0x88, 0xb5);  // mov byte [rbp - imm], sil
-                if (local->type->size == 2) inst3(0x66, 0x89, 0xb5);  // mov word [rbp - imm], si
-                if (local->type->size == 4) inst2(0x89, 0xb5);        // mov dword [rbp - imm], esi
-                if (local->type->size == 8) inst3(0x48, 0x89, 0xb5);  // mov qword [rbp - imm], rsi
-            }
-            if (i == 2) {
-                if (local->type->size == 1) inst2(0x88, 0x95);        // mov byte [rbp - imm], dl
-                if (local->type->size == 2) inst3(0x66, 0x89, 0x95);  // mov word [rbp - imm], dx
-                if (local->type->size == 4) inst2(0x89, 0x95);        // mov dword [rbp - imm], edx
-                if (local->type->size == 8) inst3(0x48, 0x89, 0x95);  // mov qword [rbp - imm], rdx
-            }
-            if (i == 3) {
-                if (local->type->size == 1) inst2(0x88, 0x8d);        // mov byte [rbp - imm], cl
-                if (local->type->size == 2) inst3(0x66, 0x89, 0x8d);  // mov word [rbp - imm], cx
-                if (local->type->size == 4) inst2(0x89, 0x8d);        // mov dword [rbp - imm], ecx
-                if (local->type->size == 8) inst3(0x48, 0x89, 0x8d);  // mov qword [rbp - imm], rcx
-            }
-            imm32(-local->offset);
-        }
-
-        for (size_t i = 0; i < node->nodes.size; i++) {
-            Node *child = node->nodes.items[i];
-            codegen_node_x86_64(codegen, child);
-        }
-        return;
-    }
-
+void codegen_stat_x86_64(Codegen *codegen, Node *node) {
     // Nodes
     if (node->kind == NODE_NODES) {
         for (size_t i = 0; i < node->nodes.size; i++) {
             Node *child = node->nodes.items[i];
-            codegen_node_x86_64(codegen, child);
+            codegen_stat_x86_64(codegen, child);
         }
         return;
     }
 
     // Statements
-    if (node->kind == NODE_TENARY || node->kind == NODE_IF) {
-        codegen_node_x86_64(codegen, node->condition);
+    if (node->kind == NODE_IF) {
+        codegen_expr_x86_64(codegen, node->condition);
         inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
         inst2(0x0f, 0x84);              // je else
         uint8_t *else_label = codegen->code_byte_ptr;
         imm32(0);
 
-        codegen_node_x86_64(codegen, node->then_block);
+        codegen_stat_x86_64(codegen, node->then_block);
 
         uint8_t *done_label;
         if (node->else_block) {
@@ -151,10 +127,11 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 
         *((int32_t *)else_label) = codegen->code_byte_ptr - (else_label + sizeof(int32_t));  // else:
         if (node->else_block) {
-            codegen_node_x86_64(codegen, node->else_block);
+            codegen_stat_x86_64(codegen, node->else_block);
 
             *((int32_t *)done_label) = codegen->code_byte_ptr - (done_label + sizeof(int32_t));  // done:
         }
+        return;
     }
 
     if (node->kind == NODE_WHILE) {
@@ -162,14 +139,14 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
 
         uint8_t *done_label;
         if (node->condition != NULL) {
-            codegen_node_x86_64(codegen, node->condition);
+            codegen_expr_x86_64(codegen, node->condition);
             inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
             inst2(0x0f, 0x84);              // je done
             done_label = codegen->code_byte_ptr;
             imm32(0);
         }
 
-        codegen_node_x86_64(codegen, node->then_block);
+        codegen_stat_x86_64(codegen, node->then_block);
 
         inst1(0xe9);  // jmp loop
         imm32(loop_label - (codegen->code_byte_ptr + sizeof(int32_t)));
@@ -177,21 +154,23 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         if (node->condition != NULL) {
             *((int32_t *)done_label) = codegen->code_byte_ptr - (done_label + sizeof(int32_t));  // done:
         }
+        return;
     }
 
     if (node->kind == NODE_DOWHILE) {
         uint8_t *loop_label = codegen->code_byte_ptr;
 
-        codegen_node_x86_64(codegen, node->then_block);
+        codegen_stat_x86_64(codegen, node->then_block);
 
-        codegen_node_x86_64(codegen, node->condition);
+        codegen_expr_x86_64(codegen, node->condition);
         inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
         inst2(0x0f, 0x85);              // jne loop
         imm32(loop_label - (codegen->code_byte_ptr + sizeof(int32_t)));
+        return;
     }
 
     if (node->kind == NODE_RETURN) {
-        codegen_node_x86_64(codegen, node->unary);
+        codegen_expr_x86_64(codegen, node->unary);
 
         // Free locals stack frame
         if (codegen->current_function->locals_size > 0) {
@@ -202,6 +181,46 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         return;
     }
 
+    codegen_expr_x86_64(codegen, node);
+}
+
+void codegen_addr_x86_64(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_LOCAL) {
+        inst3(0x48, 0x8d, 0x85);  // lea rax, qword [rbp - imm]
+        imm32(-node->local->offset);
+        return;
+    }
+    if (node->kind == NODE_DEREF) {
+        codegen_expr_x86_64(codegen, node->lhs);
+        return;
+    }
+
+    print_error(node->token, "Node is not an lvalue");
+}
+
+void codegen_expr_x86_64(Codegen *codegen, Node *node) {
+    // Tenary
+    if (node->kind == NODE_TENARY) {
+        codegen_expr_x86_64(codegen, node->condition);
+        inst4(0x48, 0x83, 0xf8, 0x00);  // cmp rax, 0
+        inst2(0x0f, 0x84);              // je else
+        uint8_t *else_label = codegen->code_byte_ptr;
+        imm32(0);
+
+        codegen_expr_x86_64(codegen, node->then_block);
+
+        inst1(0xe9);  // jmp done
+        uint8_t *done_label = codegen->code_byte_ptr;
+        imm32(0);
+
+        *((int32_t *)else_label) = codegen->code_byte_ptr - (else_label + sizeof(int32_t));  // else:
+
+        codegen_expr_x86_64(codegen, node->else_block);
+
+        *((int32_t *)done_label) = codegen->code_byte_ptr - (done_label + sizeof(int32_t));  // done:
+        return;
+    }
+
     // Unary
     if (node->kind == NODE_ADDR) {
         codegen_addr_x86_64(codegen, node->unary);
@@ -209,7 +228,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind == NODE_DEREF) {
-        codegen_node_x86_64(codegen, node->unary);
+        codegen_expr_x86_64(codegen, node->unary);
 
         // When array in array just return the pointer
         if (node->type->kind != TYPE_ARRAY) {
@@ -219,7 +238,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind > NODE_UNARY_BEGIN && node->kind < NODE_UNARY_END) {
-        codegen_node_x86_64(codegen, node->unary);
+        codegen_expr_x86_64(codegen, node->unary);
 
         if (node->kind == NODE_NEG) inst3(0x48, 0xf7, 0xd8);  // neg rax
         if (node->kind == NODE_NOT) inst3(0x48, 0xf7, 0xd0);  // not rax
@@ -236,7 +255,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         codegen_addr_x86_64(codegen, node->lhs);
         inst1(0x50 | (rax & 7));  // push rax
 
-        codegen_node_x86_64(codegen, node->rhs);
+        codegen_expr_x86_64(codegen, node->rhs);
         inst1(0x58 | (rcx & 7));  // pop rcx
 
         Type *type = node->lhs->type;
@@ -248,10 +267,10 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind > NODE_OPERATION_BEGIN && node->kind < NODE_OPERATION_END) {
-        codegen_node_x86_64(codegen, node->rhs);
+        codegen_expr_x86_64(codegen, node->rhs);
         inst1(0x50 | (rax & 7));  // push rax
 
-        codegen_node_x86_64(codegen, node->lhs);
+        codegen_expr_x86_64(codegen, node->lhs);
         inst1(0x58 | (rcx & 7));  // pop rcx
 
         if (node->kind == NODE_ADD) inst3(0x48, 0x01, 0xc8);        // add rax, rcx
@@ -326,7 +345,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         // Write arguments to registers
         for (int32_t i = node->nodes.size - 1; i >= 0; i--) {
             Node *argument = node->nodes.items[i];
-            codegen_node_x86_64(codegen, argument);
+            codegen_expr_x86_64(codegen, argument);
 
             if (i == 0) inst3(0x48, 0x89, 0xc7);  // mov rdi, rax
             if (i == 1) inst3(0x48, 0x89, 0xc6);  // mov rsi, rax
@@ -338,4 +357,7 @@ void codegen_node_x86_64(Codegen *codegen, Node *node) {
         imm32((uint8_t *)node->function->address - (codegen->code_byte_ptr + sizeof(int32_t)));
         return;
     }
+
+    print_error(node->token, "Unknown node kind");
+    exit(EXIT_FAILURE);
 }
