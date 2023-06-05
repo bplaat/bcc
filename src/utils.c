@@ -7,11 +7,17 @@
 // Math
 size_t align(size_t size, size_t align) { return (size + align - 1) / align * align; }
 
-bool power_of_two(int64_t x) {
+bool is_power_of_two(int64_t x) {
     if (x <= 0) {
         return false;
     }
     return (x & (x - 1)) == 0;
+}
+
+uint64_t log_two(uint64_t x) {
+    uint64_t result = 0;
+    while (x >>= 1) result++;
+    return result;
 }
 
 // Strdup pollyfills
@@ -25,6 +31,7 @@ char *strndup(const char *str, size_t size) {
     return copy;
 }
 
+// I/O helpers
 #define FILE_READ_BUFFER_SIZE 512
 
 char *file_read(FILE *file) {
@@ -56,15 +63,15 @@ char *file_read(FILE *file) {
 }
 
 // Print error
-void print_error(char *text, Token *token, char *fmt, ...) {
-    fprintf(stderr, "stdin:%d:%d ERROR: ", token->line, token->column);
+void print_error(Token *token, char *fmt, ...) {
+    fprintf(stderr, "%s:%d:%d ERROR: ", token->source->basename, token->line, token->column);
     va_list args;
     va_start(args, fmt);
     vfprintf(stderr, fmt, args);
     va_end(args);
 
     // Seek to the right line in text
-    char *c = text;
+    char *c = token->source->text;
     for (int32_t i = 0; i < token->line - 1; i++) {
         while (*c != '\n' && *c != '\r') c++;
         if (*c == '\r') c++;

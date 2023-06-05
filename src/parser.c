@@ -1,7 +1,6 @@
 #include "parser.h"
 
 #include <inttypes.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +51,79 @@ void type_dump(FILE *f, Type *type) {
     }
 }
 
+// Program
+Function *program_find_function(Program *program, char *name) {
+    for (size_t i = 0; i < program->functions.size; i++) {
+        Function *function = program->functions.items[i];
+        if (!strcmp(function->name, name)) {
+            return function;
+        }
+    }
+    return NULL;
+}
+
+void program_dump(FILE *f, Program *program) {
+    for (size_t i = 0; i < program->functions.size; i++) {
+        Function *function = program->functions.items[i];
+        type_dump(f, function->return_type);
+        fprintf(f, " %s(", function->name);
+        for (size_t i = 0; i < function->arguments.size; i++) {
+            Argument *argument = function->arguments.items[i];
+            type_dump(f, argument->type);
+            fprintf(f, " %s", argument->name);
+            if (i != function->arguments.size - 1) {
+                fprintf(f, ", ");
+            }
+        }
+        fprintf(f, ");\n");
+    }
+    fprintf(f, "\n");
+
+    for (size_t i = 0; i < program->functions.size; i++) {
+        Function *function = program->functions.items[i];
+        function_dump(f, function);
+        fprintf(f, "\n");
+    }
+}
+
+// Function
+Local *function_find_local(Function *function, char *name) {
+    for (size_t i = 0; i < function->locals.size; i++) {
+        Local *local = function->locals.items[i];
+        if (!strcmp(local->name, name)) {
+            return local;
+        }
+    }
+    return NULL;
+}
+
+void function_dump(FILE *f, Function *function) {
+    type_dump(f, function->return_type);
+    fprintf(f, " %s(", function->name);
+    for (size_t i = 0; i < function->arguments.size; i++) {
+        Argument *argument = function->arguments.items[i];
+        type_dump(f, argument->type);
+        fprintf(f, " %s", argument->name);
+        if (i != function->arguments.size - 1) {
+            fprintf(f, ", ");
+        }
+    }
+    fprintf(f, ") {\n");
+    for (size_t i = 0; i < function->locals.size; i++) {
+        Local *local = function->locals.items[i];
+        fprintf(f, "  ");
+        type_dump(f, local->type);
+        fprintf(f, " %s;\n", local->name);
+    }
+    for (size_t i = 0; i < function->nodes.size; i++) {
+        Node *child = function->nodes.items[i];
+        fprintf(f, "  ");
+        node_dump(f, child, 1);
+        fprintf(f, ";\n");
+    }
+    fprintf(f, "}\n");
+}
+
 // Node
 Node *node_new(NodeKind kind, Token *token) {
     Node *node = malloc(sizeof(Node));
@@ -60,7 +132,6 @@ Node *node_new(NodeKind kind, Token *token) {
     return node;
 }
 
-// Deprecated
 Node *node_new_integer(Token *token, int64_t integer) {
     Node *node = node_new(NODE_INTEGER, token);
     node->type = type_new_integer(4, true);
@@ -91,77 +162,7 @@ Node *node_new_nodes(NodeKind kind, Token *token) {
     return node;
 }
 
-Function *node_find_function(Node *node, char *name) {
-    for (size_t i = 0; i < node->functions.size; i++) {
-        Function *function = node->functions.items[i];
-        if (!strcmp(function->name, name)) {
-            return function;
-        }
-    }
-    return NULL;
-}
-
-Local *node_find_local(Node *node, char *name) {
-    for (size_t i = 0; i < node->locals.size; i++) {
-        Local *local = node->locals.items[i];
-        if (!strcmp(local->name, name)) {
-            return local;
-        }
-    }
-    return NULL;
-}
-
 void node_dump(FILE *f, Node *node, int32_t indent) {
-    if (node->kind == NODE_PROGRAM) {
-        for (size_t i = 0; i < node->functions.size; i++) {
-            Function *function = node->functions.items[i];
-            type_dump(f, function->return_type);
-            fprintf(f, " %s(", function->name);
-            for (size_t i = 0; i < function->arguments.size; i++) {
-                Argument *argument = function->arguments.items[i];
-                type_dump(f, argument->type);
-                fprintf(f, " %s", argument->name);
-                if (i != function->arguments.size - 1) {
-                    fprintf(f, ", ");
-                }
-            }
-            fprintf(f, ");\n");
-        }
-        fprintf(f, "\n");
-
-        for (size_t i = 0; i < node->nodes.size; i++) {
-            Node *child = node->nodes.items[i];
-            node_dump(f, child, indent);
-            fprintf(f, "\n");
-        }
-    }
-
-    if (node->kind == NODE_FUNCTION) {
-        type_dump(f, node->function->return_type);
-        fprintf(f, " %s(", node->function->name);
-        for (size_t i = 0; i < node->function->arguments.size; i++) {
-            Argument *argument = node->function->arguments.items[i];
-            type_dump(f, argument->type);
-            fprintf(f, " %s", argument->name);
-            if (i != node->function->arguments.size - 1) {
-                fprintf(f, ", ");
-            }
-        }
-        fprintf(f, ") {\n");
-        for (size_t i = 0; i < node->locals.size; i++) {
-            Local *local = node->locals.items[i];
-            for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
-            type_dump(f, local->type);
-            fprintf(f, " %s;\n", local->name);
-        }
-        for (size_t i = 0; i < node->nodes.size; i++) {
-            Node *child = node->nodes.items[i];
-            for (int32_t i = 0; i < indent + 1; i++) fprintf(f, "  ");
-            node_dump(f, child, indent + 1);
-            fprintf(f, ";\n");
-        }
-        fprintf(f, "}\n");
-    }
     if (node->kind == NODE_NODES) {
         fprintf(f, "{\n");
         for (size_t i = 0; i < node->nodes.size; i++) {
@@ -282,14 +283,14 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
 }
 
 // Parser
-Node *parser(char *text, Token *tokens, size_t tokens_size) {
+void parser(Program *program, Token *tokens, size_t tokens_size) {
     Parser parser = {
-        .text = text,
+        .program = program,
         .tokens = tokens,
         .tokens_size = tokens_size,
         .position = 0,
     };
-    return parser_program(&parser);
+    parser_program(&parser);
 }
 
 #define current() (&parser->tokens[parser->position])
@@ -299,14 +300,14 @@ void parser_eat(Parser *parser, TokenKind token_kind) {
     if (token->kind == token_kind) {
         parser->position++;
     } else {
-        print_error(parser->text, token, "Unexpected token: '%s' wanted '%s'", token_kind_to_string(token->kind), token_kind_to_string(token_kind));
+        print_error(token, "Unexpected token: '%s' wanted '%s'", token_kind_to_string(token->kind), token_kind_to_string(token_kind));
         exit(EXIT_FAILURE);
     }
 }
 
 Type *parser_type(Parser *parser) {
     if (current()->kind < TOKEN_TYPE_BEGIN && current()->kind > TOKEN_TYPE_END) {
-        print_error(parser->text, current(), "Expected a type token");
+        print_error(current(), "Expected a type token");
         exit(EXIT_FAILURE);
     }
 
@@ -380,7 +381,7 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->base->size)));
     }
 
-    print_error(parser->text, token, "Invalid add types");
+    print_error(token, "Invalid add types");
     exit(EXIT_FAILURE);
 }
 
@@ -401,7 +402,7 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->base->size)));
     }
 
-    print_error(parser->text, token, "Invalid subtract types");
+    print_error(token, "Invalid subtract types");
     exit(EXIT_FAILURE);
 }
 
@@ -411,8 +412,8 @@ Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         return node_new_integer(token, lhs->integer * rhs->integer);
     }
 
-    if (rhs->kind == TYPE_INTEGER && power_of_two(rhs->integer)) {
-        rhs->integer = log(rhs->integer) / log(power_of_two(rhs->integer));
+    if (rhs->kind == NODE_INTEGER && is_power_of_two(rhs->integer)) {
+        rhs->integer = log_two(rhs->integer);
         return node_new_operation(NODE_SHL, token, lhs, rhs);
     }
     return node_new_operation(NODE_MUL, token, lhs, rhs);
@@ -424,54 +425,50 @@ Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         return node_new_integer(token, lhs->integer / rhs->integer);
     }
 
-    if (rhs->kind == TYPE_INTEGER && power_of_two(rhs->integer)) {
-        rhs->integer = log(rhs->integer) / log(power_of_two(rhs->integer));
+    if (rhs->kind == NODE_INTEGER && is_power_of_two(rhs->integer)) {
+        rhs->integer = log_two(rhs->integer);
         return node_new_operation(NODE_SHR, token, lhs, rhs);
     }
     return node_new_operation(NODE_DIV, token, lhs, rhs);
 }
 
 Node *parser_deref_node(Parser *parser, Token *token, Node *unary) {
+    (void)parser;
     Node *node = node_new_unary(NODE_DEREF, token, unary);
     if (node->type->kind != TYPE_POINTER && node->type->kind != TYPE_ARRAY) {
-        print_error(parser->text, token, "Type is not a pointer");
+        print_error(token, "Type is not a pointer");
         exit(EXIT_FAILURE);
     }
     node->type = node->type->base;
     return node;
 }
 
-Node *parser_program(Parser *parser) {
-    Node *node = node_new_nodes(NODE_PROGRAM, current());
-    node->functions.capacity = 0;
-    list_init(&node->functions);
-    parser->program = node;
+void parser_program(Parser *parser) {
     while (current()->kind != TOKEN_EOF) {
-        Node *function_node = parser_function(parser);
-        list_add(&node->nodes, function_node);
+        parser_function(parser);
     }
-    return node;
 }
 
-Node *parser_function(Parser *parser) {
-    Token *token = current();
-
-    Node *node = node_new_nodes(NODE_FUNCTION, token);
-    parser->current_function = node;
-    node->locals.capacity = 0;
-    list_init(&node->locals);
-    node->locals_size = 0;
-
+Function *parser_function(Parser *parser) {
     Function *function = malloc(sizeof(Function));
-    node->function = function;
     list_add(&parser->program->functions, function);
+    parser->current_function = function;
+
     function->return_type = parser_type(parser);
     function->name = current()->variable;
+    function->is_leaf = true;
+
     function->arguments.capacity = 0;
     list_init(&function->arguments);
-    function->is_leaf = true;
-    parser_eat(parser, TOKEN_VARIABLE);
 
+    function->locals.capacity = 0;
+    list_init(&function->locals);
+    function->locals_size = 0;
+
+    function->nodes.capacity = 0;
+    list_init(&function->nodes);
+
+    parser_eat(parser, TOKEN_VARIABLE);
     parser_eat(parser, TOKEN_LPAREN);
     if (current()->kind != TOKEN_RPAREN) {
         for (;;) {
@@ -483,8 +480,8 @@ Node *parser_function(Parser *parser) {
             Local *local = malloc(sizeof(Local));
             local->name = argument->name;
             local->type = argument->type;
-            list_add(&node->locals, local);
-            node->locals_size += local->type->size;
+            list_add(&function->locals, local);
+            function->locals_size += local->type->size;
 
             parser_eat(parser, TOKEN_VARIABLE);
             if (current()->kind == TOKEN_RPAREN) {
@@ -498,18 +495,18 @@ Node *parser_function(Parser *parser) {
     parser_eat(parser, TOKEN_LCURLY);
     while (current()->kind != TOKEN_RCURLY) {
         Node *child = parser_statement(parser);
-        if (child != NULL) list_add(&node->nodes, child);
+        if (child != NULL) list_add(&function->nodes, child);
     }
     parser_eat(parser, TOKEN_RCURLY);
 
     // Set locals offset
-    size_t local_offset = node->locals_size;
-    for (size_t i = 0; i < node->locals.size; i++) {
-        Local *local = node->locals.items[i];
+    size_t local_offset = function->locals_size;
+    for (size_t i = 0; i < function->locals.size; i++) {
+        Local *local = function->locals.items[i];
         local->offset = local_offset;
         local_offset -= local->type->size;
     }
-    return node;
+    return function;
 }
 
 Node *parser_block(Parser *parser) {
@@ -626,9 +623,9 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_SEMICOLON);
 
         // Check return type
-        Type *return_type = parser->current_function->function->return_type;
+        Type *return_type = parser->current_function->return_type;
         if (node->type->kind != return_type->kind || node->type->size != return_type->size) {
-            print_error(parser->text, token, "Wrong return type");
+            print_error(token, "Wrong return type");
             exit(EXIT_FAILURE);
         }
         return node;
@@ -650,7 +647,7 @@ Node *parser_declarations(Parser *parser) {
             Type *local_type = parser_type_suffix(parser, base_type);
 
             // Create local when it doesn't exists
-            Local *local = node_find_local(parser->current_function, name);
+            Local *local = function_find_local(parser->current_function, name);
             if (local == NULL) {
                 local = malloc(sizeof(Local));
                 local->name = name;
@@ -658,7 +655,7 @@ Node *parser_declarations(Parser *parser) {
                 list_add(&parser->current_function->locals, local);
                 parser->current_function->locals_size += local->type->size;
             } else {
-                print_error(parser->text, token, "[TMP] Can't redefine variable: '%s'", name);
+                print_error(token, "[TMP] Can't redefine variable: '%s'", name);
                 exit(EXIT_FAILURE);
             }
 
@@ -724,7 +721,7 @@ Node *parser_assign(Parser *parser) {
     if (current()->kind > TOKEN_ASSIGN_BEGIN && current()->kind < TOKEN_ASSIGN_END) {
         Token *token = current();
         if (lhs->type->kind == TYPE_ARRAY) {
-            print_error(parser->text, token, "Can't assign an array type");
+            print_error(token, "Can't assign an array type");
         }
 
         if (token->kind == TOKEN_ASSIGN) {
@@ -1025,13 +1022,13 @@ Node *parser_primary(Parser *parser) {
         // Function call
         if (current()->kind == TOKEN_LPAREN) {
             Node *node = node_new_nodes(NODE_CALL, token);
-            node->function = node_find_function(parser->program, name);
+            node->function = program_find_function(parser->program, name);
             if (node->function == NULL) {
-                print_error(parser->text, token, "Undefined function: '%s'", name);
+                print_error(token, "Undefined function: '%s'", name);
                 exit(EXIT_FAILURE);
             }
             node->type = node->function->return_type;
-            parser->current_function->function->is_leaf = false;
+            parser->current_function->is_leaf = false;
 
             parser_eat(parser, TOKEN_LPAREN);
             if (current()->kind != TOKEN_RPAREN) {
@@ -1049,15 +1046,15 @@ Node *parser_primary(Parser *parser) {
 
         // Local
         Node *node = node_new(NODE_LOCAL, token);
-        node->local = node_find_local(parser->current_function, name);
+        node->local = function_find_local(parser->current_function, name);
         if (node->local == NULL) {
-            print_error(parser->text, token, "Undefined variable: '%s'", name);
+            print_error(token, "Undefined variable: '%s'", name);
             exit(EXIT_FAILURE);
         }
         node->type = node->local->type;
         return node;
     }
 
-    print_error(parser->text, token, "Unexpected token: '%s'", token_kind_to_string(token->kind));
+    print_error(token, "Unexpected token: '%s'", token_kind_to_string(token->kind));
     exit(EXIT_FAILURE);
 }

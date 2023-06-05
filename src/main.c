@@ -20,6 +20,7 @@ int main(int argc, char **argv) {
     }
 
     // Parse arguments
+    char *path = NULL;
     FILE *file = NULL;
     bool debug = false;
 #ifdef __x86_64__
@@ -46,22 +47,26 @@ int main(int argc, char **argv) {
         }
 
         if (!strcmp(argv[i], "-")) {
+            path = "stdin";
             file = stdin;
         } else {
+            path = argv[i];
             file = fopen(argv[i], "rb");
         }
     }
 
     // Read input
+    if (file == NULL) return EXIT_FAILURE;
     char *text = file_read(file);
     fclose(file);
 
-    // Allocate code page
-    Page *code = page_new(4 * 1024);
+    // Create program
+    Program program = {.arch = arch};
+    list_init(&program.functions);
 
     // Lexer
     size_t tokens_size;
-    Token *tokens = lexer(text, &tokens_size);
+    Token *tokens = lexer(path, text, &tokens_size);
     if (debug) {
         for (size_t i = 0; i < tokens_size; i++) {
             Token *token = &tokens[i];
@@ -71,26 +76,27 @@ int main(int argc, char **argv) {
     }
 
     // Parser
-    Node *node = parser(text, tokens, tokens_size);
+    parser(&program, tokens, tokens_size);
     if (debug) {
-        node_dump(stdout, node, 0);
-        printf("\n");
+        program_dump(stdout, &program);
     }
 
     // Codegen
-    void *main;
-    codegen(arch, code->data, text, node, &main);
+    program.section_text = page_new(4 * 1024);
+    codegen(&program);
     if (debug) {
+        printf(".text:\n");
+        uint8_t *section_text = program.section_text->data;
         size_t i = 0;
         for (size_t y = 0; y < 128; y += 16) {
             for (int32_t x = 0; x < 16; x++) {
-                printf("%02x ", ((uint8_t *)code->data)[i++]);
+                printf("%02x ", section_text[i++]);
             }
             printf("\n");
         }
     }
 
     // Execute
-    page_make_executable(code);
-    return ((JitFunc)main)();
+    page_make_executable(program.section_text);
+    return ((JitFunc)program.main_func)();
 }

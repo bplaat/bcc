@@ -1,13 +1,25 @@
 #include "codegen.h"
 
-void codegen(Arch arch, void *code, char *text, Node *node, void **main) {
+void codegen(Program *program) {
     Codegen codegen = {
-        .text = text,
-        .code = code,
-        .code_byte_ptr = (uint8_t *)code,
-        .code_word_ptr = (uint32_t *)code,
+        .program = program,
+        .code_byte_ptr = (uint8_t *)program->section_text->data,
+        .code_word_ptr = (uint32_t *)program->section_text->data,
     };
-    if (arch == ARCH_X86_64) codegen_node_x86_64(&codegen, node);
-    if (arch == ARCH_ARM64) codegen_node_arm64(&codegen, node);
-    *main = codegen.main;
+
+    // x86_64
+    if (program->arch == ARCH_X86_64) {
+        for (size_t i = 0; i < program->functions.size; i++) {
+            Function *function = program->functions.items[i];
+            codegen_func_x86_64(&codegen, function);
+        }
+    }
+
+    // arm64
+    if (program->arch == ARCH_ARM64) {
+        for (size_t i = 0; i < program->functions.size; i++) {
+            Function *function = program->functions.items[i];
+            codegen_func_arm64(&codegen, function);
+        }
+    }
 }
