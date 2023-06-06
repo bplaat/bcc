@@ -180,5 +180,16 @@ if [ "$1" = "test" ]; then
     assert 1 "int sub2(int x, int y) { return x-y; } int main() { return sub2(4,3); }"
     assert 55 "int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); } int main() { return fib(9); }"
 
+    assert 0 "int x; int main() { return x; }"
+    assert 3 "int x; int main() { x=3; return x; }"
+    assert 7 "int x; int y; int main() { x=3; y=4; return x+y; }"
+    assert 7 "int x, y; int main() { x=3; y=4; return x+y; }"
+    assert 0 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[0]; }"
+    assert 1 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[1]; }"
+    assert 2 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[2]; }"
+    assert 3 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[3]; }"
+    assert 4 "int x; int main() { return sizeof(x); }"
+    assert 16 "int x[4]; int main() { return sizeof(x); }"
+
     echo "[OK] All tests pass"
 fi
