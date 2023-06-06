@@ -191,5 +191,25 @@ if [ "$1" = "test" ]; then
     assert 4 "int x; int main() { return sizeof(x); }"
     assert 16 "int x[4]; int main() { return sizeof(x); }"
 
+    assert 0 'int main() { return ""[0]; }'
+    assert 1 'int main() { return sizeof(""); }'
+    assert 97 'int main() { return "abc"[0]; }'
+    assert 98 'int main() { return "abc"[1]; }'
+    assert 99 'int main() { return "abc"[2]; }'
+    assert 0 'int main() { return "abc"[3]; }'
+    assert 4 'int main() { return sizeof("abc"); }'
+
+    # assert 98 'char *name;
+    # unsigned int hash(char *key) {
+    #     unsigned int hash = 2166136261;
+    #     while (*key) {
+    #         hash ^= *key;
+    #         key += 4;
+    #         hash *= 16777619;
+    #     }
+    #     return hash;
+    # }
+    # int main() { name = "Bastiaan"; return hash(name); }'
+
     echo "[OK] All tests pass"
 fi

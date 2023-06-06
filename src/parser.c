@@ -142,9 +142,9 @@ Node *node_new(NodeKind kind, Token *token) {
     return node;
 }
 
-Node *node_new_integer(Token *token, int64_t integer) {
+Node *node_new_integer(Token *token, int32_t size, bool is_signed, int64_t integer) {
     Node *node = node_new(NODE_INTEGER, token);
-    node->type = type_new_integer(4, true);
+    node->type = type_new_integer(size, is_signed);
     node->integer = integer;
     return node;
 }
@@ -388,7 +388,7 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         lhs = tmp;
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
-        return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->base->size)));
+        return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
     }
 
     print_error(token, "Invalid add types");
@@ -397,19 +397,19 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
 
 Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
-        return node_new_integer(token, lhs->integer - rhs->integer);
+        return node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->integer - rhs->integer);
     }
 
     if (lhs->type->kind == TYPE_INTEGER && rhs->type->kind == TYPE_INTEGER) {
         return node_new_operation(NODE_SUB, token, lhs, rhs);
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && (rhs->type->kind == TYPE_POINTER || rhs->type->kind == TYPE_ARRAY)) {
-        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, lhs->type->base->size));
+        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size));
         node->type = node->type->base;
         return node;
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
-        return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->base->size)));
+        return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
     }
 
     print_error(token, "Invalid subtract types");
@@ -419,7 +419,7 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
 Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     (void)parser;
     if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
-        return node_new_integer(token, lhs->integer * rhs->integer);
+        return node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->integer * rhs->integer);
     }
 
     if (rhs->kind == NODE_INTEGER && is_power_of_two(rhs->integer)) {
@@ -432,7 +432,7 @@ Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
 Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     (void)parser;
     if (lhs->kind == NODE_INTEGER && rhs->kind == NODE_INTEGER) {
-        return node_new_integer(token, lhs->integer / rhs->integer);
+        return node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->integer / rhs->integer);
     }
 
     if (rhs->kind == NODE_INTEGER && is_power_of_two(rhs->integer)) {
@@ -462,7 +462,7 @@ void parser_program(Parser *parser) {
 void parser_function(Parser *parser) {
     Type *type = parser_type(parser);
     Token *token = current();
-    char *name = current()->variable;
+    char *name = current()->string;
     parser_eat(parser, TOKEN_VARIABLE);
 
     // Function
@@ -490,7 +490,7 @@ void parser_function(Parser *parser) {
             for (;;) {
                 Argument *argument = malloc(sizeof(Argument));
                 argument->type = parser_type(parser);
-                argument->name = current()->variable;
+                argument->name = current()->string;
                 list_add(&function->arguments, argument);
 
                 Local *local = malloc(sizeof(Local));
@@ -535,6 +535,7 @@ void parser_function(Parser *parser) {
             global = malloc(sizeof(Global));
             global->type = global_type;
             global->name = name;
+            global->init_data = NULL;
             list_add(&parser->program->globals, global);
             parser->program->globals_size += global->type->size;
         } else {
@@ -545,7 +546,7 @@ void parser_function(Parser *parser) {
         if (current()->kind == TOKEN_COMMA) {
             parser_eat(parser, TOKEN_COMMA);
             token = current();
-            name = current()->variable;
+            name = current()->string;
             parser_eat(parser, TOKEN_VARIABLE);
         } else {
             break;
@@ -669,7 +670,7 @@ Node *parser_statement(Parser *parser) {
 
         // Check return type
         Type *return_type = parser->current_function->return_type;
-        if (node->type->kind != return_type->kind || node->type->size != return_type->size) {
+        if (node->type->kind != return_type->kind) {
             print_error(token, "Wrong return type");
             exit(EXIT_FAILURE);
         }
@@ -687,7 +688,7 @@ Node *parser_declarations(Parser *parser) {
         Type *base_type = parser_type(parser);
         List *nodes = list_new();
         for (;;) {
-            char *name = current()->variable;
+            char *name = current()->string;
             parser_eat(parser, TOKEN_VARIABLE);
             Type *local_type = parser_type_suffix(parser, base_type);
 
@@ -995,8 +996,7 @@ Node *parser_unary(Parser *parser) {
     }
     if (token->kind == TOKEN_SIZEOF) {
         parser_eat(parser, TOKEN_SIZEOF);
-        Node *node = parser_unary(parser);
-        return node_new_integer(token, node->type->size);
+        return node_new_integer(token, 8, false, parser_unary(parser)->type->size);
     }
     return parser_postfix(parser);
 }
@@ -1025,43 +1025,51 @@ Node *parser_primary(Parser *parser) {
     }
 
     if (token->kind == TOKEN_I8) {
-        Node *node = node_new(NODE_INTEGER, token);
-        node->type = type_new_integer(1, true);
-        node->integer = token->integer;
+        Node *node = node_new_integer(token, 1, true, token->integer);
         parser_eat(parser, TOKEN_I8);
         return node;
     }
     if (token->kind == TOKEN_I32) {
-        Node *node = node_new(NODE_INTEGER, token);
-        node->type = type_new_integer(4, true);
-        node->integer = token->integer;
+        Node *node = node_new_integer(token, 4, true, token->integer);
         parser_eat(parser, TOKEN_I32);
         return node;
     }
     if (token->kind == TOKEN_I64) {
-        Node *node = node_new(NODE_INTEGER, token);
-        node->type = type_new_integer(8, true);
-        node->integer = token->integer;
+        Node *node = node_new_integer(token, 8, true, token->integer);
         parser_eat(parser, TOKEN_I64);
         return node;
     }
     if (token->kind == TOKEN_U32) {
-        Node *node = node_new(NODE_INTEGER, token);
-        node->type = type_new_integer(4, false);
-        node->integer = token->integer;
+        Node *node = node_new_integer(token, 4, false, token->integer);
         parser_eat(parser, TOKEN_U32);
         return node;
     }
     if (token->kind == TOKEN_U64) {
-        Node *node = node_new(NODE_INTEGER, token);
-        node->type = type_new_integer(8, false);
-        node->integer = token->integer;
+        Node *node = node_new_integer(token, 8, false, token->integer);
         parser_eat(parser, TOKEN_U64);
         return node;
     }
 
+    if (token->kind == TOKEN_STRING) {
+        // Create new string global
+        Global *global = malloc(sizeof(Global));
+        global->type = type_new_array(type_new_integer(1, true), strlen(token->string) + 1);
+        global->name = string_format(".STR%zu", parser->program->strings_count++);
+        global->init_data = token->string;
+        list_add(&parser->program->globals, global);
+        parser->program->globals_size += align(global->type->size, 4);
+
+        parser_eat(parser, TOKEN_STRING);
+
+        // Create global node
+        Node *node = node_new(NODE_GLOBAL, token);
+        node->global = global;
+        node->type = node->global->type;
+        return node;
+    }
+
     if (token->kind == TOKEN_VARIABLE) {
-        char *name = token->variable;
+        char *name = token->string;
         parser_eat(parser, TOKEN_VARIABLE);
 
         // Function call

@@ -63,6 +63,15 @@ char *file_read(FILE *file) {
 }
 
 // Print error
+char *string_format(char *fmt, ...) {
+    char buffer[512];
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(buffer, fmt, args);
+    va_end(args);
+    return strdup(buffer);
+}
+
 void print_error(Token *token, char *fmt, ...) {
     fprintf(stderr, "%s:%d:%d ERROR: ", token->source->basename, token->line, token->column);
     va_list args;

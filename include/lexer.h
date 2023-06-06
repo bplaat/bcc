@@ -19,8 +19,6 @@ typedef enum TokenKind {
     TOKEN_EOF,
     TOKEN_UNKNOWN,
 
-    TOKEN_VARIABLE,
-
     TOKEN_INTEGER_BEGIN,
     TOKEN_I8,
     TOKEN_I32,
@@ -28,6 +26,9 @@ typedef enum TokenKind {
     TOKEN_U32,
     TOKEN_U64,
     TOKEN_INTEGER_END,
+
+    TOKEN_VARIABLE,
+    TOKEN_STRING,
 
     TOKEN_TYPE_BEGIN,
     TOKEN_CHAR,
@@ -101,7 +102,7 @@ typedef struct Token {
     int32_t column;
     union {
         int64_t integer;
-        char *variable;
+        char *string;
     };
 } Token;
 
