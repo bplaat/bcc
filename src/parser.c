@@ -52,6 +52,16 @@ void type_dump(FILE *f, Type *type) {
 }
 
 // Program
+Global *program_find_global(Program *program, char *name) {
+    for (size_t i = 0; i < program->globals.size; i++) {
+        Global *global = program->globals.items[i];
+        if (!strcmp(global->name, name)) {
+            return global;
+        }
+    }
+    return NULL;
+}
+
 Function *program_find_function(Program *program, char *name) {
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
@@ -449,64 +459,99 @@ void parser_program(Parser *parser) {
     }
 }
 
-Function *parser_function(Parser *parser) {
-    Function *function = malloc(sizeof(Function));
-    list_add(&parser->program->functions, function);
-    parser->current_function = function;
-
-    function->return_type = parser_type(parser);
-    function->name = current()->variable;
-    function->is_leaf = true;
-
-    function->arguments.capacity = 0;
-    list_init(&function->arguments);
-
-    function->locals.capacity = 0;
-    list_init(&function->locals);
-    function->locals_size = 0;
-
-    function->nodes.capacity = 0;
-    list_init(&function->nodes);
-
+void parser_function(Parser *parser) {
+    Type *type = parser_type(parser);
+    Token *token = current();
+    char *name = current()->variable;
     parser_eat(parser, TOKEN_VARIABLE);
-    parser_eat(parser, TOKEN_LPAREN);
-    if (current()->kind != TOKEN_RPAREN) {
-        for (;;) {
-            Argument *argument = malloc(sizeof(Argument));
-            argument->type = parser_type(parser);
-            argument->name = current()->variable;
-            list_add(&function->arguments, argument);
 
-            Local *local = malloc(sizeof(Local));
-            local->name = argument->name;
-            local->type = argument->type;
-            list_add(&function->locals, local);
-            function->locals_size += local->type->size;
+    // Function
+    if (current()->kind == TOKEN_LPAREN) {
+        Function *function = malloc(sizeof(Function));
+        list_add(&parser->program->functions, function);
+        parser->current_function = function;
 
-            parser_eat(parser, TOKEN_VARIABLE);
-            if (current()->kind == TOKEN_RPAREN) {
-                break;
+        function->return_type = type;
+        function->name = name;
+        function->is_leaf = true;
+
+        function->arguments.capacity = 0;
+        list_init(&function->arguments);
+
+        function->locals.capacity = 0;
+        list_init(&function->locals);
+        function->locals_size = 0;
+
+        function->nodes.capacity = 0;
+        list_init(&function->nodes);
+
+        parser_eat(parser, TOKEN_LPAREN);
+        if (current()->kind != TOKEN_RPAREN) {
+            for (;;) {
+                Argument *argument = malloc(sizeof(Argument));
+                argument->type = parser_type(parser);
+                argument->name = current()->variable;
+                list_add(&function->arguments, argument);
+
+                Local *local = malloc(sizeof(Local));
+                local->name = argument->name;
+                local->type = argument->type;
+                list_add(&function->locals, local);
+                function->locals_size += local->type->size;
+
+                parser_eat(parser, TOKEN_VARIABLE);
+                if (current()->kind == TOKEN_RPAREN) {
+                    break;
+                }
+                parser_eat(parser, TOKEN_COMMA);
             }
+        }
+        parser_eat(parser, TOKEN_RPAREN);
+
+        parser_eat(parser, TOKEN_LCURLY);
+        while (current()->kind != TOKEN_RCURLY) {
+            Node *child = parser_statement(parser);
+            if (child != NULL) list_add(&function->nodes, child);
+        }
+        parser_eat(parser, TOKEN_RCURLY);
+
+        // Set locals offset
+        size_t local_offset = function->locals_size;
+        for (size_t i = 0; i < function->locals.size; i++) {
+            Local *local = function->locals.items[i];
+            local->offset = local_offset;
+            local_offset -= local->type->size;
+        }
+        return;
+    }
+
+    // Global
+    for (;;) {
+        Type *global_type = parser_type_suffix(parser, type);
+
+        // Create global when it doesn't exists
+        Global *global = program_find_global(parser->program, name);
+        if (global == NULL) {
+            global = malloc(sizeof(Global));
+            global->type = global_type;
+            global->name = name;
+            list_add(&parser->program->globals, global);
+            parser->program->globals_size += global->type->size;
+        } else {
+            print_error(token, "[TMP] Can't redefine variable: '%s'", name);
+            exit(EXIT_FAILURE);
+        }
+
+        if (current()->kind == TOKEN_COMMA) {
             parser_eat(parser, TOKEN_COMMA);
+            token = current();
+            name = current()->variable;
+            parser_eat(parser, TOKEN_VARIABLE);
+        } else {
+            break;
         }
     }
-    parser_eat(parser, TOKEN_RPAREN);
-
-    parser_eat(parser, TOKEN_LCURLY);
-    while (current()->kind != TOKEN_RCURLY) {
-        Node *child = parser_statement(parser);
-        if (child != NULL) list_add(&function->nodes, child);
-    }
-    parser_eat(parser, TOKEN_RCURLY);
-
-    // Set locals offset
-    size_t local_offset = function->locals_size;
-    for (size_t i = 0; i < function->locals.size; i++) {
-        Local *local = function->locals.items[i];
-        local->offset = local_offset;
-        local_offset -= local->type->size;
-    }
-    return function;
+    parser_eat(parser, TOKEN_SEMICOLON);
 }
 
 Node *parser_block(Parser *parser) {
@@ -1044,13 +1089,23 @@ Node *parser_primary(Parser *parser) {
             return node;
         }
 
+        // Global
+        Global *global = program_find_global(parser->program, name);
+        if (global != NULL) {
+            Node *node = node_new(NODE_GLOBAL, token);
+            node->global = global;
+            node->type = node->global->type;
+            return node;
+        }
+
         // Local
-        Node *node = node_new(NODE_LOCAL, token);
-        node->local = function_find_local(parser->current_function, name);
-        if (node->local == NULL) {
+        Local *local = function_find_local(parser->current_function, name);
+        if (local == NULL) {
             print_error(token, "Undefined variable: '%s'", name);
             exit(EXIT_FAILURE);
         }
+        Node *node = node_new(NODE_LOCAL, token);
+        node->local = local;
         node->type = node->local->type;
         return node;
     }

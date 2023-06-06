@@ -6,7 +6,7 @@
 
 #include "codegen.h"
 #include "lexer.h"
-#include "page.h"
+#include "object.h"
 #include "parser.h"
 #include "utils.h"
 
@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
         }
 
         if (!strcmp(argv[i], "-")) {
-            path = "stdin";
+            path = "./stdin";
             file = stdin;
         } else {
             path = argv[i];
@@ -82,21 +82,17 @@ int main(int argc, char **argv) {
     }
 
     // Codegen
-    program.section_text = page_new(4 * 1024);
+    program.text_section = section_new(4 * 1024);
+    program.data_section = section_new(4 * 1024);
     codegen(&program);
     if (debug) {
         printf(".text:\n");
-        uint8_t *section_text = program.section_text->data;
-        size_t i = 0;
-        for (size_t y = 0; y < 128; y += 16) {
-            for (int32_t x = 0; x < 16; x++) {
-                printf("%02x ", section_text[i++]);
-            }
-            printf("\n");
-        }
+        section_dump(stdout, program.text_section);
+        printf("\n.data:\n");
+        section_dump(stdout, program.data_section);
     }
 
     // Execute
-    page_make_executable(program.section_text);
+    section_make_executable(program.text_section);
     return ((JitFunc)program.main_func)();
 }
