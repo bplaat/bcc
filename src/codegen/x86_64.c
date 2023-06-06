@@ -186,8 +186,8 @@ void codegen_stat_x86_64(Codegen *codegen, Node *node) {
 
 void codegen_addr_x86_64(Codegen *codegen, Node *node) {
     if (node->kind == NODE_GLOBAL) {
-        inst2(0x48, 0xb8 | (rax & 7));  // movabs rax, imm
-        imm64((uint64_t)node->global->address);
+        inst3(0x48, 0x8d, 0x05);  // lea rax, [rip + imm]
+        imm32((uint8_t *)node->global->address - (codegen->code_byte_ptr + sizeof(int32_t)));
         return;
     }
     if (node->kind == NODE_LOCAL) {
@@ -324,8 +324,8 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
         if (type->kind == TYPE_ARRAY) {
             codegen_addr_x86_64(codegen, node);
         } else {
-            inst2(0x48, 0xb8 | (rax & 7));  // movabs rax, imm
-            imm64((uint64_t)node->global->address);
+            inst3(0x48, 0x8d, 0x05);  // lea rax, [rip + imm]
+            imm32((uint8_t *)node->global->address - (codegen->code_byte_ptr + sizeof(int32_t)));
             if (type->size == 1) inst2(0x8a, 0x00);              // mov al, byte [rax]
             if (type->size == 2) inst3(0x66, 0x8b, 0x00);        // mov ax, word [rax]
             if (type->size == 4) inst2(0x8b, 0x00);              // mov eax, dword [rax]
