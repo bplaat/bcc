@@ -25,7 +25,6 @@ Source *source_new(char *path, char *text) {
 // Token
 char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_EOF) return "EOF";
-    if (kind == TOKEN_UNKNOWN) return "unknown?";
 
     if (kind > TOKEN_INTEGER_BEGIN && kind < TOKEN_INTEGER_END) {
         if (kind == TOKEN_I8) return "character";
@@ -139,6 +138,74 @@ static TokenKind lexer_integer_suffix(char *c, char **c_ptr) {
     return TOKEN_I32;
 }
 
+static char lexer_escape_string(char *c, char **end) {
+    if (*c == '\\') {
+        c++;
+        if (*c == 'a') {
+            *end = ++c;
+            return '\a';
+        }
+        if (*c == 'b') {
+            *end = ++c;
+            return '\b';
+        }
+        if (*c == 'e') {
+            *end = ++c;
+            return 0x1b;
+        }
+        if (*c == 'f') {
+            *end = ++c;
+            return '\f';
+        }
+        if (*c == 'n') {
+            *end = ++c;
+            return '\n';
+        }
+        if (*c == 'r') {
+            *end = ++c;
+            return '\r';
+        }
+        if (*c == 't') {
+            *end = ++c;
+            return '\t';
+        }
+        if (*c == 'v') {
+            *end = ++c;
+            return '\v';
+        }
+        if (*c == '\\') {
+            *end = ++c;
+            return '\\';
+        }
+        if (*c == '\'') {
+            *end = ++c;
+            return '\'';
+        }
+        if (*c == '"') {
+            *end = ++c;
+            return '"';
+        }
+        if (*c == '?') {
+            *end = ++c;
+            return '?';
+        }
+        if (*c == '0') {
+            *end = ++c;
+            return '\0';
+        }
+        if (isdigit(*c)) {
+            return strtol(c, end, 8);
+        }
+        if (*c == 'x') {
+            c++;
+            return strtol(c, end, 16);
+        }
+    }
+    char character = *c++;
+    *end = c;
+    return character;
+}
+
 Token *lexer(char *path, char *text, size_t *tokens_size) {
     Source *source = source_new(path, text);
 
@@ -231,15 +298,16 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
         if (*c == '\'') {
             c++;
             tokens[size].kind = TOKEN_I8;
-            tokens[size++].integer = *c;
-            c += 2;
+            tokens[size++].integer = lexer_escape_string(c, &c);
+            c++;
             continue;
         }
 
         // String
         if (*c == '\"') {
+            // Read unescaped string
             c++;
-            char *string = c;
+            char *unescaped = c;
             while (*c != '\"') {
                 if (*c == '\r' || *c == '\n') {
                     print_error(&tokens[size], "Unclosed string literal");
@@ -247,10 +315,22 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
                 }
                 c++;
             }
-            size_t string_size = c - string;
+            size_t unescape_size = c - unescaped;
             c++;
+
+            // Process escape characters
+            char *string = malloc(unescape_size + 1);
+            char *ec = unescaped;
+            char *sc = string;
+
+            while ((size_t)(ec - unescaped) < unescape_size) {
+                *sc++ = lexer_escape_string(ec, &ec);
+            }
+            *sc = '\0';
+
+            // Create string token
             tokens[size].kind = TOKEN_STRING;
-            tokens[size++].string = strndup(string, string_size);
+            tokens[size++].string = string;
         }
 
         // Variables
@@ -293,8 +373,8 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
         }
 
         // Unknown character
-        tokens[size].kind = TOKEN_UNKNOWN;
-        tokens[size++].integer = *c++;
+        print_error(&tokens[size], "Unclosed character: '%c'", *c);
+        exit(EXIT_FAILURE);
     }
     *tokens_size = size;
     return tokens;
