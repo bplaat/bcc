@@ -164,6 +164,10 @@ void codegen_stat_arm64(Codegen *codegen, Node *node) {
 }
 
 void codegen_addr_arm64(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_GLOBAL) {
+        inst(0x10000000 | ((((uint32_t *)node->global->address - codegen->code_word_ptr) & 0x7ffff) << 5) | (x0 & 31));  // adr x1, imm
+        return;
+    }
     if (node->kind == NODE_LOCAL) {
         inst(0xD1000000 | ((node->local->offset & 0x1fff) << 10) | ((fp & 31) << 5) | (x0 & 31));  // sub x0, fp, imm
         return;
@@ -282,6 +286,20 @@ void codegen_expr_arm64(Codegen *codegen, Node *node) {
     }
 
     // Values
+    if (node->kind == NODE_GLOBAL) {
+        // When we load an array we don't load value because the array becomes a pointer
+        Type *type = node->global->type;
+        if (type->kind == TYPE_ARRAY) {
+            codegen_addr_arm64(codegen, node);
+        } else {
+            inst(0x10000000 | ((((uint32_t *)node->global->address - codegen->code_word_ptr) & 0x7ffff) << 5) | (x1 & 31));  // adr x1, imm
+            if (type->size == 1) inst(0x3D400020);                                                                           // ldr b0, [x1]
+            if (type->size == 2) inst(0x7D400020);                                                                           // ldr h0, [x1]
+            if (type->size == 4) inst(0xB9400020);                                                                           // ldr w0, [x1]
+            if (type->size == 8) inst(0xF9400020);                                                                           // ldr x0, [x1]
+        }
+        return;
+    }
     if (node->kind == NODE_LOCAL) {
         // When we load an array we don't load value because the array becomes a pointer
         Type *type = node->local->type;
