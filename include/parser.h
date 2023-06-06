@@ -6,7 +6,7 @@
 
 #include "lexer.h"
 #include "list.h"
-#include "page.h"
+#include "object.h"
 #include "utils.h"
 
 // Type
@@ -35,18 +35,33 @@ Type *type_new_array(Type *base, size_t size);
 void type_dump(FILE *f, Type *type);
 
 // Program
+typedef struct Global Global;      // Forward define
 typedef struct Function Function;  // Forward define
 
 typedef struct Program {
     Arch arch;
+    List globals;
+    size_t globals_size;
+    size_t strings_count;
     List functions;
-    Page *section_text;
+    Section *text_section;
+    Section *data_section;
     void *main_func;
 } Program;
+
+Global *program_find_global(Program *program, char *name);
 
 Function *program_find_function(Program *program, char *name);
 
 void program_dump(FILE *f, Program *program);
+
+// Global
+struct Global {
+    char *name;
+    Type *type;
+    void *init_data;
+    void *address;
+};
 
 // Function
 typedef struct Argument {
@@ -80,6 +95,7 @@ void function_dump(FILE *f, Function *function);
 typedef enum NodeKind {
     NODE_NODES,
 
+    NODE_GLOBAL,
     NODE_LOCAL,
     NODE_INTEGER,
     NODE_CALL,
@@ -145,12 +161,6 @@ struct Node {
             Node *else_block;
         };
 
-        // Local
-        Local *local;
-
-        // Integer
-        int64_t integer;
-
         // Unary, return
         Node *unary;
 
@@ -159,12 +169,21 @@ struct Node {
             Node *lhs;
             Node *rhs;
         };
+
+        // Global
+        Global *global;
+
+        // Local
+        Local *local;
+
+        // Integer
+        int64_t integer;
     };
 };
 
 Node *node_new(NodeKind kind, Token *token);
 
-Node *node_new_integer(Token *token, int64_t integer);
+Node *node_new_integer(Token *token, int32_t size, bool is_signed, int64_t integer);
 
 Node *node_new_unary(NodeKind kind, Token *token, Node *unary);
 
@@ -197,7 +216,7 @@ Node *parser_div_node(Parser *parser, Token *token, Node *lhs, Node *rhs);
 Node *parser_deref_node(Parser *parser, Token *token, Node *unary);
 
 void parser_program(Parser *parser);
-Function *parser_function(Parser *parser);
+void parser_function(Parser *parser);
 Node *parser_block(Parser *parser);
 Node *parser_statement(Parser *parser);
 Node *parser_declarations(Parser *parser);

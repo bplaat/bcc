@@ -180,5 +180,66 @@ if [ "$1" = "test" ]; then
     assert 1 "int sub2(int x, int y) { return x-y; } int main() { return sub2(4,3); }"
     assert 55 "int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); } int main() { return fib(9); }"
 
+    assert 0 "int x; int main() { return x; }"
+    assert 3 "int x; int main() { x=3; return x; }"
+    assert 7 "int x; int y; int main() { x=3; y=4; return x+y; }"
+    assert 7 "int x, y; int main() { x=3; y=4; return x+y; }"
+    assert 0 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[0]; }"
+    assert 1 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[1]; }"
+    assert 2 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[2]; }"
+    assert 3 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[3]; }"
+    assert 4 "int x; int main() { return sizeof(x); }"
+    assert 16 "int x[4]; int main() { return sizeof(x); }"
+
+    assert 0 'int main() { return ""[0]; }'
+    assert 1 'int main() { return sizeof(""); }'
+    assert 97 'int main() { return "abc"[0]; }'
+    assert 98 'int main() { return "abc"[1]; }'
+    assert 99 'int main() { return "abc"[2]; }'
+    assert 0 'int main() { return "abc"[3]; }'
+    assert 4 'int main() { return sizeof("abc"); }'
+
+    assert 7 "int main() { return '\\a'; }"
+    assert 7 'int main() { return "\\a"[0]; }'
+    assert 8 'int main() { return "\\b"[0]; }'
+    assert 9 'int main() { return "\\t"[0]; }'
+    assert 10 'int main() { return "\\n"[0]; }'
+    assert 11 'int main() { return "\\v"[0]; }'
+    assert 12 'int main() { return "\\f"[0]; }'
+    assert 13 'int main() { return "\\r"[0]; }'
+    assert 27 'int main() { return "\\e"[0]; }'
+    assert 106 'int main() { return "\\j"[0]; }'
+    assert 107 'int main() { return "\\k"[0]; }'
+    assert 108 'int main() { return "\\l"[0]; }'
+    assert 7 'int main() { return "\\ax\\ny"[0]; }'
+    assert 120 'int main() { return "\\ax\\ny"[1]; }'
+    assert 10 'int main() { return "\\ax\\ny"[2]; }'
+    assert 121 'int main() { return "\\ax\\ny"[3]; }'
+    assert 0 'int main() { return "\\0"[0]; }'
+    assert 16 'int main() { return "\\20"[0]; }'
+    assert 65 'int main() { return "\\101"[0]; }'
+    assert 104 'int main() { return "\\150"[0]; }'
+    assert 104 "int main() { return '\\150'; }"
+    assert 0 'int main() { return "\\x00"[0]; }'
+    assert 119 'int main() { return "\\x77"[0]; }'
+    assert 165 'int main() { return "\\xA5"[0]; }'
+    assert 255 'int main() { return "\\x00ff"[0]; }'
+
+    # assert 98 '
+    #     unsigned int hash(char *key) {
+    #         unsigned int hash = 2166136261;
+    #         while (*key) {
+    #             hash ^= *key;
+    #             key += 4;
+    #             hash *= 16777619;
+    #         }
+    #         return hash;
+    #     }
+    #     int main() {
+    #         char *name = "Bastiaan";
+    #         return hash(name);
+    #     }
+    # '
+
     echo "[OK] All tests pass"
 fi

@@ -62,7 +62,7 @@ void codegen_func_x86_64(Codegen *codegen, Function *function) {
 
     // Write arguments to locals
     for (int32_t i = function->arguments.size - 1; i >= 0; i--) {
-        Argument *argument =function->arguments.items[i];
+        Argument *argument = function->arguments.items[i];
         Local *local = function_find_local(function, argument->name);
 
         if (i == 0) {
@@ -185,6 +185,11 @@ void codegen_stat_x86_64(Codegen *codegen, Node *node) {
 }
 
 void codegen_addr_x86_64(Codegen *codegen, Node *node) {
+    if (node->kind == NODE_GLOBAL) {
+        inst3(0x48, 0x8d, 0x05);  // lea rax, [rip + imm]
+        imm32((uint8_t *)node->global->address - (codegen->code_byte_ptr + sizeof(int32_t)));
+        return;
+    }
     if (node->kind == NODE_LOCAL) {
         inst3(0x48, 0x8d, 0x85);  // lea rax, qword [rbp - imm]
         imm32(-node->local->offset);
@@ -313,6 +318,24 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
     }
 
     // Values
+    if (node->kind == NODE_GLOBAL) {
+        // When we load an array we don't load value because the array becomes a pointer
+        Type *type = node->local->type;
+        if (type->kind == TYPE_ARRAY) {
+            codegen_addr_x86_64(codegen, node);
+        } else {
+            inst3(0x48, 0x8d, 0x05);  // lea rax, [rip + imm]
+            imm32((uint8_t *)node->global->address - (codegen->code_byte_ptr + sizeof(int32_t)));
+            if (type->size == 1) inst2(0x8a, 0x00);              // mov al, byte [rax]
+            if (type->size == 2) inst3(0x66, 0x8b, 0x00);        // mov ax, word [rax]
+            if (type->size == 4) inst2(0x8b, 0x00);              // mov eax, dword [rax]
+            if (type->size == 8) inst3(0x48, 0x8b, 0x00);        // mov rax, qword [rax]
+            if (type->size == 1) inst4(0x48, 0x0f, 0xb6, 0xc0);  // movzx rax, al
+            if (type->size == 2) inst4(0x48, 0x0f, 0xb7, 0xc0);  // movzx rax, ax
+        }
+        return;
+    }
+
     if (node->kind == NODE_LOCAL) {
         // When we load an array we don't load value because the array becomes a pointer
         Type *type = node->local->type;

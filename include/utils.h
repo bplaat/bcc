@@ -28,6 +28,8 @@ char *strndup(const char *str, size_t size);
 // I/O helpers
 char *file_read(FILE *file);
 
+char *string_format(char *fmt, ...);
+
 void print_error(Token *token, char *fmt, ...);
 
 #endif
