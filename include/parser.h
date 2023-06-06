@@ -42,6 +42,7 @@ typedef struct Program {
     Arch arch;
     List globals;
     size_t globals_size;
+    size_t strings_count;
     List functions;
     Section *text_section;
     Section *data_section;
@@ -58,6 +59,7 @@ void program_dump(FILE *f, Program *program);
 struct Global {
     char *name;
     Type *type;
+    void *init_data;
     void *address;
 };
 
@@ -181,7 +183,7 @@ struct Node {
 
 Node *node_new(NodeKind kind, Token *token);
 
-Node *node_new_integer(Token *token, int64_t integer);
+Node *node_new_integer(Token *token, int32_t size, bool is_signed, int64_t integer);
 
 Node *node_new_unary(NodeKind kind, Token *token, Node *unary);
 

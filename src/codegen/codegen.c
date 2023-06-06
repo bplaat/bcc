@@ -14,10 +14,14 @@ void codegen(Program *program) {
     for (size_t i = 0; i < program->globals.size; i++) {
         Global *global = program->globals.items[i];
         global->address = global_address;
-        memset(global->address, 0, global->type->size);
-        global_address += global->type->size;
+        if (global->init_data) {
+            memcpy(global->address, global->init_data, global->type->size);
+        } else {
+            memset(global->address, 0, global->type->size);
+        }
+        global_address += align(global->type->size, 4);
     }
-    program->data_section->filled = global_address- (uint8_t *)program->data_section->data;
+    program->data_section->filled = global_address - (uint8_t *)program->data_section->data;
 
     // x86_64
     if (program->arch == ARCH_X86_64) {

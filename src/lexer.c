@@ -27,11 +27,12 @@ char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_EOF) return "EOF";
     if (kind == TOKEN_UNKNOWN) return "unknown?";
 
-    if (kind == TOKEN_VARIABLE) return "variable";
     if (kind > TOKEN_INTEGER_BEGIN && kind < TOKEN_INTEGER_END) {
         if (kind == TOKEN_I8) return "character";
         return "integer";
     }
+    if (kind == TOKEN_VARIABLE) return "variable";
+    if (kind == TOKEN_STRING) return "string";
 
     if (kind == TOKEN_CHAR) return "char";
     if (kind == TOKEN_SHORT) return "short";
@@ -235,6 +236,23 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
             continue;
         }
 
+        // String
+        if (*c == '\"') {
+            c++;
+            char *string = c;
+            while (*c != '\"') {
+                if (*c == '\r' || *c == '\n') {
+                    print_error(&tokens[size], "Unclosed string literal");
+                    exit(EXIT_FAILURE);
+                }
+                c++;
+            }
+            size_t string_size = c - string;
+            c++;
+            tokens[size].kind = TOKEN_STRING;
+            tokens[size++].string = strndup(string, string_size);
+        }
+
         // Variables
         if (isalpha(*c) || *c == '_') {
             char *string = c;
@@ -253,7 +271,7 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
             }
             if (!keyword_found) {
                 tokens[size].kind = TOKEN_VARIABLE;
-                tokens[size++].variable = strndup(string, string_size);
+                tokens[size++].string = strndup(string, string_size);
             }
             continue;
         }
