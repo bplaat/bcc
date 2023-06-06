@@ -73,6 +73,25 @@ Function *program_find_function(Program *program, char *name) {
 }
 
 void program_dump(FILE *f, Program *program) {
+    // Globals
+    for (size_t i = 0; i < program->globals.size; i++) {
+        Global *global = program->globals.items[i];
+        type_dump(f, global->type);
+        fprintf(f, " %s", global->name);
+        if (global->init_data) {
+            fprintf(f, " = {");
+            uint8_t *bytes = global->init_data;
+            for (size_t i = 0; i < global->type->size; i++) {
+                fprintf(f, "0x%02x", bytes[i]);
+                if (i != global->type->size - 1) fprintf(f, ", ");
+            }
+            fprintf(f, "}");
+        }
+        fprintf(f, ";\n");
+    }
+    fprintf(f, "\n");
+
+    // Function declarations
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
         type_dump(f, function->return_type);
@@ -89,6 +108,7 @@ void program_dump(FILE *f, Program *program) {
     }
     fprintf(f, "\n");
 
+    // Functions implementations
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
         function_dump(f, function);
@@ -108,6 +128,7 @@ Local *function_find_local(Function *function, char *name) {
 }
 
 void function_dump(FILE *f, Function *function) {
+    // Function declaration
     type_dump(f, function->return_type);
     fprintf(f, " %s(", function->name);
     for (size_t i = 0; i < function->arguments.size; i++) {
@@ -119,18 +140,23 @@ void function_dump(FILE *f, Function *function) {
         }
     }
     fprintf(f, ") {\n");
+
+    // Local declarations
     for (size_t i = 0; i < function->locals.size; i++) {
         Local *local = function->locals.items[i];
         fprintf(f, "  ");
         type_dump(f, local->type);
         fprintf(f, " %s;\n", local->name);
     }
+
+    // Nodes
     for (size_t i = 0; i < function->nodes.size; i++) {
         Node *child = function->nodes.items[i];
         fprintf(f, "  ");
         node_dump(f, child, 1);
         fprintf(f, ";\n");
     }
+
     fprintf(f, "}\n");
 }
 
@@ -388,7 +414,8 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         lhs = tmp;
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
-        return node_new_operation(NODE_ADD, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
+        return node_new_operation(NODE_ADD, token, lhs,
+                                  parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
     }
 
     print_error(token, "Invalid add types");
@@ -404,12 +431,14 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
         return node_new_operation(NODE_SUB, token, lhs, rhs);
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && (rhs->type->kind == TYPE_POINTER || rhs->type->kind == TYPE_ARRAY)) {
-        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs), node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size));
+        Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs),
+                                     node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size));
         node->type = node->type->base;
         return node;
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
-        return node_new_operation(NODE_SUB, token, lhs, parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
+        return node_new_operation(NODE_SUB, token, lhs,
+                                  parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
     }
 
     print_error(token, "Invalid subtract types");
@@ -1054,7 +1083,7 @@ Node *parser_primary(Parser *parser) {
         // Create new string global
         Global *global = malloc(sizeof(Global));
         global->type = type_new_array(type_new_integer(1, true), strlen(token->string) + 1);
-        global->name = string_format(".STR%zu", parser->program->strings_count++);
+        global->name = string_format("STR%zu", parser->program->strings_count++);
         global->init_data = token->string;
         list_add(&parser->program->globals, global);
         parser->program->globals_size += align(global->type->size, 4);
