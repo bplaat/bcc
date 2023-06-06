@@ -17,7 +17,6 @@ Source *source_new(char *path, char *text);
 // Token
 typedef enum TokenKind {
     TOKEN_EOF,
-    TOKEN_UNKNOWN,
 
     TOKEN_INTEGER_BEGIN,
     TOKEN_I8,

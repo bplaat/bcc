@@ -199,6 +199,7 @@ if [ "$1" = "test" ]; then
     assert 0 'int main() { return "abc"[3]; }'
     assert 4 'int main() { return sizeof("abc"); }'
 
+    assert 7 "int main() { return '\\a'; }"
     assert 7 'int main() { return "\\a"[0]; }'
     assert 8 'int main() { return "\\b"[0]; }'
     assert 9 'int main() { return "\\t"[0]; }'
@@ -217,7 +218,8 @@ if [ "$1" = "test" ]; then
     assert 0 'int main() { return "\\0"[0]; }'
     assert 16 'int main() { return "\\20"[0]; }'
     assert 65 'int main() { return "\\101"[0]; }'
-    assert 104 'int main() { return "\\1500"[0]; }'
+    assert 104 'int main() { return "\\150"[0]; }'
+    assert 104 "int main() { return '\\150'; }"
     assert 0 'int main() { return "\\x00"[0]; }'
     assert 119 'int main() { return "\\x77"[0]; }'
     assert 165 'int main() { return "\\xA5"[0]; }'
