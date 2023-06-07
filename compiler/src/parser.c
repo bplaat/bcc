@@ -249,6 +249,9 @@ void node_dump(FILE *f, Node *node, int32_t indent) {
         fprintf(f, "}");
     }
 
+    if (node->kind == NODE_GLOBAL) {
+        fprintf(f, "%s", node->global->name);
+    }
     if (node->kind == NODE_LOCAL) {
         fprintf(f, "%s", node->local->name);
     }

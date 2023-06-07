@@ -376,8 +376,15 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
             if (i == 3) inst3(0x48, 0x89, 0xc1);  // mov rcx, rax
         }
 
-        inst1(0xe8);  // call function
-        imm32((uint8_t *)node->function->address - (codegen->code_byte_ptr + sizeof(int32_t)));
+        int64_t distance = (uint8_t *)node->function->address - (codegen->code_byte_ptr + 1 + sizeof(int32_t));
+        if (distance < INT32_MIN || distance > INT32_MAX) {
+            inst2(0x48, 0xb8 | (rax & 7));  // movabs rax, imm
+            imm64((int64_t)node->function->address);
+            inst2(0xff, 0xd0);  // call rax
+        } else {
+            inst1(0xe8);  // call function
+            imm32(distance);
+        }
         return;
     }
 
