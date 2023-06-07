@@ -33,6 +33,40 @@ Type *type_new_array(Type *base, size_t size) {
     return type;
 }
 
+Type *type_new_function(Type *return_type) {
+    Type *type = type_new(TYPE_FUNCTION, 8);
+    type->return_type = return_type;
+    list_init(&type->arguments_types);
+    return type;
+}
+
+bool type_equals(Type *lhs, Type *rhs) {
+    if (lhs->kind == TYPE_INTEGER && rhs->kind == TYPE_INTEGER) {
+        return lhs->is_signed == rhs->is_signed && lhs->size == rhs->size;
+    }
+    if (lhs->kind == TYPE_POINTER && rhs->kind == TYPE_POINTER) {
+        return lhs->size == 8 && rhs->size == 8 && type_equals(lhs->base, rhs->base);
+    }
+    if (lhs->kind == TYPE_ARRAY && rhs->kind == TYPE_ARRAY) {
+        return lhs->size == rhs->size && type_equals(lhs->base, rhs->base);
+    }
+    if (lhs->kind == TYPE_FUNCTION && rhs->kind == TYPE_FUNCTION) {
+        if (!type_equals(lhs->return_type, rhs->return_type)) {
+            return false;
+        }
+        if (lhs->arguments_types.size != rhs->arguments_types.size) {
+            return false;
+        }
+        for (size_t i = 0; i < lhs->arguments_types.size; i++) {
+            if (!type_equals(lhs->arguments_types.items[i], rhs->arguments_types.items[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 void type_dump(FILE *f, Type *type) {
     if (type->kind == TYPE_INTEGER) {
         if (type->is_signed) {
@@ -94,13 +128,14 @@ void program_dump(FILE *f, Program *program) {
     // Function declarations
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
-        type_dump(f, function->return_type);
+        type_dump(f, function->type->return_type);
         fprintf(f, " %s(", function->name);
-        for (size_t i = 0; i < function->arguments.size; i++) {
-            Argument *argument = function->arguments.items[i];
-            type_dump(f, argument->type);
-            fprintf(f, " %s", argument->name);
-            if (i != function->arguments.size - 1) {
+        for (size_t i = 0; i < function->arguments_names.size; i++) {
+            Type *argument_type = function->type->arguments_types.items[i];
+            char *argument_name = function->arguments_names.items[i];
+            type_dump(f, argument_type);
+            fprintf(f, " %s", argument_name);
+            if (i != function->arguments_names.size - 1) {
                 fprintf(f, ", ");
             }
         }
@@ -129,13 +164,14 @@ Local *function_find_local(Function *function, char *name) {
 
 void function_dump(FILE *f, Function *function) {
     // Function declaration
-    type_dump(f, function->return_type);
+    type_dump(f, function->type->return_type);
     fprintf(f, " %s(", function->name);
-    for (size_t i = 0; i < function->arguments.size; i++) {
-        Argument *argument = function->arguments.items[i];
-        type_dump(f, argument->type);
-        fprintf(f, " %s", argument->name);
-        if (i != function->arguments.size - 1) {
+    for (size_t i = 0; i < function->arguments_names.size; i++) {
+        Type *argument_type = function->type->arguments_types.items[i];
+        char *argument_name = function->arguments_names.items[i];
+        type_dump(f, argument_type);
+        fprintf(f, " %s", argument_name);
+        if (i != function->arguments_names.size - 1) {
             fprintf(f, ", ");
         }
     }
@@ -495,35 +531,31 @@ void parser_function(Parser *parser) {
 
     // Function
     if (current()->kind == TOKEN_LPAREN) {
-        Function *function = calloc(1, sizeof(Function));
-        list_add(&parser->program->functions, function);
+        // Create function when it don't exists
+        Function *function = program_find_function(parser->program, name);
+        if (function == NULL) {
+            function = calloc(1, sizeof(Function));
+            list_add(&parser->program->functions, function);
+
+            function->name = name;
+            function->is_leaf = true;
+            list_init(&function->locals);
+            function->locals_size = 0;
+            list_init(&function->nodes);
+        }
         parser->current_function = function;
 
-        function->return_type = type;
-        function->name = name;
-        function->is_leaf = true;
-
-        list_init(&function->arguments);
-
-        list_init(&function->locals);
-        function->locals_size = 0;
-
-        list_init(&function->nodes);
-
+        // Parse arguments and create function type to compare against
+        Type *function_type = type_new_function(type);
+        List arguments_names = {0};
+        list_init(&arguments_names);
         parser_eat(parser, TOKEN_LPAREN);
         if (current()->kind != TOKEN_RPAREN) {
             for (;;) {
-                Argument *argument = calloc(1, sizeof(Argument));
-                argument->type = parser_type(parser);
-                argument->name = current()->string;
-                list_add(&function->arguments, argument);
-
-                Local *local = calloc(1, sizeof(Local));
-                local->name = argument->name;
-                local->type = argument->type;
-                list_add(&function->locals, local);
-                function->locals_size += local->type->size;
-
+                Type *argument_type = parser_type(parser);
+                list_add(&function_type->arguments_types, argument_type);
+                char *argument_name = current()->string;
+                list_add(&arguments_names, argument_name);
                 parser_eat(parser, TOKEN_VARIABLE);
                 if (current()->kind == TOKEN_RPAREN) {
                     break;
@@ -533,24 +565,60 @@ void parser_function(Parser *parser) {
         }
         parser_eat(parser, TOKEN_RPAREN);
 
-        parser_eat(parser, TOKEN_LCURLY);
-        while (current()->kind != TOKEN_RCURLY) {
-            Node *child = parser_statement(parser);
-            if (child != NULL) list_add(&function->nodes, child);
-        }
-        parser_eat(parser, TOKEN_RCURLY);
+        // When function declaration or implementation
+        if (current()->kind == TOKEN_SEMICOLON) {
+            function->type = function_type;
+            parser_eat(parser, TOKEN_SEMICOLON);
+        } else {
+            // Check if the function is not already implemented
+            if (function->is_implemented) {
+                print_error(token, "Can't reimplement a function");
+                exit(EXIT_FAILURE);
+            }
+            function->is_implemented = true;
 
-        // Set locals offset
-        size_t local_offset = function->locals_size;
-        for (size_t i = 0; i < function->locals.size; i++) {
-            Local *local = function->locals.items[i];
-            local->offset = local_offset;
-            local_offset -= local->type->size;
+            // When a function already has a type check if it is the same
+            if (function->type) {
+                if (!type_equals(function->type, function_type)) {
+                    print_error(token, "Function implementation has the wrong type");
+                    exit(EXIT_FAILURE);
+                }
+            } else {
+                function->type = function_type;
+            }
+
+            // We always use the argument names that are defined in the function implementation
+            function->arguments_names = arguments_names;
+
+            // Create locals for arguments
+            for (size_t i = 0; i < function->arguments_names.size; i++) {
+                Local *local = malloc(sizeof(Local));
+                local->name = function->arguments_names.items[i];
+                local->type = function->type->arguments_types.items[i];
+                list_add(&function->locals, local);
+                function->locals_size += local->type->size;
+            }
+
+            // Parse nodes
+            parser_eat(parser, TOKEN_LCURLY);
+            while (current()->kind != TOKEN_RCURLY) {
+                Node *child = parser_statement(parser);
+                if (child != NULL) list_add(&function->nodes, child);
+            }
+            parser_eat(parser, TOKEN_RCURLY);
+
+            // Set locals offset
+            size_t local_offset = function->locals_size;
+            for (size_t i = 0; i < function->locals.size; i++) {
+                Local *local = function->locals.items[i];
+                local->offset = local_offset;
+                local_offset -= local->type->size;
+            }
         }
         return;
     }
 
-    // Global
+    // Otherwise it is a global variable
     for (;;) {
         Type *global_type = parser_type_suffix(parser, type);
 
@@ -694,8 +762,7 @@ Node *parser_statement(Parser *parser) {
         parser_eat(parser, TOKEN_SEMICOLON);
 
         // Check return type
-        Type *return_type = parser->current_function->return_type;
-        if (node->type->kind != return_type->kind) {
+        if (!type_equals(node->type, parser->current_function->type->return_type)) {
             print_error(token, "Wrong return type");
             exit(EXIT_FAILURE);
         }
@@ -1105,7 +1172,7 @@ Node *parser_primary(Parser *parser) {
                 print_error(token, "Undefined function: '%s'", name);
                 exit(EXIT_FAILURE);
             }
-            node->type = node->function->return_type;
+            node->type = node->function->type->return_type;
             parser->current_function->is_leaf = false;
 
             parser_eat(parser, TOKEN_LPAREN);
