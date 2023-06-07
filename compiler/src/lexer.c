@@ -26,6 +26,7 @@ Source *source_new(char *path, char *text) {
 char *token_kind_to_string(TokenKind kind) {
     if (kind == TOKEN_EOF) return "EOF";
 
+    if (kind == TOKEN_EXTERN) return "extern";
     if (kind > TOKEN_INTEGER_BEGIN && kind < TOKEN_INTEGER_END) {
         if (kind == TOKEN_I8) return "character";
         return "integer";
@@ -96,11 +97,11 @@ char *token_kind_to_string(TokenKind kind) {
 }
 
 // Lexer
-static Keyword keywords[] = {{"char", TOKEN_CHAR},         {"short", TOKEN_SHORT},  {"int", TOKEN_INT},   {"long", TOKEN_LONG},   {"signed", TOKEN_SIGNED},
-                             {"unsigned", TOKEN_UNSIGNED},
+static Keyword keywords[] = {{"extern", TOKEN_EXTERN}, {"char", TOKEN_CHAR},     {"short", TOKEN_SHORT},       {"int", TOKEN_INT},
+                             {"long", TOKEN_LONG},     {"signed", TOKEN_SIGNED}, {"unsigned", TOKEN_UNSIGNED},
 
-                             {"sizeof", TOKEN_SIZEOF},     {"if", TOKEN_IF},        {"else", TOKEN_ELSE}, {"while", TOKEN_WHILE}, {"do", TOKEN_DO},
-                             {"for", TOKEN_FOR},           {"return", TOKEN_RETURN}};
+                             {"sizeof", TOKEN_SIZEOF}, {"if", TOKEN_IF},         {"else", TOKEN_ELSE},         {"while", TOKEN_WHILE},
+                             {"do", TOKEN_DO},         {"for", TOKEN_FOR},       {"return", TOKEN_RETURN}};
 
 static Keyword operators[] = {
     {"<<=", TOKEN_SHL_ASSIGN}, {">>=", TOKEN_SHR_ASSIGN},

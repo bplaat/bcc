@@ -85,6 +85,7 @@ struct Function {
     char *name;
     Type *type;
     bool is_leaf;
+    bool is_extern;
     bool is_implemented;
     List arguments_names;
     List locals;

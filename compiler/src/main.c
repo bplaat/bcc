@@ -105,6 +105,7 @@ int main(int argc, char **argv) {
         parser(&program, tokens, tokens_size);
     }
     if (debug) {
+        printf("\n");
         program_dump(stdout, &program);
     }
 

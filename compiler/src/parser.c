@@ -130,12 +130,12 @@ void program_dump(FILE *f, Program *program) {
         Function *function = program->functions.items[i];
         type_dump(f, function->type->return_type);
         fprintf(f, " %s(", function->name);
-        for (size_t i = 0; i < function->arguments_names.size; i++) {
-            Type *argument_type = function->type->arguments_types.items[i];
-            char *argument_name = function->arguments_names.items[i];
-            type_dump(f, argument_type);
-            fprintf(f, " %s", argument_name);
-            if (i != function->arguments_names.size - 1) {
+        for (size_t i = 0; i < function->type->arguments_types.size; i++) {
+            type_dump(f, function->type->arguments_types.items[i]);
+            if (i < function->arguments_names.size) {
+                fprintf(f, " %s", (char *)function->arguments_names.items[i]);
+            }
+            if (i != function->type->arguments_types.size - 1) {
                 fprintf(f, ", ");
             }
         }
@@ -146,8 +146,10 @@ void program_dump(FILE *f, Program *program) {
     // Functions implementations
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
-        function_dump(f, function);
-        fprintf(f, "\n");
+        if (!function->is_extern) {
+            function_dump(f, function);
+            fprintf(f, "\n");
+        }
     }
 }
 
@@ -166,15 +168,15 @@ void function_dump(FILE *f, Function *function) {
     // Function declaration
     type_dump(f, function->type->return_type);
     fprintf(f, " %s(", function->name);
-    for (size_t i = 0; i < function->arguments_names.size; i++) {
-        Type *argument_type = function->type->arguments_types.items[i];
-        char *argument_name = function->arguments_names.items[i];
-        type_dump(f, argument_type);
-        fprintf(f, " %s", argument_name);
-        if (i != function->arguments_names.size - 1) {
-            fprintf(f, ", ");
+    for (size_t i = 0; i < function->type->arguments_types.size; i++) {
+            type_dump(f, function->type->arguments_types.items[i]);
+            if (i < function->arguments_names.size) {
+                fprintf(f, " %s", (char *)function->arguments_names.items[i]);
+            }
+            if (i != function->type->arguments_types.size - 1) {
+                fprintf(f, ", ");
+            }
         }
-    }
     fprintf(f, ") {\n");
 
     // Local declarations
@@ -524,6 +526,12 @@ void parser_program(Parser *parser) {
 }
 
 void parser_function(Parser *parser) {
+    bool is_extern = false;
+    if (current()->kind == TOKEN_EXTERN) {
+        is_extern = true;
+        parser_eat(parser, TOKEN_EXTERN);
+    }
+
     Type *type = parser_type(parser);
     Token *token = current();
     char *name = current()->string;
@@ -539,6 +547,7 @@ void parser_function(Parser *parser) {
 
             function->name = name;
             function->is_leaf = true;
+            function->is_extern = is_extern;
             list_init(&function->locals);
             function->locals_size = 0;
             list_init(&function->nodes);

@@ -9,7 +9,7 @@ if [ "$(uname -s)" = Darwin ]; then
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -g -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
+    gcc -g -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler -name "*.c") -ldl -o bcc-x86_64 || exit
 fi
 if [ "$(uname -o)" = Msys ]; then
     gcc -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
@@ -237,8 +237,9 @@ if [ "$1" = "test" ]; then
     assert 1 "int sub2(int x, int y); int main() { return sub2(4,3); } int sub2(int x, int y) { return x-y; }"
 
     assert 3 'unsigned long main() { return strlen("Hoi"); }'
-    # assert 1 'char main() { return !strcmp("Hoi", "Hoi"); }'
-    # assert 0 'char main() { return !strcmp("Hoi", "Hoi2"); }'
+    assert 1 'char main() { return !strcmp("Hoi", "Hoi"); }'
+    assert 0 'char main() { return !strcmp("Hoi", "Hoi2"); }'
+    assert 0 'int main() { puts("Hello Bassie!"); return 0; }'
 
     # assert 98 '
     #     unsigned int hash(char *key) {
