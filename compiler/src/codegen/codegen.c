@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#ifdef __linux__
+#if defined(__linux__) || defined(__APPLE__)
 #include <dlfcn.h>
 #endif
 
@@ -14,8 +14,13 @@ void codegen(Program *program) {
     };
 
 // Link extern functions
+#if defined(__linux__) || defined(__APPLE__)
 #ifdef __linux__
     void *handle = dlopen("libc.so.6", RTLD_LAZY);
+#endif
+#ifdef __APPLE__
+    void *handle = dlopen("libSystem.B.dylib", RTLD_LAZY);
+#endif
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
         if (function->is_extern) function->address = dlsym(handle, function->name);
