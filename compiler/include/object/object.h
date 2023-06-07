@@ -2,8 +2,8 @@
 #define OBJECT_H
 
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #ifdef _WIN32
 
@@ -22,6 +22,15 @@ extern bool VirtualFree(void *lpAddress, size_t dwSize, uint32_t dwFreeType);
 #include <sys/mman.h>
 
 #endif
+
+// Object
+typedef enum ObjectKind {
+    OBJECT_ELF,
+    OBJECT_MACHO,
+    OBJECT_PE,
+} ObjectKind;
+
+void object_out(ObjectKind kind, char *path);
 
 // Section
 typedef struct Section {

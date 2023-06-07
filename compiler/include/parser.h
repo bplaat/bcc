@@ -6,7 +6,7 @@
 
 #include "lexer.h"
 #include "list.h"
-#include "object.h"
+#include "object/object.h"
 #include "utils.h"
 
 // Type

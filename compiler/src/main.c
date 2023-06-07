@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "object/object.h"
 #include "codegen.h"
 #include "lexer.h"
-#include "object.h"
 #include "parser.h"
 #include "utils.h"
 
@@ -119,6 +119,9 @@ int main(int argc, char **argv) {
         printf("\n.data:\n");
         section_dump(stdout, program.data_section);
     }
+
+    // Output object
+    object_out(OBJECT_ELF, "a.out");
 
     // Execute program
     section_make_executable(program.text_section);
