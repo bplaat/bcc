@@ -1,7 +1,6 @@
 #!/bin/sh
 # ./build.sh      | Build bcc
 # ./build.sh test | Build and run tests
-# For now only works on macOS and Linux
 
 if [ "$(uname -s)" = Darwin ]; then
     clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
@@ -12,6 +11,9 @@ fi
 if [ "$(uname -s)" = Linux ]; then
     gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
 fi
+if [ "$(uname -o)" = Msys ]; then
+    gcc -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
+fi
 
 # Function that runs a test
 assert() {
@@ -20,7 +22,7 @@ assert() {
 
     # Compile and run for x86_64
     if [ -e "./bcc-x86_64" ]; then
-        echo "$input" | ./bcc-x86_64 -
+        echo -e "$input" | ./bcc-x86_64 -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
@@ -34,7 +36,7 @@ assert() {
 
     # Compile and run for arm64
     if [ -e "./bcc-arm64" ]; then
-        echo "$input" | ./bcc-arm64 -
+        echo -e "$input" | ./bcc-arm64 -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"

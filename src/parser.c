@@ -9,7 +9,7 @@
 
 // Type
 Type *type_new(TypeKind kind, size_t size) {
-    Type *type = malloc(sizeof(Type));
+    Type *type = calloc(1, sizeof(Type));
     type->kind = kind;
     type->size = size;
     return type;
@@ -162,7 +162,7 @@ void function_dump(FILE *f, Function *function) {
 
 // Node
 Node *node_new(NodeKind kind, Token *token) {
-    Node *node = malloc(sizeof(Node));
+    Node *node = calloc(1, sizeof(Node));
     node->kind = kind;
     node->token = token;
     return node;
@@ -193,7 +193,6 @@ Node *node_new_operation(NodeKind kind, Token *token, Node *lhs, Node *rhs) {
 Node *node_new_nodes(NodeKind kind, Token *token) {
     Node *node = node_new(kind, token);
     node->type = NULL;
-    node->nodes.capacity = 0;
     list_init(&node->nodes);
     return node;
 }
@@ -496,7 +495,7 @@ void parser_function(Parser *parser) {
 
     // Function
     if (current()->kind == TOKEN_LPAREN) {
-        Function *function = malloc(sizeof(Function));
+        Function *function = calloc(1, sizeof(Function));
         list_add(&parser->program->functions, function);
         parser->current_function = function;
 
@@ -504,25 +503,22 @@ void parser_function(Parser *parser) {
         function->name = name;
         function->is_leaf = true;
 
-        function->arguments.capacity = 0;
         list_init(&function->arguments);
 
-        function->locals.capacity = 0;
         list_init(&function->locals);
         function->locals_size = 0;
 
-        function->nodes.capacity = 0;
         list_init(&function->nodes);
 
         parser_eat(parser, TOKEN_LPAREN);
         if (current()->kind != TOKEN_RPAREN) {
             for (;;) {
-                Argument *argument = malloc(sizeof(Argument));
+                Argument *argument = calloc(1, sizeof(Argument));
                 argument->type = parser_type(parser);
                 argument->name = current()->string;
                 list_add(&function->arguments, argument);
 
-                Local *local = malloc(sizeof(Local));
+                Local *local = calloc(1, sizeof(Local));
                 local->name = argument->name;
                 local->type = argument->type;
                 list_add(&function->locals, local);
@@ -561,7 +557,7 @@ void parser_function(Parser *parser) {
         // Create global when it doesn't exists
         Global *global = program_find_global(parser->program, name);
         if (global == NULL) {
-            global = malloc(sizeof(Global));
+            global = calloc(1, sizeof(Global));
             global->type = global_type;
             global->name = name;
             global->init_data = NULL;
@@ -724,7 +720,7 @@ Node *parser_declarations(Parser *parser) {
             // Create local when it doesn't exists
             Local *local = function_find_local(parser->current_function, name);
             if (local == NULL) {
-                local = malloc(sizeof(Local));
+                local = calloc(1, sizeof(Local));
                 local->name = name;
                 local->type = local_type;
                 list_add(&parser->current_function->locals, local);
@@ -1081,7 +1077,7 @@ Node *parser_primary(Parser *parser) {
 
     if (token->kind == TOKEN_STRING) {
         // Create new string global
-        Global *global = malloc(sizeof(Global));
+        Global *global = calloc(1, sizeof(Global));
         global->type = type_new_array(type_new_integer(1, true), strlen(token->string) + 1);
         global->name = string_format("STR%zu", parser->program->strings_count++);
         global->init_data = token->string;

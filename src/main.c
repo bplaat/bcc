@@ -22,12 +22,11 @@ int main(int argc, char **argv) {
     // Parse arguments
     char *path = NULL;
     FILE *file = NULL;
+    char *text = NULL;
     bool debug = false;
-#ifdef __x86_64__
     Arch arch = ARCH_X86_64;
-#endif
 #ifdef __aarch64__
-    Arch arch = ARCH_ARM64;
+    arch = ARCH_ARM64;
 #endif
     for (int32_t i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--debug")) {
@@ -46,6 +45,13 @@ int main(int argc, char **argv) {
             continue;
         }
 
+        if (!strcmp(argv[i], "-i") || !strcmp(argv[i], "--inline")) {
+            i++;
+            path = "./inline";
+            text = argv[i];
+            continue;
+        }
+
         if (!strcmp(argv[i], "-")) {
             path = "./stdin";
             file = stdin;
@@ -55,10 +61,12 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Read input
-    if (file == NULL) return EXIT_FAILURE;
-    char *text = file_read(file);
-    fclose(file);
+    // Read input file
+    if (text == NULL) {
+        if (file == NULL) return EXIT_FAILURE;
+        text = file_read(file);
+        fclose(file);
+    }
 
     // Create program
     Program program = {.arch = arch};
