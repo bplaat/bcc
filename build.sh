@@ -40,7 +40,7 @@ assert() {
 
     # Compile and run for arm64
     if [ -e "./bcc-arm64" ]; then
-        echo -e "$input" | ./bcc-arm64 $(find stdlib -name "*.c") -
+        echo "$input" | ./bcc-arm64 $(find stdlib -name "*.c") -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
