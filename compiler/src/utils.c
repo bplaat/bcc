@@ -49,6 +49,7 @@ char *file_read(FILE *file) {
                 buffer = realloc(buffer, capacity);
             }
         }
+        *c = '\0';
         return buffer;
     }
 
