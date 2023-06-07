@@ -29,6 +29,7 @@ typedef enum TokenKind {
     TOKEN_VARIABLE,
     TOKEN_STRING,
 
+    TOKEN_EXTERN,
     TOKEN_TYPE_BEGIN,
     TOKEN_CHAR,
     TOKEN_SHORT,

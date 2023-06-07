@@ -1,16 +1,18 @@
 #!/bin/sh
 # ./build.sh      | Build bcc
 # ./build.sh test | Build and run tests
-# For now only works on macOS and Linux
 
 if [ "$(uname -s)" = Darwin ]; then
-    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
+    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
     if [ "$(arch)" = arm64 ]; then
-        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-arm64 || exit
+        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-arm64 || exit
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
+    gcc -g -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler -name "*.c") -ldl -o bcc-x86_64 || exit
+fi
+if [ "$(uname -o)" = Msys ]; then
+    gcc -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
 fi
 
 # Function that runs a test
@@ -20,13 +22,17 @@ assert() {
 
     # Compile and run for x86_64
     if [ -e "./bcc-x86_64" ]; then
-        echo "$input" | ./bcc-x86_64 -
+        if [ "$(uname -o)" = Msys ]; then
+            echo -e "$input" | ./bcc-x86_64 $(find stdlib -name "*.c") -
+        else
+            echo "$input" | ./bcc-x86_64 $(find stdlib -name "*.c") -
+        fi
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-x86_64 -d -
+            echo "$input" | ./bcc-x86_64 -d $(find stdlib -name "*.c") -
             echo "Arch: x86_64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -34,13 +40,13 @@ assert() {
 
     # Compile and run for arm64
     if [ -e "./bcc-arm64" ]; then
-        echo "$input" | ./bcc-arm64 -
+        echo -e "$input" | ./bcc-arm64 $(find stdlib -name "*.c") -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-arm64 -d -
+            echo "$input" | ./bcc-arm64 -d $(find stdlib -name "*.c") -
             echo "Arch: arm64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -91,8 +97,8 @@ if [ "$1" = "test" ]; then
     assert 1 "int main() { return 0 || 1; }"
     assert 0 "int main() { return 0 || 0; }"
 
-    assert 56 "int main() { return 56u; }"
-    assert 40 "long main() { return 40ull; }"
+    assert 56 "unsigned int main() { return 56u; }"
+    assert 40 "unsigned long main() { return 40ull; }"
     assert 97 "char main() { return 'a'; }"
     assert 53 "char main() { return '0' + 5; }"
 
@@ -135,7 +141,7 @@ if [ "$1" = "test" ]; then
     assert 5 "int main() { int x=3; int *y=&x; *y=5; return x; }"
     assert 7 "int main() { int x=3; int y=5; *(&x+1)=7; return y; }"
     assert 7 "int main() { int x=3; int y=5; *(&y-2+1)=7; return x; }"
-    assert 5 "int main() { int x=3; return (&x+2)-&x+3; }"
+    assert 5 "unsigned long main() { int x=3; return (&x+2)-&x+3; }"
 
     assert 3 "int main() { int x[2]; int *y=&x; *y=3; return *x; }"
     assert 3 "int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *x; }"
@@ -149,12 +155,13 @@ if [ "$1" = "test" ]; then
     assert 4 "int main() { int x[2][3]; int *y=x; *(y+4)=4; return *(*(x+1)+1); }"
     assert 5 "int main() { int x[2][3]; int *y=x; *(y+5)=5; return *(*(x+1)+2); }"
 
-    assert 4 "int main() { int x=3; return sizeof x; }"
-    assert 2 "int main() { int x=3; return sizeof(x) - 2; }"
-    assert 12 "int main() { int *x=3; return sizeof x + 4; }"
-    assert 16 "int main() { int x[4]; return sizeof x; }"
-    assert 32 "int main() { int *x[4]; return sizeof x; }"
-    assert 32 "int main() { int x[4][2]; return sizeof x; }"
+    assert 4 "unsigned long main() { int x=3; return sizeof x; }"
+    assert 2 "unsigned long main() { int x=3; return sizeof(x) - 2; }"
+    assert 12 "unsigned long main() { int *x=3; return sizeof x + 4; }"
+    assert 16 "unsigned long main() { int x[4]; return sizeof x; }"
+    assert 32 "unsigned long main() { int *x[4]; return sizeof x; }"
+    assert 32 "unsigned long main() { int x[4][2]; return sizeof x; }"
+
     assert 6 "int main() { int x = 10; return x > 5 ? 6 : 7; }"
     assert 32 "int main() { int x = 7 < 4 ? 45 : 32; return x; }"
 
@@ -188,42 +195,51 @@ if [ "$1" = "test" ]; then
     assert 1 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[1]; }"
     assert 2 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[2]; }"
     assert 3 "int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[3]; }"
-    assert 4 "int x; int main() { return sizeof(x); }"
-    assert 16 "int x[4]; int main() { return sizeof(x); }"
+    assert 4 "int x; unsigned long main() { return sizeof(x); }"
+    assert 16 "int x[4]; unsigned long main() { return sizeof(x); }"
 
-    assert 0 'int main() { return ""[0]; }'
-    assert 1 'int main() { return sizeof(""); }'
-    assert 97 'int main() { return "abc"[0]; }'
-    assert 98 'int main() { return "abc"[1]; }'
-    assert 99 'int main() { return "abc"[2]; }'
-    assert 0 'int main() { return "abc"[3]; }'
-    assert 4 'int main() { return sizeof("abc"); }'
+    assert 0 'char main() { return ""[0]; }'
+    assert 1 'unsigned long main() { return sizeof(""); }'
+    assert 97 'char main() { return "abc"[0]; }'
+    assert 98 'char main() { return "abc"[1]; }'
+    assert 99 'char main() { return "abc"[2]; }'
+    assert 0 'char main() { return "abc"[3]; }'
+    assert 4 'unsigned long main() { return sizeof("abc"); }'
 
-    assert 7 "int main() { return '\\a'; }"
-    assert 7 'int main() { return "\\a"[0]; }'
-    assert 8 'int main() { return "\\b"[0]; }'
-    assert 9 'int main() { return "\\t"[0]; }'
-    assert 10 'int main() { return "\\n"[0]; }'
-    assert 11 'int main() { return "\\v"[0]; }'
-    assert 12 'int main() { return "\\f"[0]; }'
-    assert 13 'int main() { return "\\r"[0]; }'
-    assert 27 'int main() { return "\\e"[0]; }'
-    assert 106 'int main() { return "\\j"[0]; }'
-    assert 107 'int main() { return "\\k"[0]; }'
-    assert 108 'int main() { return "\\l"[0]; }'
-    assert 7 'int main() { return "\\ax\\ny"[0]; }'
-    assert 120 'int main() { return "\\ax\\ny"[1]; }'
-    assert 10 'int main() { return "\\ax\\ny"[2]; }'
-    assert 121 'int main() { return "\\ax\\ny"[3]; }'
-    assert 0 'int main() { return "\\0"[0]; }'
-    assert 16 'int main() { return "\\20"[0]; }'
-    assert 65 'int main() { return "\\101"[0]; }'
-    assert 104 'int main() { return "\\150"[0]; }'
-    assert 104 "int main() { return '\\150'; }"
-    assert 0 'int main() { return "\\x00"[0]; }'
-    assert 119 'int main() { return "\\x77"[0]; }'
-    assert 165 'int main() { return "\\xA5"[0]; }'
-    assert 255 'int main() { return "\\x00ff"[0]; }'
+    assert 7 "char main() { return '\\a'; }"
+    assert 7 'char main() { return "\\a"[0]; }'
+    assert 8 'char main() { return "\\b"[0]; }'
+    assert 9 'char main() { return "\\t"[0]; }'
+    assert 10 'char main() { return "\\n"[0]; }'
+    assert 11 'char main() { return "\\v"[0]; }'
+    assert 12 'char main() { return "\\f"[0]; }'
+    assert 13 'char main() { return "\\r"[0]; }'
+    assert 27 'char main() { return "\\e"[0]; }'
+    assert 106 'char main() { return "\\j"[0]; }'
+    assert 107 'char main() { return "\\k"[0]; }'
+    assert 108 'char main() { return "\\l"[0]; }'
+    assert 7 'char main() { return "\\ax\\ny"[0]; }'
+    assert 120 'char main() { return "\\ax\\ny"[1]; }'
+    assert 10 'char main() { return "\\ax\\ny"[2]; }'
+    assert 121 'char main() { return "\\ax\\ny"[3]; }'
+    assert 0 'char main() { return "\\0"[0]; }'
+    assert 16 'char main() { return "\\20"[0]; }'
+    assert 65 'char main() { return "\\101"[0]; }'
+    assert 104 'char main() { return "\\150"[0]; }'
+    assert 104 "char main() { return '\\150'; }"
+    assert 0 'char main() { return "\\x00"[0]; }'
+    assert 119 'char main() { return "\\x77"[0]; }'
+    assert 165 'char main() { return "\\xA5"[0]; }'
+    assert 255 'char main() { return "\\x00ff"[0]; }'
+
+    assert 32 "int ret32(); int main() { return ret32(); } int ret32() { return 32; }"
+    assert 7 "int add2(int x, int y); int main() { return add2(3,4); } int add2(int x, int y) { return x+y; }"
+    assert 1 "int sub2(int x, int y); int main() { return sub2(4,3); } int sub2(int x, int y) { return x-y; }"
+
+    assert 3 'unsigned long main() { return strlen("Hoi"); }'
+    assert 1 'char main() { return !strcmp("Hoi", "Hoi"); }'
+    assert 0 'char main() { return !strcmp("Hoi", "Hoi2"); }'
+    assert 0 'int main() { puts("Hello Bassie!"); return 0; }'
 
     # assert 98 '
     #     unsigned int hash(char *key) {

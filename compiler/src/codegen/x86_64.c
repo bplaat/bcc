@@ -61,9 +61,9 @@ void codegen_func_x86_64(Codegen *codegen, Function *function) {
     }
 
     // Write arguments to locals
-    for (int32_t i = function->arguments.size - 1; i >= 0; i--) {
-        Argument *argument = function->arguments.items[i];
-        Local *local = function_find_local(function, argument->name);
+    for (int32_t i = function->arguments_names.size - 1; i >= 0; i--) {
+        char *argument_name = function->arguments_names.items[i];
+        Local *local = function_find_local(function, argument_name);
 
         if (i == 0) {
             if (local->type->size == 1) inst3(0x40, 0x88, 0xbd);  // mov byte [rbp - imm], dil

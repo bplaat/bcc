@@ -1,13 +1,12 @@
 #include "object.h"
 
-#include <stdint.h>
 #include <stdlib.h>
 
 #include "utils.h"
 
 // Section
 Section *section_new(size_t size) {
-    Section *section = malloc(sizeof(Section));
+    Section *section = calloc(1, sizeof(Section));
     section->size = size;
 #ifdef _WIN32
     section->data = VirtualAlloc(NULL, size, MEM_COMMIT | MEM_RESERVE, SECTION_READWRITE);

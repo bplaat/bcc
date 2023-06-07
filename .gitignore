@@ -1,4 +1,5 @@
 .DS_Store
 bcc
 bcc-x86_64
+bcc-x86_64.exe
 bcc-arm64
