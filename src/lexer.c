@@ -9,7 +9,7 @@
 
 // Source
 Source *source_new(char *path, char *text) {
-    Source *source = malloc(sizeof(Source));
+    Source *source = calloc(1, sizeof(Source));
     source->path = strdup(path);
     source->text = strdup(text);
 
