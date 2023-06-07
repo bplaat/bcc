@@ -3,16 +3,16 @@
 # ./build.sh test | Build and run tests
 
 if [ "$(uname -s)" = Darwin ]; then
-    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
+    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-x86_64 || exit
     if [ "$(arch)" = arm64 ]; then
-        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-arm64 || exit
+        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-arm64 || exit
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-x86_64 || exit
 fi
 if [ "$(uname -o)" = Msys ]; then
-    gcc -Wall -Wextra -Wpedantic --std=c11 -Iinclude $(find src -name "*.c") -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-x86_64 || exit
 fi
 
 # Function that runs a test
