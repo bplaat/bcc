@@ -3,16 +3,16 @@
 # ./build.sh test | Build and run tests
 
 if [ "$(uname -s)" = Darwin ]; then
-    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-x86_64 || exit
+    clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
     if [ "$(arch)" = arm64 ]; then
-        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-arm64 || exit
+        clang --target=arm64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-arm64 || exit
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-x86_64 || exit
+    gcc -g -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
 fi
 if [ "$(uname -o)" = Msys ]; then
-    gcc -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler/src -name "*.c") -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
 fi
 
 # Function that runs a test
@@ -23,16 +23,16 @@ assert() {
     # Compile and run for x86_64
     if [ -e "./bcc-x86_64" ]; then
         if [ "$(uname -o)" = Msys ]; then
-            echo -e "$input" | ./bcc-x86_64 -
+            echo -e "$input" | ./bcc-x86_64 $(find stdlib -name "*.c") -
         else
-            echo "$input" | ./bcc-x86_64 -
+            echo "$input" | ./bcc-x86_64 $(find stdlib -name "*.c") -
         fi
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-x86_64 -d -
+            echo "$input" | ./bcc-x86_64 -d $(find stdlib -name "*.c") -
             echo "Arch: x86_64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -40,13 +40,13 @@ assert() {
 
     # Compile and run for arm64
     if [ -e "./bcc-arm64" ]; then
-        echo -e "$input" | ./bcc-arm64 -
+        echo -e "$input" | ./bcc-arm64 $(find stdlib -name "*.c") -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-arm64 -d -
+            echo "$input" | ./bcc-arm64 -d $(find stdlib -name "*.c") -
             echo "Arch: arm64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -141,7 +141,7 @@ if [ "$1" = "test" ]; then
     assert 5 "int main() { int x=3; int *y=&x; *y=5; return x; }"
     assert 7 "int main() { int x=3; int y=5; *(&x+1)=7; return y; }"
     assert 7 "int main() { int x=3; int y=5; *(&y-2+1)=7; return x; }"
-    assert 5 "int main() { int x=3; return (&x+2)-&x+3; }"
+    assert 5 "unsigned long main() { int x=3; return (&x+2)-&x+3; }"
 
     assert 3 "int main() { int x[2]; int *y=&x; *y=3; return *x; }"
     assert 3 "int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *x; }"
@@ -235,6 +235,10 @@ if [ "$1" = "test" ]; then
     assert 32 "int ret32(); int main() { return ret32(); } int ret32() { return 32; }"
     assert 7 "int add2(int x, int y); int main() { return add2(3,4); } int add2(int x, int y) { return x+y; }"
     assert 1 "int sub2(int x, int y); int main() { return sub2(4,3); } int sub2(int x, int y) { return x-y; }"
+
+    assert 3 'unsigned long main() { return strlen("Hoi"); }'
+    # assert 1 'char main() { return !strcmp("Hoi", "Hoi"); }'
+    # assert 0 'char main() { return !strcmp("Hoi", "Hoi2"); }'
 
     # assert 98 '
     #     unsigned int hash(char *key) {

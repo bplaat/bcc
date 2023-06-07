@@ -468,7 +468,7 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && (rhs->type->kind == TYPE_POINTER || rhs->type->kind == TYPE_ARRAY)) {
         Node *node = parser_div_node(parser, token, node_new_operation(NODE_SUB, token, lhs, rhs),
                                      node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size));
-        node->type = node->type->base;
+        node->type = type_new_integer(8, false);
         return node;
     }
     if ((lhs->type->kind == TYPE_POINTER || lhs->type->kind == TYPE_ARRAY) && rhs->type->kind == TYPE_INTEGER) {
