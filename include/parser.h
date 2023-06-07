@@ -14,14 +14,21 @@ typedef enum TypeKind {
     TYPE_INTEGER,
     TYPE_POINTER,
     TYPE_ARRAY,
+    TYPE_FUNCTION,
 } TypeKind;
 
 typedef struct Type Type;
 struct Type {
     TypeKind kind;
-    bool is_signed;
     size_t size;
-    Type *base;
+    union {
+        bool is_signed;
+        Type *base;
+        struct {
+            Type *return_type;
+            List arguments_types;
+        };
+    };
 };
 
 Type *type_new(TypeKind kind, size_t size);
@@ -31,6 +38,10 @@ Type *type_new_integer(size_t size, bool is_signed);
 Type *type_new_pointer(Type *base);
 
 Type *type_new_array(Type *base, size_t size);
+
+Type *type_new_function(Type *return_type);
+
+bool type_equals(Type *lhs, Type *rhs);
 
 void type_dump(FILE *f, Type *type);
 
@@ -64,11 +75,6 @@ struct Global {
 };
 
 // Function
-typedef struct Argument {
-    char *name;
-    Type *type;
-} Argument;
-
 typedef struct Local {
     char *name;
     Type *type;
@@ -77,9 +83,10 @@ typedef struct Local {
 
 struct Function {
     char *name;
-    Type *return_type;
+    Type *type;
     bool is_leaf;
-    List arguments;
+    bool is_implemented;
+    List arguments_names;
     List locals;
     size_t locals_size;
     List nodes;
