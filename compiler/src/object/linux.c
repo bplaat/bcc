@@ -10,6 +10,8 @@ void object_linx_out(FILE *f, Program *program) {
     size_t origin = 0x0000000000400000;
     size_t alignment = 0x1000;
 
+    // TODO: add _start sycall 60 ; exit
+
     // Create program header
     ELF64Program program_header[] = {
         // .text

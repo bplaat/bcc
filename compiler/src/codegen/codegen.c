@@ -4,31 +4,33 @@
 
 #include "utils/math.h"
 
-void codegen(Program *program) {
+void codegen(bool is_running, Program *program) {
     Codegen codegen = {
         .program = program,
         .code_byte_ptr = (uint8_t *)program->text_section->data,
         .code_word_ptr = (uint32_t *)program->text_section->data,
     };
 
-// Link extern functions to clib library
+    // When direct running link extern clib functions to system C library
+    if (is_running) {
 #ifdef _WIN32
-    void *handle = LoadLibraryA("msvcrt.dll");
+        void *handle = LoadLibraryA("msvcrt.dll");
 #endif
 #ifdef __APPLE__
-    void *handle = dlopen("libSystem.B.dylib", RTLD_LAZY);
+        void *handle = dlopen("libSystem.B.dylib", RTLD_LAZY);
 #endif
 #ifdef __linux__
-    void *handle = dlopen("libc.so.6", RTLD_LAZY);
+        void *handle = dlopen("libc.so.6", RTLD_LAZY);
 #endif
-    for (size_t i = 0; i < program->functions.size; i++) {
-        Function *function = program->functions.items[i];
-        if (function->is_extern) {
+        for (size_t i = 0; i < program->functions.size; i++) {
+            Function *function = program->functions.items[i];
+            if (function->is_extern) {
 #ifdef _WIN32
-            function->address = GetProcAddress(handle, function->name);
+                function->address = GetProcAddress(handle, function->name);
 #else
-            function->address = dlsym(handle, function->name);
+                function->address = dlsym(handle, function->name);
 #endif
+            }
         }
     }
 

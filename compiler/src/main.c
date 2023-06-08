@@ -111,7 +111,10 @@ int main(int argc, char **argv) {
     }
 
     // Create program
-    Program program = {.arch = arch};
+    Program program = {
+        .system = system,
+        .arch = arch,
+    };
     list_init(&program.globals);
     list_init(&program.functions);
 
@@ -149,7 +152,7 @@ int main(int argc, char **argv) {
     // Codegen program
     program.text_section = section_new(4 * 1024);
     program.data_section = section_new(4 * 1024);
-    codegen(&program);
+    codegen(run, &program);
 
     // Run program
     if (run) {

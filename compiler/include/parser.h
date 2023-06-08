@@ -50,11 +50,13 @@ typedef struct Global Global;      // Forward define
 typedef struct Function Function;  // Forward define
 
 typedef struct Program {
+    System system;
     Arch arch;
     List globals;
     size_t globals_size;
     size_t strings_count;
     List functions;
+
     Section *text_section;
     Section *data_section;
     void *main_func;

@@ -1,6 +1,9 @@
 #ifndef CODEGEN_H
 #define CODEGEN_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "parser.h"
 #include "utils/utils.h"
 
@@ -20,7 +23,7 @@ typedef struct Codegen {
     Function *current_function;
 } Codegen;
 
-void codegen(Program *program);
+void codegen(bool is_running, Program *program);
 
 // x86_64
 void codegen_func_x86_64(Codegen *codegen, Function *function);
