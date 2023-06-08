@@ -4,6 +4,18 @@
 #include "parser.h"
 #include "utils.h"
 
+// Dlopen win32 functions
+#ifdef _WIN32
+
+extern void *LoadLibraryA(char *lpLibFileName);
+extern void *GetProcAddress(void *hModule, char *lpProcName);
+
+#else
+
+#include <dlfcn.h>
+
+#endif
+
 // Codegen
 typedef struct Codegen {
     Program *program;

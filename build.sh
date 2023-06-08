@@ -9,7 +9,7 @@ if [ "$(uname -s)" = Darwin ]; then
     fi
 fi
 if [ "$(uname -s)" = Linux ]; then
-    gcc -g -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler -name "*.c") -ldl -o bcc-x86_64 || exit
+    gcc -Wall -Wextra -Wpedantic --std=gnu11 -Icompiler/include $(find compiler -name "*.c") -ldl -o bcc-x86_64 || exit
 fi
 if [ "$(uname -o)" = Msys ]; then
     gcc -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
@@ -23,16 +23,16 @@ assert() {
     # Compile and run for x86_64
     if [ -e "./bcc-x86_64" ]; then
         if [ "$(uname -o)" = Msys ]; then
-            echo -e "$input" | ./bcc-x86_64 $(find stdlib -name "*.c") -
+            echo -e "$input" | ./bcc-x86_64 $(find stdlib -name "*.h") -
         else
-            echo "$input" | ./bcc-x86_64 $(find stdlib -name "*.c") -
+            echo "$input" | ./bcc-x86_64 $(find stdlib -name "*.h") -
         fi
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-x86_64 -d $(find stdlib -name "*.c") -
+            echo "$input" | ./bcc-x86_64 -d $(find stdlib -name "*.h") -
             echo "Arch: x86_64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -40,13 +40,13 @@ assert() {
 
     # Compile and run for arm64
     if [ -e "./bcc-arm64" ]; then
-        echo "$input" | ./bcc-arm64 $(find stdlib -name "*.c") -
+        echo "$input" | ./bcc-arm64 $(find stdlib -name "*.h") -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-arm64 -d $(find stdlib -name "*.c") -
+            echo "$input" | ./bcc-arm64 -d $(find stdlib -name "*.h") -
             echo "Arch: arm64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -239,23 +239,7 @@ if [ "$1" = "test" ]; then
     assert 3 'unsigned long main() { return strlen("Hoi"); }'
     assert 1 'char main() { return !strcmp("Hoi", "Hoi"); }'
     assert 0 'char main() { return !strcmp("Hoi", "Hoi2"); }'
-    assert 0 'int main() { puts("Hello Bassie!"); return 0; }'
-
-    # assert 98 '
-    #     unsigned int hash(char *key) {
-    #         unsigned int hash = 2166136261;
-    #         while (*key) {
-    #             hash ^= *key;
-    #             key += 4;
-    #             hash *= 16777619;
-    #         }
-    #         return hash;
-    #     }
-    #     int main() {
-    #         char *name = "Bastiaan";
-    #         return hash(name);
-    #     }
-    # '
+    assert 0 'int main() { puts("Hello Bassie C Compiler!"); return 0; }'
 
     echo "[OK] All tests pass"
 fi

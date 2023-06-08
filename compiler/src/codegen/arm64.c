@@ -20,7 +20,7 @@
         codegen->code_word_ptr++;       \
     }
 
-static void codgen_arm64_imm64(Codegen *codegen, int32_t reg, int64_t imm) {
+static void codegen_arm64_imm64(Codegen *codegen, int32_t reg, int64_t imm) {
     inst(0xD2800000 | ((imm & 0xffff) << 5) | (reg & 31));                                    // mov reg, imm
     if (imm > 0xffff) inst(0xF2A00000 | (((imm >> 16) & 0xffff) << 5) | (reg & 31));          // movk reg, imm, lsl 16
     if (imm > 0xffffffff) inst(0xF2C00000 | (((imm >> 32) & 0xffff) << 5) | (reg & 31));      // movk reg, imm, lsl 32
@@ -323,7 +323,7 @@ void codegen_expr_arm64(Codegen *codegen, Node *node) {
     }
 
     if (node->kind == NODE_INTEGER) {
-        codgen_arm64_imm64(codegen, x0, node->integer);
+        codegen_arm64_imm64(codegen, x0, node->integer);
         return;
     }
 
@@ -340,7 +340,7 @@ void codegen_expr_arm64(Codegen *codegen, Node *node) {
 
         int64_t distance = (uint32_t *)node->function->address - codegen->code_word_ptr;
         if (distance < -0x3ffffff || distance > 0x3ffffff) {
-            codgen_arm64_imm64(codegen, x6, (uint64_t)node->function->address);
+            codegen_arm64_imm64(codegen, x6, (uint64_t)node->function->address);
             inst(0xD63F0000 | ((x6 & 31) << 5));  // blr x6
         } else {
             inst(0x94000000 | ((distance)&0x7ffffff));  // bl function

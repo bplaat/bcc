@@ -65,6 +65,21 @@ void codegen_func_x86_64(Codegen *codegen, Function *function) {
         char *argument_name = function->arguments_names.items[i];
         Local *local = function_find_local(function, argument_name);
 
+#ifdef _WIN32
+        if (i == 0) {
+            if (local->type->size == 1) inst2(0x88, 0x8d);        // mov byte [rbp - imm], cl
+            if (local->type->size == 2) inst3(0x66, 0x89, 0x8d);  // mov word [rbp - imm], cx
+            if (local->type->size == 4) inst2(0x89, 0x8d);        // mov dword [rbp - imm], ecx
+            if (local->type->size == 8) inst3(0x48, 0x89, 0x8d);  // mov qword [rbp - imm], rcx
+        }
+        if (i == 1) {
+            if (local->type->size == 1) inst2(0x88, 0x95);        // mov byte [rbp - imm], dl
+            if (local->type->size == 2) inst3(0x66, 0x89, 0x95);  // mov word [rbp - imm], dx
+            if (local->type->size == 4) inst2(0x89, 0x95);        // mov dword [rbp - imm], edx
+            if (local->type->size == 8) inst3(0x48, 0x89, 0x95);  // mov qword [rbp - imm], rdx
+        }
+        // TODO r8, r9
+#else
         if (i == 0) {
             if (local->type->size == 1) inst3(0x40, 0x88, 0xbd);  // mov byte [rbp - imm], dil
             if (local->type->size == 2) inst3(0x66, 0x89, 0xbd);  // mov word [rbp - imm], di
@@ -89,6 +104,7 @@ void codegen_func_x86_64(Codegen *codegen, Function *function) {
             if (local->type->size == 4) inst2(0x89, 0x8d);        // mov dword [rbp - imm], ecx
             if (local->type->size == 8) inst3(0x48, 0x89, 0x8d);  // mov qword [rbp - imm], rcx
         }
+#endif
         imm32(-local->offset);
     }
 
@@ -370,11 +386,22 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
             Node *argument = node->nodes.items[i];
             codegen_expr_x86_64(codegen, argument);
 
+#ifdef _WIN32
+            if (i == 0) inst3(0x48, 0x89, 0xc1);  // mov rcx, rax
+            if (i == 1) inst3(0x48, 0x89, 0xc2);  // mov rdx, rax
+            if (i == 2) inst3(0x49, 0x89, 0xc0);  // mov r8, rax
+            if (i == 3) inst3(0x49, 0x89, 0xc1);  // mov r9, rax
+#else
             if (i == 0) inst3(0x48, 0x89, 0xc7);  // mov rdi, rax
             if (i == 1) inst3(0x48, 0x89, 0xc6);  // mov rsi, rax
             if (i == 2) inst3(0x48, 0x89, 0xc2);  // mov rdx, rax
             if (i == 3) inst3(0x48, 0x89, 0xc1);  // mov rcx, rax
+#endif
         }
+
+#ifdef _WIN32
+    inst4(0x48, 0x83, 0xec, 0x20);  // sub rsp, 32
+#endif
 
         int64_t distance = (uint8_t *)node->function->address - (codegen->code_byte_ptr + 1 + sizeof(int32_t));
         if (distance < INT32_MIN || distance > INT32_MAX) {
@@ -385,6 +412,10 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
             inst1(0xe8);  // call function
             imm32(distance);
         }
+
+#ifdef _WIN32
+    inst4(0x48, 0x83, 0xc4, 0x20);  // add rsp, 32
+#endif
         return;
     }
 
