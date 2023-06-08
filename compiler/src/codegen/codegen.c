@@ -2,10 +2,6 @@
 
 #include <string.h>
 
-#if defined(__linux__) || defined(__APPLE__)
-#include <dlfcn.h>
-#endif
-
 void codegen(Program *program) {
     Codegen codegen = {
         .program = program,
@@ -13,19 +9,26 @@ void codegen(Program *program) {
         .code_word_ptr = (uint32_t *)program->text_section->data,
     };
 
-// Link extern functions
-#if defined(__linux__) || defined(__APPLE__)
-#ifdef __linux__
-    void *handle = dlopen("libc.so.6", RTLD_LAZY);
+// Link extern functions to clib library
+#ifdef _WIN32
+    void *handle = LoadLibraryA("msvcrt.dll");
 #endif
 #ifdef __APPLE__
     void *handle = dlopen("libSystem.B.dylib", RTLD_LAZY);
 #endif
+#ifdef __linux__
+    void *handle = dlopen("libc.so.6", RTLD_LAZY);
+#endif
     for (size_t i = 0; i < program->functions.size; i++) {
         Function *function = program->functions.items[i];
-        if (function->is_extern) function->address = dlsym(handle, function->name);
-    }
+        if (function->is_extern) {
+#ifdef _WIN32
+            function->address = GetProcAddress(handle, function->name);
+#else
+            function->address = dlsym(handle, function->name);
 #endif
+        }
+    }
 
     // Fill globals in data section
     uint8_t *global_address = program->data_section->data;
