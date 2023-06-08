@@ -1,6 +1,10 @@
 #include "object/object.h"
 
 #include <stdlib.h>
+#include <string.h>
+#ifndef _WIN32
+#include <sys/stat.h>
+#endif
 
 #include "object/elf.h"
 #include "utils.h"
@@ -13,16 +17,10 @@ void object_out(ObjectKind kind, char *path) {
         size_t origin = 0x0000000000400000;
         size_t alignment = 0x1000;
 
-        uint8_t section_text[0x1000] = {0};
-        size_t section_text_size = 0;
-        section_text[section_text_size++] = 0xb8;
-        section_text[section_text_size++] = 0x01;
-        section_text[section_text_size++] = 0x00;
-        section_text[section_text_size++] = 0x00;
-        section_text[section_text_size++] = 0x00;
-        section_text[section_text_size++] = 0xc3;
+        uint8_t section_text[0x1000] = { 0xBF, 0x45, 0x00, 0x00, 0x00, 0xB8, 0x3C, 0x00, 0x00, 0x00, 0x0F, 0x05 };
+        size_t section_text_size = 12;
 
-        uint8_t section_data[0x1000] = {0};
+        uint8_t section_data[0x1000];
         size_t section_data_size = 0;
         section_data[section_data_size++] = 'H';
         section_data[section_data_size++] = 'o';
@@ -38,8 +36,8 @@ void object_out(ObjectKind kind, char *path) {
                 .p_offset = alignment,
                 .p_vaddr = origin + alignment,
                 .p_paddr = origin + alignment,
-                .p_filesz = section_text_size,
-                .p_memsz = section_text_size,
+                .p_filesz = alignment,
+                .p_memsz = alignment,
                 .p_align = alignment,
             },
             // .data
@@ -49,8 +47,8 @@ void object_out(ObjectKind kind, char *path) {
                 .p_offset = alignment + alignment,
                 .p_vaddr = origin + alignment + alignment,
                 .p_paddr = origin + alignment + alignment,
-                .p_filesz = section_data_size,
-                .p_memsz = section_data_size,
+                .p_filesz = alignment,
+                .p_memsz = alignment,
                 .p_align = alignment,
             },
         };
@@ -82,6 +80,7 @@ void object_out(ObjectKind kind, char *path) {
                 .sh_type = SHT_STRTAB,
                 .sh_offset = alignment + alignment + alignment,
                 .sh_size = sizeof(section_names),
+                .sh_addralign = 1,
             },
         };
 
@@ -122,6 +121,11 @@ void object_out(ObjectKind kind, char *path) {
     }
 
     fclose(f);
+
+// Give file executable rights
+#ifndef _WIN32
+    chmod(path, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
+#endif
 }
 
 // Section
