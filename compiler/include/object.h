@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
+// Mmap win32 functions
 #ifdef _WIN32
 
 #define MEM_COMMIT 0x00001000
