@@ -7,18 +7,18 @@
 
 #include "lexer.h"
 
+// System
+typedef enum System {
+    SYSTEM_MACOS,
+    SYSTEM_LINUX,
+    SYSTEM_WINDOWS,
+} System;
+
 // Arch
 typedef enum Arch {
     ARCH_X86_64,
     ARCH_ARM64,
 } Arch;
-
-// Math
-size_t align(size_t size, size_t alignment);
-
-bool is_power_of_two(int64_t x);
-
-uint64_t log_two(uint64_t x);
 
 // Strdup pollyfill
 char *strdup(const char *str);

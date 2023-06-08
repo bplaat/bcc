@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "utils.h"
+#include "utils/utils.h"
 
 // Source
 Source *source_new(char *path, char *text) {

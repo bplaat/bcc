@@ -2,6 +2,8 @@
 # ./build.sh      | Build bcc
 # ./build.sh test | Build and run tests
 
+rm -rf .vscode
+
 if [ "$(uname -s)" = Darwin ]; then
     clang --target=x86_64-macos -Wall -Wextra -Wpedantic --std=c11 -Icompiler/include $(find compiler -name "*.c") -o bcc-x86_64 || exit
     if [ "$(arch)" = arm64 ]; then
@@ -23,16 +25,17 @@ assert() {
     # Compile and run for x86_64
     if [ -e "./bcc-x86_64" ]; then
         if [ "$(uname -o)" = Msys ]; then
-            echo -e "$input" | ./bcc-x86_64 $(find stdlib -name "*.h") -
+            echo -e "$input" | ./bcc-x86_64 -r $(find stdlib -name "*.h") -
         else
-            echo "$input" | ./bcc-x86_64 $(find stdlib -name "*.h") -
+            echo "$input" | ./bcc-x86_64 -r $(find stdlib -name "*.h") -
         fi
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-x86_64 -d $(find stdlib -name "*.h") -
+            echo "$input" | ./bcc-x86_64 -d $(find stdlib -name "*.h") - -o a.out
+            objdump -S -Mintel a.out
             echo "Arch: x86_64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -40,13 +43,14 @@ assert() {
 
     # Compile and run for arm64
     if [ -e "./bcc-arm64" ]; then
-        echo "$input" | ./bcc-arm64 $(find stdlib -name "*.h") -
+        echo "$input" | ./bcc-arm64 -r $(find stdlib -name "*.h") -
         actual=$?
         if [ $actual != "$expected" ]; then
             echo "[FAIL] Program:"
             echo "$input"
             echo "Dump:"
-            echo "$input" | ./bcc-arm64 -d $(find stdlib -name "*.h") -
+            echo "$input" | ./bcc-arm64 -d $(find stdlib -name "*.h") - -o a.out
+            objdump -S a.out
             echo "Arch: arm64 | Return: $actual | Correct: $expected"
             exit 1
         fi
@@ -240,6 +244,8 @@ if [ "$1" = "test" ]; then
     assert 1 'char main() { return !strcmp("Hoi", "Hoi"); }'
     assert 0 'char main() { return !strcmp("Hoi", "Hoi2"); }'
     assert 0 'int main() { puts("Hello Bassie C Compiler!"); return 0; }'
+
+    assert 0 'int main() { return 56; }'
 
     echo "[OK] All tests pass"
 fi

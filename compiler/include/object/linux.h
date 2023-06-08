@@ -1,5 +1,5 @@
-#ifndef ELF_H
-#define ELF_H
+#ifndef OBJECT_LINUX_H
+#define OBJECT_LINUX_H
 
 #include <stdint.h>
 

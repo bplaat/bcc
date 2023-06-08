@@ -1,6 +1,8 @@
-#include "codegen.h"
+#include "codegen/codegen.h"
 
 #include <string.h>
+
+#include "utils/math.h"
 
 void codegen(Program *program) {
     Codegen codegen = {

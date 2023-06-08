@@ -4,11 +4,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "object/object.h"
-#include "codegen.h"
+#include "codegen/codegen.h"
 #include "lexer.h"
+#include "object/object.h"
+#include "object/section.h"
 #include "parser.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 typedef int64_t (*JitFunc)(void);
 
@@ -26,20 +27,51 @@ int main(int argc, char **argv) {
     }
 
     // Parse arguments
+    bool run = false;
     bool debug = false;
+    char *output = "a.out";
+    List files = {0};
+    list_init(&files);
+
+    System system = SYSTEM_LINUX;
+#ifdef __APPLE__
+    system = SYSTEM_MACOS;
+#endif
+#ifdef _WIN32
+    system = SYSTEM_WINDOWS;
+#endif
+
     Arch arch = ARCH_X86_64;
 #ifdef __aarch64__
     arch = ARCH_ARM64;
 #endif
-    List files = {0};
-    list_init(&files);
+
     for (int32_t i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "-r") || !strcmp(argv[i], "--run")) {
+            run = true;
+            continue;
+        }
+
         if (!strcmp(argv[i], "-d") || !strcmp(argv[i], "--debug")) {
             debug = true;
             continue;
         }
 
-        if (!strcmp(argv[i], "-a") || !strcmp(argv[i], "--arch")) {
+        if (!strcmp(argv[i], "--os")) {
+            i++;
+            if (!strcmp(argv[i], "linux")) {
+                system = SYSTEM_LINUX;
+            }
+            if (!strcmp(argv[i], "macos")) {
+                system = SYSTEM_MACOS;
+            }
+            if (!strcmp(argv[i], "windows")) {
+                system = SYSTEM_WINDOWS;
+            }
+            continue;
+        }
+
+        if (!strcmp(argv[i], "--arch")) {
             i++;
             if (!strcmp(argv[i], "x86_64")) {
                 arch = ARCH_X86_64;
@@ -56,6 +88,12 @@ int main(int argc, char **argv) {
             file->path = "./inline";
             file->text = argv[i];
             list_add(&files, file);
+            continue;
+        }
+
+        if (!strcmp(argv[i], "-o") || !strcmp(argv[i], "--output")) {
+            i++;
+            output = argv[i];
             continue;
         }
 
@@ -105,7 +143,6 @@ int main(int argc, char **argv) {
         parser(&program, tokens, tokens_size);
     }
     if (debug) {
-        printf("\n");
         program_dump(stdout, &program);
     }
 
@@ -113,17 +150,14 @@ int main(int argc, char **argv) {
     program.text_section = section_new(4 * 1024);
     program.data_section = section_new(4 * 1024);
     codegen(&program);
-    if (debug) {
-        printf(".text:\n");
-        section_dump(stdout, program.text_section);
-        printf("\n.data:\n");
-        section_dump(stdout, program.data_section);
+
+    // Run program
+    if (run) {
+        section_make_executable(program.text_section);
+        return ((JitFunc)program.main_func)();
     }
 
-    // Output object
-    object_out(OBJECT_ELF, "a.out");
-
-    // Execute program
-    section_make_executable(program.text_section);
-    return ((JitFunc)program.main_func)();
+    // Output object file
+    object_out(output, system, &program);
+    return EXIT_SUCCESS;
 }

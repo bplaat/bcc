@@ -1,10 +1,10 @@
-#include "map.h"
+#include "utils/map.h"
 
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "utils.h"
+#include "utils/utils.h"
 
 static uint32_t map_hash(char *key) {
     uint32_t hash = 2166136261;

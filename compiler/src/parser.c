@@ -5,7 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "utils.h"
+#include "utils/math.h"
+#include "utils/utils.h"
 
 // Type
 Type *type_new(TypeKind kind, size_t size) {
