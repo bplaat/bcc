@@ -4,11 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "codegen.h"
+#include "codegen/codegen.h"
 #include "lexer.h"
 #include "object.h"
 #include "parser.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 typedef int64_t (*JitFunc)(void);
 
