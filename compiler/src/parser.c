@@ -367,6 +367,10 @@ void parser(Program *program, Token *tokens, size_t tokens_size) {
         .position = 0,
     };
     parser_program(&parser);
+
+    if (parser.has_errors) {
+        exit(EXIT_FAILURE);
+    }
 }
 
 #define current() (&parser->tokens[parser->position])
@@ -376,15 +380,16 @@ void parser_eat(Parser *parser, TokenKind token_kind) {
     if (token->kind == token_kind) {
         parser->position++;
     } else {
+        parser->has_errors = true;
         print_error(token, "Unexpected token: '%s' wanted '%s'", token_kind_to_string(token->kind), token_kind_to_string(token_kind));
-        exit(EXIT_FAILURE);
     }
 }
 
 Type *parser_type(Parser *parser) {
     if (current()->kind < TOKEN_TYPE_BEGIN && current()->kind > TOKEN_TYPE_END) {
+        parser->has_errors = true;
         print_error(current(), "Expected a type token");
-        exit(EXIT_FAILURE);
+        return type_new(TYPE_INTEGER, 0);
     }
 
     Type *type = type_new_integer(4, true);
@@ -458,8 +463,9 @@ Node *parser_add_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
                                   parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
     }
 
+    parser->has_errors = true;
     print_error(token, "Invalid add types");
-    exit(EXIT_FAILURE);
+    return node_new_nodes(NODE_NODES, token);
 }
 
 Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
@@ -481,8 +487,9 @@ Node *parser_sub_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
                                   parser_mul_node(parser, token, rhs, node_new_integer(token, lhs->type->size, lhs->type->is_signed, lhs->type->base->size)));
     }
 
+    parser->has_errors = true;
     print_error(token, "Invalid subtract types");
-    exit(EXIT_FAILURE);
+    return node_new_nodes(NODE_NODES, token);
 }
 
 Node *parser_mul_node(Parser *parser, Token *token, Node *lhs, Node *rhs) {
@@ -515,8 +522,9 @@ Node *parser_deref_node(Parser *parser, Token *token, Node *unary) {
     (void)parser;
     Node *node = node_new_unary(NODE_DEREF, token, unary);
     if (node->type->kind != TYPE_POINTER && node->type->kind != TYPE_ARRAY) {
+        parser->has_errors = true;
         print_error(token, "Type is not a pointer");
-        exit(EXIT_FAILURE);
+        return node_new_nodes(NODE_NODES, token);
     }
     node->type = node->type->base;
     return node;
@@ -584,16 +592,18 @@ void parser_function(Parser *parser) {
         } else {
             // Check if the function is not already implemented
             if (function->is_implemented) {
+                parser->has_errors = true;
                 print_error(token, "Can't reimplement a function");
-                exit(EXIT_FAILURE);
+                return;
             }
             function->is_implemented = true;
 
             // When a function already has a type check if it is the same
             if (function->type) {
                 if (!type_equals(function->type, function_type)) {
+                    parser->has_errors = true;
                     print_error(token, "Function implementation has the wrong type");
-                    exit(EXIT_FAILURE);
+                    return;
                 }
             } else {
                 function->type = function_type;
@@ -644,8 +654,9 @@ void parser_function(Parser *parser) {
             list_add(&parser->program->globals, global);
             parser->program->globals_size += global->type->size;
         } else {
+            parser->has_errors = true;
             print_error(token, "[TMP] Can't redefine variable: '%s'", name);
-            exit(EXIT_FAILURE);
+            return;
         }
 
         if (current()->kind == TOKEN_COMMA) {
@@ -775,8 +786,9 @@ Node *parser_statement(Parser *parser) {
 
         // Check return type
         if (!type_equals(node->type, parser->current_function->type->return_type)) {
+            parser->has_errors = true;
             print_error(token, "Wrong return type");
-            exit(EXIT_FAILURE);
+            return node_new_nodes(NODE_NODES, token);
         }
         return node;
     }
@@ -805,8 +817,9 @@ Node *parser_declarations(Parser *parser) {
                 list_add(&parser->current_function->locals, local);
                 parser->current_function->locals_size += local->type->size;
             } else {
+                parser->has_errors = true;
                 print_error(token, "[TMP] Can't redefine variable: '%s'", name);
-                exit(EXIT_FAILURE);
+                return node_new_nodes(NODE_NODES, token);
             }
 
             if (current()->kind == TOKEN_ASSIGN) {
@@ -1181,8 +1194,9 @@ Node *parser_primary(Parser *parser) {
             Node *node = node_new_nodes(NODE_CALL, token);
             node->function = program_find_function(parser->program, name);
             if (node->function == NULL) {
+                parser->has_errors = true;
                 print_error(token, "Undefined function: '%s'", name);
-                exit(EXIT_FAILURE);
+                return node_new_nodes(NODE_NODES, token);
             }
             node->type = node->function->type->return_type;
             parser->current_function->is_leaf = false;
@@ -1213,8 +1227,9 @@ Node *parser_primary(Parser *parser) {
         // Local
         Local *local = function_find_local(parser->current_function, name);
         if (local == NULL) {
+            parser->has_errors = true;
             print_error(token, "Undefined variable: '%s'", name);
-            exit(EXIT_FAILURE);
+            return node_new_nodes(NODE_NODES, token);
         }
         Node *node = node_new(NODE_LOCAL, token);
         node->local = local;
@@ -1222,6 +1237,7 @@ Node *parser_primary(Parser *parser) {
         return node;
     }
 
+    parser->has_errors = true;
     print_error(token, "Unexpected token: '%s'", token_kind_to_string(token->kind));
-    exit(EXIT_FAILURE);
+    return node_new_nodes(NODE_NODES, token);
 }
