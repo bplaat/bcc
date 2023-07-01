@@ -8,9 +8,7 @@
 size_t align(size_t size, size_t align) { return (size + align - 1) / align * align; }
 
 bool is_power_of_two(int64_t x) {
-    if (x <= 0) {
-        return false;
-    }
+    if (x <= 0) return false;
     return (x & (x - 1)) == 0;
 }
 

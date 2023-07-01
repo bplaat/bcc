@@ -208,6 +208,7 @@ typedef struct Parser {
     size_t tokens_size;
     size_t position;
     Function *current_function;
+    bool has_errors;
 } Parser;
 
 void parser(Program *program, Token *tokens, size_t tokens_size);
