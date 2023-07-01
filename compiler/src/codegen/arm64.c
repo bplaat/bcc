@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "codegen.h"
+#include "codegen/codegen.h"
 
 #define x0 0
 #define x1 1

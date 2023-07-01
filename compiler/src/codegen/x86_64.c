@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "codegen.h"
+#include "codegen/codegen.h"
 
 #define rax 0
 #define rcx 1
@@ -400,7 +400,7 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
         }
 
 #ifdef _WIN32
-    inst4(0x48, 0x83, 0xec, 0x20);  // sub rsp, 32
+        inst4(0x48, 0x83, 0xec, 0x20);  // sub rsp, 32
 #endif
 
         int64_t distance = (uint8_t *)node->function->address - (codegen->code_byte_ptr + 1 + sizeof(int32_t));
@@ -414,7 +414,7 @@ void codegen_expr_x86_64(Codegen *codegen, Node *node) {
         }
 
 #ifdef _WIN32
-    inst4(0x48, 0x83, 0xc4, 0x20);  // add rsp, 32
+        inst4(0x48, 0x83, 0xc4, 0x20);  // add rsp, 32
 #endif
         return;
     }

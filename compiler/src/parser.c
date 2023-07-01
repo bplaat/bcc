@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "utils.h"
+#include "utils/utils.h"
 
 // Type
 Type *type_new(TypeKind kind, size_t size) {
@@ -169,14 +169,14 @@ void function_dump(FILE *f, Function *function) {
     type_dump(f, function->type->return_type);
     fprintf(f, " %s(", function->name);
     for (size_t i = 0; i < function->type->arguments_types.size; i++) {
-            type_dump(f, function->type->arguments_types.items[i]);
-            if (i < function->arguments_names.size) {
-                fprintf(f, " %s", (char *)function->arguments_names.items[i]);
-            }
-            if (i != function->type->arguments_types.size - 1) {
-                fprintf(f, ", ");
-            }
+        type_dump(f, function->type->arguments_types.items[i]);
+        if (i < function->arguments_names.size) {
+            fprintf(f, " %s", (char *)function->arguments_names.items[i]);
         }
+        if (i != function->type->arguments_types.size - 1) {
+            fprintf(f, ", ");
+        }
+    }
     fprintf(f, ") {\n");
 
     // Local declarations

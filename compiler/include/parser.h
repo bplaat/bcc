@@ -5,9 +5,9 @@
 #include <stdio.h>
 
 #include "lexer.h"
-#include "list.h"
 #include "object.h"
-#include "utils.h"
+#include "utils/list.h"
+#include "utils/utils.h"
 
 // Type
 typedef enum TypeKind {

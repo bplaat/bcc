@@ -2,7 +2,7 @@
 #define CODEGEN_H
 
 #include "parser.h"
-#include "utils.h"
+#include "utils/utils.h"
 
 // Dlopen win32 functions
 #ifdef _WIN32
