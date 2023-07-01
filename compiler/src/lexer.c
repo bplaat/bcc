@@ -214,6 +214,7 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
     Token *tokens = malloc(capacity * sizeof(Token));
     size_t size = 0;
 
+    bool has_errors = false;
     char *c = text;
     char *line_start = c;
     int32_t line = 1;
@@ -374,9 +375,15 @@ Token *lexer(char *path, char *text, size_t *tokens_size) {
         }
 
         // Unknown character
-        print_error(&tokens[size], "Unclosed character: '%c'", *c);
-        exit(EXIT_FAILURE);
+        has_errors = true;
+        print_error(&tokens[size], "Unknown character: '%c'", *c);
+        c++;
     }
     *tokens_size = size;
+
+    // Stop when we had some errors
+    if (has_errors) {
+        exit(EXIT_FAILURE);
+    }
     return tokens;
 }
